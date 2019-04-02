@@ -78,7 +78,7 @@ fortest: $(LIBRARY) $(SSHELL)
 ios:     liblitesync.a liblitesync.dylib
 iostest: liblitesync.a liblitesync.dylib
 
-debug:   export LIBFLAGS := -g -DSQLITE_DEBUG=1 -DDEBUG $(DEBUGFLAGS) $(LIBFLAGS)
+debug:   export LIBFLAGS := -g -DSQLITE_DEBUG=1 -DDEBUGPRINT $(DEBUGFLAGS) $(LIBFLAGS)
 
 fortest: export LIBFLAGS := -DLITESYNC_FOR_TESTING $(LIBFLAGS)
 iostest: export LIBFLAGS := -DLITESYNC_FOR_TESTING $(LIBFLAGS)
