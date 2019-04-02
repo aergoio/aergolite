@@ -262,12 +262,7 @@ SQLITE_PRIVATE u32  litesyncSeqFromRowId(sqlite_int64 value);
 
 SQLITE_PRIVATE int   litesyncGetWalLog(Pager *pPager, int64 tid, binn **plog);
 SQLITE_PRIVATE int64 last_tid_from_wal_log(Pager *pPager);
-SQLITE_PRIVATE int64 last_wal_log_tid_from_node(Pager *pPager, int node_id);
-
-SQLITE_PRIVATE void request_new_pages(node *node, unsigned int from_page);
-
-SQLITE_PRIVATE int  send_db_pages_to_peer(node *node, unsigned int from_page, unsigned int to_page);
-SQLITE_PRIVATE void stop_db_transfer(litesync *this_node);
+//SQLITE_PRIVATE int64 last_wal_log_tid_from_node(Pager *pPager, int node_id);
 
 SQLITE_PRIVATE int  open_detached_worker_db(litesync *this_node, sqlite3 **pworker_db);
 SQLITE_PRIVATE int  open_main_db_connection2(litesync *this_node);

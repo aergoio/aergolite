@@ -4,7 +4,7 @@
 extern "C" {
 #endif
 
-#include <uv.h>
+#include "uv.h"
 
 
 typedef struct uv_msg_s        uv_msg_t;

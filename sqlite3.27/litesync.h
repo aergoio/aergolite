@@ -6,7 +6,7 @@
 ** declarations for the litereplica
 */
 
-#include <binn.h>
+#include "binn.h"
 
 
 
@@ -21,7 +21,7 @@
 
 /* exported functions */
 
-void litesync_join();
+void litesync_join(void);
 
 
 /* replica status */
