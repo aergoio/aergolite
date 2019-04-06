@@ -312,3 +312,4 @@ SQLITE_PRIVATE int send_udp_message(litesync *this_node, char *address, char *me
 SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle);
 
 SQLITE_PRIVATE void check_current_leader(litesync *this_node);
+SQLITE_PRIVATE void start_leader_election(litesync *this_node);
