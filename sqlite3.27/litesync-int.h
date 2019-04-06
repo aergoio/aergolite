@@ -41,15 +41,17 @@
 
 #define LITESYNC_LOG_INSERT          0xdb01     /* secondary -> primary */
 #define LITESYNC_LOG_NEW             0xdb02     /* secondary <- primary -> secondary (broadcast) */
+#define LITESYNC_LOG_NEW_OK          0xdb03     /* secondary -> primary */
+#define LITESYNC_LOG_COMMIT          0xdb04     /* secondary <- primary -> secondary (broadcast) */
 
-#define LITESYNC_LOG_NEXT            0xdb03     /* secondary -> primary (request) */
-#define LITESYNC_LOG_GET             0xdb04     /* secondary -> primary (request) */
-#define LITESYNC_LOG_NOTFOUND        0xdb05     /* secondary <- primary (response) */
-#define LITESYNC_LOG_DATA            0xdb06     /* secondary <- primary (response) */
-#define LITESYNC_IN_SYNC             0xdb07     /* secondary <- primary (response) */
+#define LITESYNC_LOG_NEXT            0xdb05     /* secondary -> primary (request) */
+#define LITESYNC_LOG_GET             0xdb06     /* secondary -> primary (request) */
+#define LITESYNC_LOG_NOTFOUND        0xdb07     /* secondary <- primary (response) */
+#define LITESYNC_LOG_DATA            0xdb08     /* secondary <- primary (response) */
+#define LITESYNC_IN_SYNC             0xdb09     /* secondary <- primary (response) */
 
-#define LITESYNC_LOG_EXISTS          0xdb08     /* secondary <- primary (response) */
-#define LITESYNC_LOG_INSERT_FAILED   0xdb14     /* secondary <- primary (response) */
+#define LITESYNC_LOG_EXISTS          0xdb10     /* secondary <- primary (response) */
+#define LITESYNC_LOG_INSERT_FAILED   0xdb11     /* secondary <- primary (response) */
 
 
 /* peer message parameters */
@@ -148,6 +150,14 @@ struct node_id_conflict {
   uv_timer_t timer;
 };
 
+struct leader_votes {
+  int id;
+  int count;
+  struct leader_votes *next;
+};
+
+
+
 
 struct node {
   node *next;            /* Next item in the list */
@@ -188,8 +198,15 @@ struct litesync {
   struct tcp_address *bind;   /* Address(es) to bind */
 //  struct tcp_address *connect;/* Address(es) to connect */
 
+  uv_udp_t *udp_sock;
+
+
   node *peers;                /* Remote nodes connected to this one */
-  node *leader_node;          /* Points to the primary node if it is connected (used in secondary nodes) */
+
+  BOOL is_leader;             /* True if this node is the current leader */
+  node *leader_node;          /* Points to the leader node if it is connected */
+  node *last_leader;          /* Points to the previous leader node */
+  struct leader_votes *leader_votes;
 
   single_instance_handle single_instance; /* store the handle for the single instance */
 
@@ -214,10 +231,15 @@ struct litesync {
   uv_timer_t process_transactions_timer;
   uv_timer_t failed_txn_timer;    /* Used to call the failed transaction function again in the case of failure */
 
+  uv_timer_t leader_check_timer;
+  uv_timer_t election_ping_timer;
+
   int64 current_local_tid;    /* the current transaction being logged in the wal-local */
   int64 current_remote_tid;   /* the current transaction being logged in the wal-remote, if not using log table */
   int64 last_local_tid;       /* last transaction in the wal-local file */
   int64 last_remote_tid;      /* last transaction in the wal-remote file */
+  u32 last_sent_frame;        /* the WAL frame of the last sent transaction */
+  int64 last_sent_tid;        /* last transaction sent to the primary node */
   int64 last_ack_tid;         /* last transaction acknowledged by the primary node */
   int64 last_valid_tid;       /* last transaction accepted by the primary node */
 //  int64 base_tid;             /* the 'base' transaction id, the one that comes before the first on the log table */
@@ -260,7 +282,7 @@ SQLITE_PRIVATE sqlite_int64 litesyncBuildRowId(int node_id, u32 seq_num);
 SQLITE_PRIVATE int  litesyncNodeIdFromRowId(sqlite_int64 value);
 SQLITE_PRIVATE u32  litesyncSeqFromRowId(sqlite_int64 value);
 
-SQLITE_PRIVATE int   litesyncGetWalLog(Pager *pPager, int64 tid, binn **plog);
+SQLITE_PRIVATE int   litesyncGetWalLog(Pager *pPager, u32 start, int64 tid, binn **plog);
 SQLITE_PRIVATE int64 last_tid_from_wal_log(Pager *pPager);
 //SQLITE_PRIVATE int64 last_wal_log_tid_from_node(Pager *pPager, int node_id);
 
@@ -270,13 +292,23 @@ SQLITE_PRIVATE int  open_worker_db(litesync *this_node);
 SQLITE_PRIVATE void start_downstream_db_sync(litesync *this_node);
 SQLITE_PRIVATE void start_upstream_db_sync(litesync *this_node);
 
-SQLITE_PRIVATE void send_next_local_transaction(litesync *this_node, int64 last_sent_tid);
+SQLITE_PRIVATE void send_next_local_transaction(litesync *this_node);
 
 SQLITE_PRIVATE int  send_notification_to_worker(char *address, void *data, int size);
 
+SQLITE_PRIVATE void process_transactions_timer_cb(uv_timer_t* handle);
 SQLITE_PRIVATE void reconnect_timer_cb(uv_timer_t* handle);
 SQLITE_PRIVATE void log_rotation_timer_cb(uv_timer_t* handle);
 
 SQLITE_PRIVATE char * litesync_status_json(sqlite3 *db, const char *name);
 
 SQLITE_PRIVATE void worker_thread_on_close(uv_handle_t *handle);
+
+
+
+SQLITE_PRIVATE int send_broadcast_message(litesync *this_node, char *message);
+SQLITE_PRIVATE int send_udp_message(litesync *this_node, char *address, char *message);
+
+SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle);
+
+SQLITE_PRIVATE void check_current_leader(litesync *this_node);
