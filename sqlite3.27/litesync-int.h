@@ -208,6 +208,8 @@ struct litesync {
   node *last_leader;          /* Points to the previous leader node */
   struct leader_votes *leader_votes;
 
+  BOOL in_election;           /* True if in a leader election */
+
   single_instance_handle single_instance; /* store the handle for the single instance */
 
 //  struct send_db *sending;
@@ -233,6 +235,7 @@ struct litesync {
 
   uv_timer_t leader_check_timer;
   uv_timer_t election_ping_timer;
+  uv_timer_t election_end_timer;
 
   int64 current_local_tid;    /* the current transaction being logged in the wal-local */
   int64 current_remote_tid;   /* the current transaction being logged in the wal-remote, if not using log table */
