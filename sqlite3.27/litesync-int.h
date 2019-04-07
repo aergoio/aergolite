@@ -5,21 +5,6 @@
 #include "../common/single_instance.h"
 
 
-/* node type */
-
-#define NODE_UNKNOWN        0    /*  */
-#define NODE_PRIMARY        1    /*  */
-#define NODE_SECONDARY      2    /*  */
-#define NODE_PEER           3    /*  */
-#define NODE_TEMPORARY      4    /*  */
-
-/* log type */
-
-#define LOG_KEEP            1    /*  */
-#define LOG_LIMIT           2    /*  */
-#define LOG_DISCARD         3    /*  */
-
-
 /* worker thread commands */
 #define WORKER_THREAD_NEW_TRANSACTION  0xcd01  /*  */
 #define WORKER_THREAD_EXIT             0xcd02  /*  */
@@ -58,21 +43,12 @@
 #define LITESYNC_OK                  0xc0de001  /*  */
 #define LITESYNC_ERROR               0xc0de002  /*  */
 
-#define LITESYNC_NODE_TYPE           0xc0de003  /*  */
 #define LITESYNC_NODE_ID             0xc0de004  /*  */
-#define LITESYNC_LOG_STORAGE         0xc0de005  /*  */
 
 #define LITESYNC_TID                 0xc0de006  /*  */
 #define LITESYNC_PREV_TID            0xc0de007  /*  */
 #define LITESYNC_LAST_TID            0xc0de008  /*  */
 #define LITESYNC_SQL_CMDS            0xc0de009  /*  */
-
-#define LITESYNC_PGNO                0xc0de00a  /*  */
-#define LITESYNC_PAGE                0xc0de00b  /*  */
-#define LITESYNC_NUMPAGES            0xc0de00c  /*  */
-#define LITESYNC_FROMPAGE            0xc0de00d  /*  */
-//#define LITESYNC_TOPAGE            0xc0de00e  /*  */
-#define LITESYNC_LASTPAGE            0xc0de00f  /*  */
 
 
 // the state of the slave peer or connection
@@ -85,17 +61,6 @@
 #define STATE_BUSY             6       /*  */
 #define STATE_ERROR            7       /*  */
 #define STATE_RECEIVING_UPDATE 8       /* the slave is receiving a page change from the master while it is in the sync process */
-
-/*
-#define STATE_CONN_NONE     CONN_STATUS_DISCONNECTED
-#define STATE_IDENTIFIED    CONN_STATUS_STARTING
-#define STATE_UPDATING      CONN_STATUS_UPDATING
-#define STATE_IN_SYNC       CONN_STATUS_IN_SYNC
-#define STATE_CONN_LOST     CONN_STATUS_CONN_LOST
-#define STATE_INVALID_PEER  CONN_STATUS_INVALID_PEER
-#define STATE_BUSY          CONN_STATUS_BUSY
-#define STATE_ERROR         CONN_STATUS_ERROR
-*/
 
 
 
@@ -125,8 +90,8 @@ struct connect_req {
 #define CONN_STATE_UNKNOWN       0
 #define CONN_STATE_CONNECTING    1
 #define CONN_STATE_CONNECTED     2
-#define CONN_STATE_CONN_LOST     3  // currently not used
-#define CONN_STATE_DISCONNECTED  4  // also unreachable?
+#define CONN_STATE_CONN_LOST     3
+#define CONN_STATE_DISCONNECTED  4
 #define CONN_STATE_FAILED        5
 
 /* db state - sync_down_state and sync_up_state */
@@ -135,9 +100,6 @@ struct connect_req {
 #define DB_STATE_IN_SYNC         2
 #define DB_STATE_LOCAL_CHANGES   3  /* there are local changes */
 #define DB_STATE_OUTDATED        4  /* if the connection dropped while updating, or some other error state */
-
-/* remote node db state (used in the primary node) */
-// UNKNOWN, SYNCHRONIZING, IN_SYNC, OUTDATED (new commands locally that it did not receive)
 
 
 typedef struct litesync litesync;
@@ -157,11 +119,8 @@ struct leader_votes {
 };
 
 
-
-
 struct node {
   node *next;            /* Next item in the list */
-//  int   type;            /* Node type [primary|secondary|peer|temporary] */
   int   id;              /* Node id */
 
   struct node_id_conflict *id_conflict;
@@ -172,11 +131,6 @@ struct node {
 
   uv_msg_t socket;       /* Socket used to connect with the other peer */
   int   conn_state;      /* The state of this connection/peer */
-
-//  uv_timer_t reconnect_timer;
-//  int reconnect_timer_enabled;
-
-  int is_downloading;
 
   litesync *this_node;   /* x */
 
@@ -190,16 +144,12 @@ struct node {
 
 
 struct litesync {
-  int type;                   /* Primary, Secondary or Peer */
   int id;                     /* Node id */
 
   char *uri;                  /* the URI filename with parameters */
 
   struct tcp_address *bind;   /* Address(es) to bind */
-//  struct tcp_address *connect;/* Address(es) to connect */
-
-  uv_udp_t *udp_sock;
-
+  uv_udp_t *udp_sock;         /* Socket used for UDP communication */
 
   node *peers;                /* Remote nodes connected to this one */
 
@@ -207,12 +157,9 @@ struct litesync {
   node *leader_node;          /* Points to the leader node if it is connected */
   node *last_leader;          /* Points to the previous leader node */
   struct leader_votes *leader_votes;
-
   BOOL in_election;           /* True if in a leader election */
 
   single_instance_handle single_instance; /* store the handle for the single instance */
-
-//  struct send_db *sending;
 
   sqlite3 *main_db1;          /* database connection for 'local' data - used by the app */
   sqlite3 *main_db2;          /* database connection for 'local' data - used by the worker thread */
@@ -266,7 +213,6 @@ SQLITE_PRIVATE Pager * getPager(sqlite3 *db, const char *name);
 SQLITE_PRIVATE Pager * getPagerFromiDb(sqlite3 *db, int iDb);
 
 SQLITE_PRIVATE int  disable_litesync(Pager *pPager);
-//SQLITE_PRIVATE int  sqlite3_enable_litesync(sqlite3 *db, const char *name, int node_type, int node_id);
 
 SQLITE_PRIVATE void litesyncCheckUserCommand(sqlite3 *db, Vdbe *p, char *zTrace);
 SQLITE_PRIVATE void litesyncProcessUserCommand(sqlite3 *db, int iDb, Pager *pPager, char *zSql);
@@ -287,7 +233,6 @@ SQLITE_PRIVATE u32  litesyncSeqFromRowId(sqlite_int64 value);
 
 SQLITE_PRIVATE int   litesyncGetWalLog(Pager *pPager, u32 start, int64 tid, binn **plog);
 SQLITE_PRIVATE int64 last_tid_from_wal_log(Pager *pPager);
-//SQLITE_PRIVATE int64 last_wal_log_tid_from_node(Pager *pPager, int node_id);
 
 SQLITE_PRIVATE int  open_detached_worker_db(litesync *this_node, sqlite3 **pworker_db);
 SQLITE_PRIVATE int  open_main_db_connection2(litesync *this_node);
