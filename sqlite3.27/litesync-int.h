@@ -152,6 +152,7 @@ struct litesync {
   uv_udp_t *udp_sock;         /* Socket used for UDP communication */
 
   node *peers;                /* Remote nodes connected to this one */
+  int total_known_nodes;      /* Including those that are currently off-line */
 
   BOOL is_leader;             /* True if this node is the current leader */
   node *leader_node;          /* Points to the leader node if it is connected */
