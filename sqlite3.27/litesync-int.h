@@ -277,6 +277,8 @@ SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle);
 SQLITE_PRIVATE void check_current_leader(litesync *this_node);
 SQLITE_PRIVATE void start_leader_election(litesync *this_node);
 
+SQLITE_PRIVATE void leader_node_process_local_transactions(litesync *this_node);
+
 SQLITE_PRIVATE struct transaction * store_transaction_on_mempool(
   litesync *this_node, int node_id, int64 tid, void *log, int64 prev_tid
 );
