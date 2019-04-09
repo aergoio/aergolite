@@ -13,7 +13,7 @@
 
 /* peer communication */
 
-#define LITESYNC_CMD                 0x2173512c
+#define LITESYNC_CMD                 0x43292173
 
 /* peer message commands */
 #define LITESYNC_CMD_ID              0xcd01     /* peer identification */
@@ -45,10 +45,12 @@
 
 #define LITESYNC_NODE_ID             0xc0de004  /*  */
 
+#define LITESYNC_SEQ                 0xc0de005  /*  */
 #define LITESYNC_TID                 0xc0de006  /*  */
-#define LITESYNC_PREV_TID            0xc0de007  /*  */
-#define LITESYNC_LAST_TID            0xc0de008  /*  */
-#define LITESYNC_SQL_CMDS            0xc0de009  /*  */
+#define LITESYNC_SQL_CMDS            0xc0de007  /*  */
+#define LITESYNC_PREV_TID            0xc0de008  /*  */
+#define LITESYNC_HASH                0xc0de009  /*  */
+//#define LITESYNC_LAST_TID            0xc0de010  /*  */
 
 
 // the state of the slave peer or connection
@@ -106,6 +108,16 @@ typedef struct litesync litesync;
 typedef struct node node;
 
 
+struct transaction {
+  struct transaction *next;
+  int64 seq;
+  int node_id;
+  int64 tid;
+  void *log;
+  int64 prev_tid;
+  int ack_count;              /* Number of nodes that acknowledged the sent transaction */
+};
+
 struct node_id_conflict {
   node *existing_node;
   node *new_node;
@@ -159,6 +171,8 @@ struct litesync {
   node *last_leader;          /* Points to the previous leader node */
   struct leader_votes *leader_votes;
   BOOL in_election;           /* True if in a leader election */
+
+  struct transaction *mempool;
 
   single_instance_handle single_instance; /* store the handle for the single instance */
 
@@ -262,3 +276,8 @@ SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle);
 
 SQLITE_PRIVATE void check_current_leader(litesync *this_node);
 SQLITE_PRIVATE void start_leader_election(litesync *this_node);
+
+SQLITE_PRIVATE struct transaction * store_transaction_on_mempool(
+  litesync *this_node, int node_id, int64 tid, void *log, int64 prev_tid
+);
+SQLITE_PRIVATE int commit_transaction_to_blockchain(litesync *this_node, struct transaction *txn);
