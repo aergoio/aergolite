@@ -286,3 +286,5 @@ SQLITE_PRIVATE struct transaction * store_transaction_on_mempool(
   litesync *this_node, int node_id, int64 tid, void *log, int64 prev_tid
 );
 SQLITE_PRIVATE int commit_transaction_to_blockchain(litesync *this_node, struct transaction *txn);
+
+SQLITE_PRIVATE int check_if_failed_txn(litesync *this_node, int64 tid);
