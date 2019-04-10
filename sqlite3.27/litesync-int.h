@@ -146,6 +146,8 @@ struct node {
 
   litesync *this_node;   /* x */
 
+  int num_txns;          /* How many transactions on its blockchain */
+
   /* used for the query status */
   int     db_state;
   uint64  last_conn;        /* (monotonic time) the last time a connection was made */
@@ -171,6 +173,7 @@ struct litesync {
   node *last_leader;          /* Points to the previous leader node */
   struct leader_votes *leader_votes;
   BOOL in_election;           /* True if in a leader election */
+  int num_txns;               /* How many transactions on its blockchain */
 
   struct transaction *mempool;
 
@@ -196,7 +199,7 @@ struct litesync {
   uv_timer_t failed_txn_timer;    /* Used to call the failed transaction function again in the case of failure */
 
   uv_timer_t leader_check_timer;
-  uv_timer_t election_ping_timer;
+  uv_timer_t election_info_timer;
   uv_timer_t election_end_timer;
 
   int64 current_local_tid;    /* the current transaction being logged in the wal-local */
