@@ -115,6 +115,7 @@ struct transaction {
   int64 tid;
   void *log;
   int64 prev_tid;
+  u8    hash[32];
   int ack_count;              /* Number of nodes that acknowledged the sent transaction */
 };
 
@@ -283,7 +284,7 @@ SQLITE_PRIVATE void start_leader_election(litesync *this_node);
 SQLITE_PRIVATE void leader_node_process_local_transactions(litesync *this_node);
 
 SQLITE_PRIVATE struct transaction * store_transaction_on_mempool(
-  litesync *this_node, int node_id, int64 tid, void *log, int64 prev_tid
+  litesync *this_node, int node_id, int64 tid, void *log
 );
 SQLITE_PRIVATE int commit_transaction_to_blockchain(litesync *this_node, struct transaction *txn);
 
