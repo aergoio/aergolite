@@ -267,8 +267,6 @@ SQLITE_PRIVATE void process_transactions_timer_cb(uv_timer_t* handle);
 SQLITE_PRIVATE void reconnect_timer_cb(uv_timer_t* handle);
 SQLITE_PRIVATE void log_rotation_timer_cb(uv_timer_t* handle);
 
-SQLITE_PRIVATE char * litesync_status_json(sqlite3 *db, const char *name);
-
 SQLITE_PRIVATE void worker_thread_on_close(uv_handle_t *handle);
 
 
@@ -289,3 +287,6 @@ SQLITE_PRIVATE struct transaction * store_transaction_on_mempool(
 SQLITE_PRIVATE int commit_transaction_to_blockchain(litesync *this_node, struct transaction *txn);
 
 SQLITE_PRIVATE int check_if_failed_txn(litesync *this_node, int64 tid);
+
+SQLITE_PRIVATE char * blockchain_status_json(sqlite3 *db, const char *name);
+SQLITE_PRIVATE char * protocol_status_json(sqlite3 *db, const char *name, BOOL extended);
