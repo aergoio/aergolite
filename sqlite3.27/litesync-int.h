@@ -4,6 +4,8 @@
 #include "../common/uv_send_message.c"
 #include "../common/single_instance.h"
 
+typedef unsigned char uchar;
+
 
 /* worker thread commands */
 #define WORKER_THREAD_NEW_TRANSACTION  0xcd01  /*  */
@@ -206,14 +208,18 @@ struct litesync {
   int64 current_local_tid;    /* the current transaction being logged in the wal-local */
   int64 current_remote_tid;   /* the current transaction being logged in the wal-remote, if not using log table */
   int64 last_local_tid;       /* last transaction in the wal-local file */
-  int64 last_remote_tid;      /* last transaction in the wal-remote file */
+  int64 last_remote_tid;      /* last transaction in the blockchain */
+  uchar last_blockchain_hash[32] ; /* last transaction hash */
   u32 last_sent_frame;        /* the WAL frame of the last sent transaction */
   int64 last_sent_tid;        /* last transaction sent to the primary node */
   int64 last_ack_tid;         /* last transaction acknowledged by the primary node */
   int64 last_valid_tid;       /* last transaction accepted by the primary node */
-//  int64 base_tid;             /* the 'base' transaction id, the one that comes before the first on the log table */
+//int64 base_tid;             /* the 'base' transaction id, the one that comes before the first on the log table */
   int64 failed_txn_id;        /* failed transaction id */
   binn *failed_txns;          /* list of failed transactions */
+
+//int    num_local_txns;      /* number of transactions on the wal-local */
+  int    num_blockchain_txns; /* number of transactions on the blockchain */
 
   BOOL   useSqliteRowids;     /* do not use node id in the rowids */
 
