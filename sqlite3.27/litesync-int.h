@@ -294,5 +294,7 @@ SQLITE_PRIVATE int commit_transaction_to_blockchain(litesync *this_node, struct 
 
 SQLITE_PRIVATE int check_if_failed_txn(litesync *this_node, int64 tid);
 
-SQLITE_PRIVATE char * blockchain_status_json(sqlite3 *db, const char *name);
-SQLITE_PRIVATE char * protocol_status_json(sqlite3 *db, const char *name, BOOL extended);
+SQLITE_PRIVATE char * blockchain_status_json_db(sqlite3 *db, const char *name);
+SQLITE_PRIVATE char * blockchain_status_json(Pager *pPager);
+SQLITE_PRIVATE char * protocol_status_json_db(sqlite3 *db, const char *name, BOOL extended);
+SQLITE_PRIVATE char * protocol_status_json(Pager *pPager, BOOL extended);
