@@ -300,5 +300,5 @@ SQLITE_PRIVATE char * blockchain_status_json(Pager *pPager);
 SQLITE_PRIVATE char * protocol_status_json_db(sqlite3 *db, const char *name, BOOL extended);
 SQLITE_PRIVATE char * protocol_status_json(Pager *pPager, BOOL extended);
 
-SQLITE_PRIVATE int set_current_node_info(sqlite3 *db, const char *name, const char *info);
+SQLITE_PRIVATE int set_current_node_info(sqlite3 *db, const char *name, char *info);
 SQLITE_PRIVATE char * get_current_node_info(sqlite3 *db, const char *name);
