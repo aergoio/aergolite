@@ -164,6 +164,7 @@ struct litesync {
   int id;                     /* Node id */
 
   char *uri;                  /* the URI filename with parameters */
+  char *node_info;            /* User defined information about this node */
 
   struct tcp_address *bind;   /* Address(es) to bind */
   uv_udp_t *udp_sock;         /* Socket used for UDP communication */
@@ -298,3 +299,6 @@ SQLITE_PRIVATE char * blockchain_status_json_db(sqlite3 *db, const char *name);
 SQLITE_PRIVATE char * blockchain_status_json(Pager *pPager);
 SQLITE_PRIVATE char * protocol_status_json_db(sqlite3 *db, const char *name, BOOL extended);
 SQLITE_PRIVATE char * protocol_status_json(Pager *pPager, BOOL extended);
+
+SQLITE_PRIVATE int set_current_node_info(sqlite3 *db, const char *name, const char *info);
+SQLITE_PRIVATE char * get_current_node_info(sqlite3 *db, const char *name);
