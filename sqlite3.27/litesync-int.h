@@ -177,7 +177,6 @@ struct litesync {
   node *last_leader;          /* Points to the previous leader node */
   struct leader_votes *leader_votes;
   BOOL in_election;           /* True if in a leader election */
-  int num_txns;               /* How many transactions on its blockchain */
 
   struct transaction *mempool;
 
@@ -291,6 +290,7 @@ SQLITE_PRIVATE void leader_node_process_local_transactions(litesync *this_node);
 SQLITE_PRIVATE struct transaction * store_transaction_on_mempool(
   litesync *this_node, int node_id, int64 tid, void *log
 );
+SQLITE_PRIVATE void discard_mempool_transaction(litesync *this_node, struct transaction *txn);
 SQLITE_PRIVATE int commit_transaction_to_blockchain(litesync *this_node, struct transaction *txn);
 
 SQLITE_PRIVATE int check_if_failed_txn(litesync *this_node, int64 tid);
