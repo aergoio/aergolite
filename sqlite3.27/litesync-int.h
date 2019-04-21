@@ -276,6 +276,7 @@ SQLITE_PRIVATE void log_rotation_timer_cb(uv_timer_t* handle);
 SQLITE_PRIVATE void worker_thread_on_close(uv_handle_t *handle);
 
 
+SQLITE_PRIVATE int is_local_ip_address(char *address);
 
 SQLITE_PRIVATE int send_broadcast_message(litesync *this_node, char *message);
 SQLITE_PRIVATE int send_udp_message(litesync *this_node, char *address, char *message);
