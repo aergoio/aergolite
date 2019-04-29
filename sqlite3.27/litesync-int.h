@@ -205,6 +205,9 @@ struct litesync {
   uv_timer_t election_info_timer;
   uv_timer_t election_end_timer;
 
+  uv_timer_t reconnect_timer;
+  int reconnect_timer_enabled;
+
   int64 current_local_tid;    /* the current transaction being logged in the wal-local */
   int64 current_remote_tid;   /* the current transaction being logged in the wal-remote, if not using log table */
   int64 last_local_tid;       /* last transaction in the wal-local file */
@@ -272,6 +275,8 @@ SQLITE_PRIVATE int  send_notification_to_worker(char *address, void *data, int s
 SQLITE_PRIVATE void process_transactions_timer_cb(uv_timer_t* handle);
 SQLITE_PRIVATE void reconnect_timer_cb(uv_timer_t* handle);
 SQLITE_PRIVATE void log_rotation_timer_cb(uv_timer_t* handle);
+
+SQLITE_PRIVATE void enable_reconnect_timer(litesync *this_node);
 
 SQLITE_PRIVATE void worker_thread_on_close(uv_handle_t *handle);
 
