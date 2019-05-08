@@ -4,7 +4,28 @@ The easiest way to deploy a blockchain for data storage on your app
 
 ---
 
-This repository holds a proof-of-concept for testing purposes.
+> This repository holds a proof-of-concept for testing purposes.
+
+AergoLite allow us to have a replicated SQLite database enforced by a private and lightweight blockchain.
+
+Each app has a local replica of the database.
+
+New database transactions are distributed to all the peers and once they reach a consensus on the order of execution all the nodes can execute the transactions.
+
+As the order of execution of these transactions are the same, all the nodes have the same resulting database content.
+
+Apps can also write to the local database when they are off-line. The database transactions are stored on a local queue and sent to the network once the connectivity is reestablished.
+
+As in any SQLite database, only the last state of the database is stored on the file. There is no stored snapshot for each previous states. This is important to reduce storage size on small devices.
+
+Only the blockchain itself has the full history, and it stores the SQL commands to generate the database.
+
+The resulting increase in size of the database is 10-15% compared to the same SQLite database without the blockchain.
+
+The network traffic is lightweight to reduce energy consumption. New packets are transferred only when there are new database transactions.
+
+You can easily choose which consensus protocol to use between 2 available: 1 leader based and 1 gossip based.
+
 
 Supported OS:
 
