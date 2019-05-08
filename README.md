@@ -100,3 +100,139 @@ cd aergolite-poc/sqlite3.27
 make
 cd -
 ```
+
+## Using
+
+The compiled library has support for both native SQLite database files and for SQLite databases with blockchain support, so the application can open native SQLite databases and ones with blockchain at the same time.
+
+The library works exacly the same way for a normal SQLite database.
+
+For opening a database with blockchain support we inform the library using a URI parameter: `blockchain=on`
+
+We also need to inform the node discovery method. This is done via the `discovery` parameter.
+
+Here is an example using discovery via UDP on the local network. You can choose any port:
+
+```
+"file:test.db?blockchain=on&discovery=local:4329"
+```
+
+All nodes from the same network must use the same node discovery method and the same UDP port.
+
+
+## Testing
+
+You can test it using the SQLite shell.
+
+Open an empty local database on each device:
+
+```
+sqlite3
+.log stdout
+.open "file:test.db?blockchain=on&discovery=local:4329"
+```
+
+
+## Retrieving status
+
+There are 2 ways to retrieve status:
+
+1. Locally via PRAGMA commands
+2. Remotely via status requests
+
+The status are divided in 2 parts:
+
+### Blockchain status
+
+This has information about the local blockchain and database.
+
+It can be queried using the command:
+
+```
+PRAGMA blockchain_status
+```
+
+That will return a result in JSON format like the following:
+
+```
+{
+"use_blockchain": true,
+"blockchain": {
+  "num_transactions": 125,
+  "last_transaction": {
+    "id": 3476202423059134961,
+    "hash": "..."
+  }
+},
+"local_changes": {
+  "num_transactions": 3
+}
+}
+```
+
+This status information does not depend on the selected consensus protocol. It has always the above format.
+
+
+### Network and consensus protocol status
+
+It can be queried using the command:
+
+```
+PRAGMA protocol_status
+```
+
+The information returned depends on the selected consensus protocol.
+
+For the `raft-like` consensus protocol the result is in this format:
+
+```
+{
+"use_blockchain": true,
+"node_id": 692281563,
+"is_leader": false,
+"leader": 1772633815,
+"num_peers": 3,
+"mempool": {
+  "num_transactions": 0
+},
+"sync_down_state": "in sync",
+"sync_up_state": "in sync"
+}
+```
+
+We can also return extended information using the command:
+
+```
+PRAGMA protocol_status(1)
+```
+
+In this case the returned data will contain the list of connected nodes:
+
+```
+{
+"use_blockchain": true,
+"node_id": 1506405147,
+"is_leader": false,
+"peers": [{
+  "node_id": 692281563,
+  "is_leader": false,
+  "conn_type": "outgoing",
+  "address": "192.168.1.45:4329"
+},{
+  "node_id": 1617834522,
+  "is_leader": true,
+  "conn_type": "outgoing",
+  "address": "192.168.1.42:4329"
+},{
+  "node_id": 1772633815,
+  "is_leader": false,
+  "conn_type": "incoming",
+  "address": "192.168.1.47:38024"
+}],
+"mempool": {
+  "num_transactions": 0
+},
+"sync_down_state": "unknown",
+"sync_up_state": "in sync"
+}
+```
