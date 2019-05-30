@@ -14,11 +14,7 @@
 
 #include <unistd.h>  /* for unlink */
 
-#include "binn.h"
-
 #include "plugin-mini-raft.h"
-
-#include "debug.c"
 
 #include "../common/linked_list.c"
 

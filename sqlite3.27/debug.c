@@ -17,10 +17,13 @@
 
 //#define DEBUG_LOG(...)    do { printf(__VA_ARGS__); fflush(stdout); } while(0);
 
+#include <unistd.h>  /* for getpid() */
+
 #ifdef _WIN32
 typedef DWORD thread_id_t;
 #define GET_THREAD_ID(X)  X = GetCurrentThreadId()
 #elif defined(__APPLE__)
+#include <pthread.h> /* for pthread_threadid_np */
 typedef uint64_t thread_id_t;
 #define GET_THREAD_ID(X)  pthread_threadid_np(NULL, &X)
 #else

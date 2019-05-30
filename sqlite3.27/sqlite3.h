@@ -11711,7 +11711,11 @@ struct fts5_api {
 ** AERGOLITE API
 */
 
+#include "binn.h"
+
 typedef unsigned char uchar;
+
+typedef void aergolite;
 
 /*
 ** These methods should be implemented in the plugin interface.
@@ -11840,6 +11844,20 @@ uchar* aergolite_decrypt(aergolite *this_node, uchar *data, int *psize, int coun
 #else
 #define aergolite_encrypt(this_node,data,psize,counter)   data
 #define aergolite_decrypt(this_node,data,psize,counter)   data
+#endif
+
+
+/*
+** Debug messages
+*/
+
+#ifdef DEBUGPRINT
+SQLITE_API void aergolite_debug_log(char *format, ...);
+#define SYNCTRACE      aergolite_debug_log
+#define SYNCERROR      aergolite_debug_log
+#else
+#define SYNCTRACE(...)
+#define SYNCERROR(...)
 #endif
 
 

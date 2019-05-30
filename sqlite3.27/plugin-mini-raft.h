@@ -4,7 +4,6 @@
 #include "../common/uv_callback.c"
 #endif
 
-typedef void aergolite;
 #include "sqlite3.h"
 
 #define SQLITE_PRIVATE static
