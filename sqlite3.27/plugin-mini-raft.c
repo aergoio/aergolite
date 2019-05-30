@@ -183,8 +183,6 @@ SQLITE_API char * get_protocol_status(void *arg, BOOL extended) {
 
   //sqlite3_str_appendf(str, "\"last_sync\": %lld\n", plugin->last_sync);
 
-//loc_return:
-
   sqlite3_str_appendchar(str, 1, '}');
 
   return sqlite3_str_finish(str);
@@ -3668,7 +3666,6 @@ loc_failed:
 
 /****************************************************************************/
 
-//int plugin_init(aergolite *this_node, void **pinstance) {
 void * plugin_init(aergolite *this_node, char *uri) {
   struct tcp_address *addr;
   plugin *plugin;
@@ -3693,18 +3690,17 @@ void * plugin_init(aergolite *this_node, char *uri) {
   /* parse the node discovery parameter */
 
   discovery = (char*) sqlite3_uri_parameter(uri, "discovery");
-
+  /*
+  ** if no node discovery is supplied, the database can only be used locally
+  ** without connections to other nodes.
+  */
   if( discovery ){
-
-  plugin->bind = parse_discovery_address(discovery, 0);
-
-  if( plugin->bind==(struct tcp_address *)-1 ) goto loc_failed;
-
-  for (addr = plugin->bind; addr; addr = addr->next) {
-    SYNCTRACE("  bind address: 0.0.0.0:%d \n", addr->port);
-    SYNCTRACE("  discovery address: %s:%d \n", addr->host, addr->port);
-  }
-
+    plugin->bind = parse_discovery_address(discovery, 0);
+    if( plugin->bind==(struct tcp_address *)-1 ) goto loc_failed;
+    for (addr = plugin->bind; addr; addr = addr->next) {
+      SYNCTRACE("  bind address: 0.0.0.0:%d \n", addr->port);
+      SYNCTRACE("  discovery address: %s:%d \n", addr->host, addr->port);
+    }
   }
 
 
@@ -3743,11 +3739,6 @@ void * plugin_init(aergolite *this_node, char *uri) {
 
   //send_request_to_worker(plugin->worker_address, msg, size, &response);
 
-
-
-  //*pinstance = plugin;
-  //return SQLITE_OK;
-
   return plugin;
 
 loc_failed:
@@ -3759,30 +3750,12 @@ loc_failed:
 
 /****************************************************************************/
 
-//    "local,",       -- node discovery can be handled by the plugin via uri parsing
-
 // int register_plugin(){ -- if using as a library, this can be the entry point
 
 int register_miniraft_plugin(){
   int rc;
 
   SYNCTRACE("registering the mini-raft plugin\n");
-
-#if 0
-  aergolite_plugin *plugin_functions = {
-    1,            /* version */
-    "mini-raft",  /* plugin name */
-    plugin_init,
-    plugin_end,
-    on_new_local_transaction,
-    get_protocol_status,
-    NULL
-  };
-
-  aergolite_plugin_register(plugin_functions);
-#endif
-
-  //aergolite_plugin_register("mini-raft", plugin_init, plugin_end, on_new_local_transaction, get_protocol_status);
 
   rc = aergolite_plugin_register("mini-raft",
     plugin_init,
@@ -3792,5 +3765,4 @@ int register_miniraft_plugin(){
   );
 
   return rc;
-
 }

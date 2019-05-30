@@ -170,10 +170,10 @@ struct transaction {
 };
 
 
-struct plugin {  // plugin *instance;   instance->id    this_node->id
+struct plugin {
   int node_id;                /* Node id */
 
-  aergolite *this_node;       /* x */
+  aergolite *this_node;       /* Reference to the aergolite instance */
 
   struct tcp_address *bind;   /* Address(es) to bind */
   uv_udp_t *udp_sock;         /* Socket used for UDP communication */
@@ -200,7 +200,7 @@ struct plugin {  // plugin *instance;   instance->id    this_node->id
   int thread_active;          /* Whether the worker thread for this pager is active */
   uv_loop_t *loop;            /* libuv event loop for this thread */
 
-  uv_timer_t aergolite_core_timer;  /* x */
+  uv_timer_t aergolite_core_timer;  /* Timer for the aergolite periodic function */
 
   uv_timer_t after_connections_timer;
 
@@ -213,30 +213,8 @@ struct plugin {  // plugin *instance;   instance->id    this_node->id
   uv_timer_t reconnect_timer;
   int reconnect_timer_enabled;
 
-#if 0
-  int64 current_local_tid;    /* the current transaction being logged in the wal-local */
-  int64 current_remote_tid;   /* the current transaction being logged in the wal-remote, if not using log table */
-  int64 last_local_tid;       /* last transaction in the wal-local file */
-  int64 last_remote_tid;      /* last transaction in the blockchain */
-  uchar last_blockchain_hash[32] ; /* last transaction hash */
-  u32 last_sent_frame;        /* the WAL frame of the last sent transaction */
-  int64 last_sent_tid;        /* last transaction sent to the primary node */
-  int64 last_ack_tid;         /* last transaction acknowledged by the primary node */
-  int64 last_valid_tid;       /* last transaction accepted by the primary node */
-//int64 base_tid;             /* the 'base' transaction id, the one that comes before the first on the log table */
-  int64 failed_txn_id;        /* failed transaction id */
-  binn *failed_txns;          /* list of failed transactions */
-
-//int    num_local_txns;      /* number of transactions on the wal-local */
-  int    num_blockchain_txns; /* number of transactions on the blockchain */
-#endif
-
-//  BOOL   db_is_ready;         /* if the app can read and write from/to the database */
-  //u32    total_pages;         /* to calculate the download progress */
-  //u32    downloaded_pages;    /* to calculate the download progress */
-  //int    db_state;
-  int    sync_down_state;     /* (sync downstream state) UNKNOWN, SYNCING, IN_SYNC, OUTDATED */
-  int    sync_up_state;       /* (sync upstream state)   HAS_LOCAL_CHANGES, SYNCING, IN_SYNC */
+  int sync_down_state;        /* downstream synchronization state */
+  int sync_up_state;          /* upstream synchronization state */
 };
 
 
