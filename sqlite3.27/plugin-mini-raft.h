@@ -1,8 +1,8 @@
+#include "../common/uv_msg_framing.c"
+#include "../common/uv_send_message.c"
 #if TARGET_OS_IPHONE
 #include "../common/uv_callback.c"
 #endif
-#include "../common/uv_msg_framing.c"
-#include "../common/uv_send_message.c"
 
 typedef void aergolite;
 #include "sqlite3.h"
