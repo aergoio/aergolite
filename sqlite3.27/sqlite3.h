@@ -11707,6 +11707,163 @@ struct fts5_api {
 ** END OF REGISTRATION API
 *************************************************************************/
 
+/*************************************************************************
+** AERGOLITE API
+*/
+
+typedef unsigned char uchar;
+
+/*
+** These methods should be implemented in the plugin interface.
+** AergoLite will fire these callbacks.
+*/
+
+#if 0
+
+typedef struct aergolite_plugin aergolite_plugin;
+
+/* All the pointers bellow must be valid */
+struct aergolite_plugin {
+  aergolite_plugin *next;                 /* next entry in the list */
+  char name[64];
+  void* (*xInit)(aergolite*, char* uri);  /* must return the plugin instance as return value */
+  int (*xEnd)(void*);
+  int (*xOnNewLocalTransaction)(void*);   // on_new_local_transaction
+  int (*xStatus)(void*, int extended);    // or xProtocolStatus
+};
+
+//! maybe the aergolite struct will not be passed as a struct but as a handle...
+
+struct aergolite_plugin {
+  int iVersion;
+  char zName[64];
+
+  //int (*xInit)(aergolite*, void**);   <- returning the plugin instance as parameter (maybe not supported on some wrappers)
+  void* (*xInit)(aergolite*, char* uri);  /* must return the plugin instance as return value */
+  int (*xEnd)(void*);
+  int (*xOnNewLocalTransaction)(void*);   // on_new_local_transaction
+  int (*xStatus)(void*, int extended);  // or xProtocolStatus
+
+  aergolite_plugin *next;  /* must be NULL */
+
+  /* Methods above are valid for version 1 */
+  /* Additional methods may be added in future releases */
+};
+
+SQLITE_API int aergolite_plugin_register(aergolite_plugin*);
+
+#endif
+
+SQLITE_API int aergolite_plugin_register(
+  char *name,                            /* name of the plugin */
+  void* (*xInit)(aergolite*, char* uri), /* initializes a new plugin instance */
+  void (*xEnd)(void*),                   /* terminates the instance */
+  void (*xOnNewLocalTransaction)(void*), /* on_new_local_transaction notification */
+  char* (*xStatus)(void*, int extended)  /* used to retrieve the protocol status */
+);
+
+SQLITE_API void aergolite_periodic(aergolite *this_node);
+
+
+SQLITE_API int aergolite_get_node_id(aergolite *this_node);
+SQLITE_API int aergolite_set_node_id(aergolite *this_node, int id);
+
+SQLITE_API char* aergolite_get_node_info(aergolite *this_node);
+
+
+
+SQLITE_API int aergolite_store_and_empty_local_db(aergolite *this_node);
+
+
+SQLITE_API int aergolite_get_next_local_transaction(aergolite *this_node, int64 *ptid, binn **plog);
+
+SQLITE_API void aergolite_free_transaction(binn *log);
+
+SQLITE_API int aergolite_get_next_blockchain_txn(
+  aergolite *this_node, int64 prev_tid, int64 *ptid, void **plist, int *pnode_id
+);
+
+SQLITE_API int64 aergolite_get_last_blockchain_tid(aergolite *this_node);
+//  prev_tid = aergolite_get_last_blockchain_transaction_id(this_node);
+SQLITE_API int aergolite_get_num_blockchain_txns(aergolite *this_node);
+
+SQLITE_API char * aergolite_get_blockchain_status(aergolite *this_node);
+
+
+SQLITE_API int aergolite_check_transaction_in_blockchain(
+  aergolite *this_node, int64 tid, BOOL *ppresent
+);
+
+SQLITE_API int aergolite_execute_transaction_on_blockchain(
+  aergolite *this_node, int node_id, int64 tid, void *list, uchar *hash
+);
+
+// -- not 'sent'...  processed
+SQLITE_API void aergolite_update_sent_transaction(aergolite *this_node, int64 tid, int included);
+
+
+/* local config */
+
+SQLITE_API int aergolite_set_node_config_str(aergolite *this_node, char *key, char *value);
+SQLITE_API int aergolite_set_node_config_int(aergolite *this_node, char *key, int64 value);
+SQLITE_API int aergolite_set_node_config_double(aergolite *this_node, char *key, double value);
+SQLITE_API int aergolite_set_node_config_blob(aergolite *this_node, char *key, char *value, int size);
+
+SQLITE_API char*  aergolite_get_node_config_str(aergolite *this_node, char *key);
+SQLITE_API int64  aergolite_get_node_config_int(aergolite *this_node, char *key);
+SQLITE_API double aergolite_get_node_config_double(aergolite *this_node, char *key);
+SQLITE_API char*  aergolite_get_node_config_blob(aergolite *this_node, char *key, int *psize);
+
+/*
+** Returned memory from _str and _blob must be released with sqlite3_free()
+*/
+
+
+/* local queue database */
+
+SQLITE_API int aergolite_queue_db_exec(aergolite *this_node, const char *sql, ...);
+
+SQLITE_API int aergolite_queue_db_query_int32(aergolite *this_node, int *pvalue, char *sql, ...);
+SQLITE_API int aergolite_queue_db_query_int64(aergolite *this_node, int64 *pvalue, char *sql, ...);
+SQLITE_API int aergolite_queue_db_query_double(aergolite *this_node, double *pvalue, char *sql, ...);
+SQLITE_API int aergolite_queue_db_query_str(aergolite *this_node, char **pvalue, char *sql, ...);
+SQLITE_API int aergolite_queue_db_query_blob(aergolite *this_node, char **pvalue, int *psize, char *sql, ...);
+
+/* consensus database */
+
+SQLITE_API int aergolite_consensus_db_exec(aergolite *this_node, const char *sql, ...);
+
+SQLITE_API int aergolite_consensus_db_query_int32(aergolite *this_node, int *pvalue, char *sql, ...);
+SQLITE_API int aergolite_consensus_db_query_int64(aergolite *this_node, int64 *pvalue, char *sql, ...);
+SQLITE_API int aergolite_consensus_db_query_double(aergolite *this_node, double *pvalue, char *sql, ...);
+SQLITE_API int aergolite_consensus_db_query_str(aergolite *this_node, char **pvalue, char *sql, ...);
+SQLITE_API int aergolite_consensus_db_query_blob(aergolite *this_node, char **pvalue, int *psize, char *sql, ...);
+
+/*
+** Returned memory from _str and _blob must be released with sqlite3_free()
+*/
+
+
+
+SQLITE_API void *sqlite3_malloc_zero(int64 n);
+SQLITE_API char *sqlite3_memdup(char *source, int size);
+SQLITE_API char *sqlite3_strdup(char *text);
+SQLITE_API char *stripchr(char *mainstr, int separator);
+
+
+#ifdef SQLITE_HAS_CODEC
+uchar* aergolite_encrypt(aergolite *this_node, uchar *data, int *psize, int counter);
+uchar* aergolite_decrypt(aergolite *this_node, uchar *data, int *psize, int counter);
+#else
+#define aergolite_encrypt(this_node,data,psize,counter)   data
+#define aergolite_decrypt(this_node,data,psize,counter)   data
+#endif
+
+
+/*
+** END OF AERGOLITE API
+*************************************************************************/
+
 #ifdef __cplusplus
 }  /* end of the 'extern "C"' block */
 #endif

@@ -83,11 +83,14 @@ debug:   export LIBFLAGS := -g -DSQLITE_DEBUG=1 -DDEBUGPRINT=1 $(DEBUGFLAGS) $(L
 fortest: export LIBFLAGS := -DLITESYNC_FOR_TESTING $(LIBFLAGS)
 iostest: export LIBFLAGS := -DLITESYNC_FOR_TESTING $(LIBFLAGS)
 
-litesync-0.1.dll: $(SHORT).o
+
+OBJECTS = sqlite3.o plugin-mini-raft.o
+
+litesync-0.1.dll: $(OBJECTS)
 	$(CC) -shared -Wl,--out-implib,$(IMPLIB).lib $^ -o $@ $(LFLAGS) -lbinn-1.0 -llibuv -lws2_32
 	$(STRIP) $@
 
-liblitesync.0.dylib: $(SHORT).o
+liblitesync.0.dylib: $(OBJECTS)
 	$(CC) -dynamiclib -install_name "$(INSTNAME)" -current_version $(CURR_VERSION) -compatibility_version $(COMPAT_VERSION) $^ -o $@ $(LDFLAGS) -lbinn -luv
 	$(STRIP) -x $@
 	install_name_tool -change libbinn.1.dylib /usr/local/lib/libbinn.1.dylib $@
@@ -95,14 +98,14 @@ liblitesync.0.dylib: $(SHORT).o
 	ln -sf $(LIBRARY) $(LIBNICK2)
 	ln -sf $(LIBRARY) $(LIBNICK3)
 
-liblitesync.a: $(SHORT).o
+liblitesync.a: $(OBJECTS)
 	$(AR) rcs $@ $^
 
-liblitesync.dylib: $(SHORT).o
+liblitesync.dylib: $(OBJECTS)
 	$(CC) -dynamiclib -o $@ $^ $(LDFLAGS) -lbinn -luv
 	$(STRIP) -x $@
 
-liblitesync.so.0.0.1: $(SHORT).o
+liblitesync.so.0.0.1: $(OBJECTS)
 	$(CC) -shared -Wl,-soname,$(SONAME) $^ -o $@ $(LDFLAGS) -lbinn -luv
 	$(STRIP) $@
 	ln -sf $(LIBRARY) $(LIBNICK1)
@@ -110,8 +113,13 @@ liblitesync.so.0.0.1: $(SHORT).o
 	ln -sf $(LIBRARY) $(LIBNICK3)
 	ln -sf $(LIBNICK3) $(LIBNICK4)
 
-$(SHORT).o: $(SHORT).c litesync.h litesync-int.h ../common/single_instance.h ../common/single_instance.c ../common/checksum.c ../common/linked_list.c
+
+$(SHORT).o: $(SHORT).c litesync-int.h ../common/single_instance.h ../common/single_instance.c ../common/checksum.c ../common/linked_list.c
 	$(CC) $(LIBFLAGS) -c $< -o $@
+
+plugin-mini-raft.o: plugin-mini-raft.c plugin-mini-raft.h ../common/sha256.c ../common/sha256.h ../common/uv_msg_framing.c ../common/uv_msg_framing.h ../common/uv_send_message.c ../common/uv_callback.c ../common/uv_callback.h
+	$(CC) $(LIBFLAGS) -c $< -o $@
+
 
 $(SSHELL): shell.o $(LIBRARY)
 ifeq ($(OS),Windows_NT)

@@ -80,7 +80,7 @@ static int LockFile(int fd, enum LockOperation lock) {
 
 /***************************************************************************/
 
-SQLITE_PRIVATE BOOL check_single_instance(litesync *this_node, char *dbpath) {
+SQLITE_PRIVATE BOOL check_single_instance(aergolite *this_node, char *dbpath) {
   BOOL success=FALSE;
 
 #if _WIN32
@@ -134,10 +134,16 @@ SQLITE_PRIVATE BOOL check_single_instance(litesync *this_node, char *dbpath) {
 
 #else
 
-  char file_name[128];
+  char file_name[256];
   int  fdLock;
 
+#if TARGET_OS_IPHONE
+  strcpy(file_name, dbpath);
+  strcat(file_name, "-lock");
+#else
   create_unix_tempfile_name(file_name, dbpath);
+#endif
+
   SYNCTRACE("check_single_instance dbpath=%s lock_file=%s\n", dbpath, file_name);
   if (file_name[0] == 0) return FALSE;
 
@@ -162,7 +168,7 @@ SQLITE_PRIVATE BOOL check_single_instance(litesync *this_node, char *dbpath) {
 
 /***************************************************************************/
 
-SQLITE_PRIVATE void release_single_instance(litesync *this_node) {
+SQLITE_PRIVATE void release_single_instance(aergolite *this_node) {
 
   SYNCTRACE("release_single_instance\n");
 
