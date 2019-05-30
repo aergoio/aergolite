@@ -48,53 +48,65 @@ static int thread_idx(thread_id_t tid){
   return 0;
 }
 
-#define DEBUG_LOG_TOFILE(...) do { \
-  thread_id_t _thread_id; \
-  FILE *f; \
-  char _fname[256]; \
-  sprintf(_fname, "log-%d", getpid()); \
-  f = fopen(_fname, "a+"); \
-  GET_THREAD_ID(_thread_id); \
-  if( _main_tid==0 ) _main_tid = _thread_id; \
-  if( _thread_id!=_last_tid ) fprintf(f, "\n"); \
-  _last_tid = _thread_id; \
-  if( _thread_id==_main_tid ){ \
-    fprintf(f, "[MAIN] "); \
-  } else { \
-    fprintf(f, "[WORKER %d] ", thread_idx(_thread_id)); \
-  } \
-  fprintf(f, __VA_ARGS__); \
-  fclose(f); \
-} while (0)
+SQLITE_PRIVATE void aergoliteLogToFile(char *format, va_list ap) {
+  thread_id_t _thread_id;
+  FILE *f;
+  char _fname[256];
+  sprintf(_fname, "log-%d", getpid());
+  f = fopen(_fname, "a+");
+  GET_THREAD_ID(_thread_id);
+  if( _main_tid==0 ) _main_tid = _thread_id;
+  if( _thread_id!=_last_tid ) fprintf(f, "\n");
+  _last_tid = _thread_id;
+  if( _thread_id==_main_tid ){
+    fprintf(f, "[MAIN] ");
+  } else {
+    fprintf(f, "[WORKER %d] ", thread_idx(_thread_id));
+  }
+  vfprintf(f, format, ap);
+  fclose(f);
+}
 
-#define DEBUG_LOG_PRINT(...) do { \
-  thread_id_t _thread_id; \
-  GET_THREAD_ID(_thread_id); \
-  if( _main_tid==0 ) _main_tid = _thread_id; \
-  if( _thread_id!=_last_tid ) printf("\n"); \
-  _last_tid = _thread_id; \
-  if( _thread_id==_main_tid ){ \
-    printf("[MAIN] "); \
-  } else { \
-    printf("[WORKER %d] ", thread_idx(_thread_id)); \
-  } \
-  printf(__VA_ARGS__); \
-} while (0)
+SQLITE_PRIVATE void aergoliteLogPrint(char *format, va_list ap) {
+  thread_id_t _thread_id;
+  GET_THREAD_ID(_thread_id);
+  if( _main_tid==0 ) _main_tid = _thread_id;
+  if( _thread_id!=_last_tid ) printf("\n");
+  _last_tid = _thread_id;
+  if( _thread_id==_main_tid ){
+    printf("[MAIN] ");
+  } else {
+    printf("[WORKER %d] ", thread_idx(_thread_id));
+  }
+  vprintf(format, ap);
+}
+
+#define DEBUG_LOG_TOFILE  aergoliteLogToFile
+#define DEBUG_LOG_PRINT   aergoliteLogPrint
 
 #if TARGET_OS_IPHONE
 #define DEBUG_LOG DEBUG_LOG_PRINT
 #else
-#define DEBUG_LOG DEBUG_LOG_TOFILE
+//#define DEBUG_LOG DEBUG_LOG_TOFILE
+#define DEBUG_LOG DEBUG_LOG_PRINT
 #endif
+
+SQLITE_API void aergolite_log(char *format, ...) {
+  va_list ap;
+  va_start(ap, format);
+  DEBUG_LOG(format, ap);
+  va_end(ap);
+}
 
 #endif  /* NOT __ANDROID__ */
 
 #endif  /* DEBUGPRINT */
 
+
 #ifdef DEBUGPRINT
-#define SYNCTRACE         DEBUG_LOG
-#define SYNCERROR         DEBUG_LOG
-#define CODECTRACE        DEBUG_LOG
+#define SYNCTRACE         aergolite_log
+#define SYNCERROR         aergolite_log
+#define CODECTRACE        aergolite_log
 #else
 #define SYNCTRACE(...)
 #define SYNCERROR(...)

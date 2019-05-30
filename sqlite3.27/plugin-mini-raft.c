@@ -3675,6 +3675,8 @@ void * plugin_init(aergolite *this_node, char *uri) {
   char *discovery;
   int64 random_no;
 
+  SYNCTRACE("initializing a new instance of mini-raft plugin\n");
+
   /* allocate a new plugin object */
 
   plugin = sqlite3_malloc_zero(sizeof(struct plugin));
@@ -3685,13 +3687,14 @@ void * plugin_init(aergolite *this_node, char *uri) {
   plugin->node_id = aergolite_get_node_id(this_node);
 
 
-  /*  */
+  plugin->is_leader = FALSE;
 
-//!is the discovery on the same plugin??
+
+  /* parse the node discovery parameter */
 
   discovery = (char*) sqlite3_uri_parameter(uri, "discovery");
 
-  plugin->is_leader = FALSE;
+  if( discovery ){
 
   plugin->bind = parse_discovery_address(discovery, 0);
 
@@ -3702,6 +3705,7 @@ void * plugin_init(aergolite *this_node, char *uri) {
     SYNCTRACE("  discovery address: %s:%d \n", addr->host, addr->port);
   }
 
+  }
 
 
   /* set the unix domain socket or pipe used to communicate with the worker thread */
@@ -3761,6 +3765,8 @@ loc_failed:
 
 int register_miniraft_plugin(){
   int rc;
+
+  SYNCTRACE("registering the mini-raft plugin\n");
 
 #if 0
   aergolite_plugin *plugin_functions = {
