@@ -11715,44 +11715,8 @@ typedef unsigned char uchar;
 
 /*
 ** These methods should be implemented in the plugin interface.
-** AergoLite will fire these callbacks.
+** AergoLite core will call them.
 */
-
-#if 0
-
-typedef struct aergolite_plugin aergolite_plugin;
-
-/* All the pointers bellow must be valid */
-struct aergolite_plugin {
-  aergolite_plugin *next;                 /* next entry in the list */
-  char name[64];
-  void* (*xInit)(aergolite*, char* uri);  /* must return the plugin instance as return value */
-  int (*xEnd)(void*);
-  int (*xOnNewLocalTransaction)(void*);   // on_new_local_transaction
-  int (*xStatus)(void*, int extended);    // or xProtocolStatus
-};
-
-//! maybe the aergolite struct will not be passed as a struct but as a handle...
-
-struct aergolite_plugin {
-  int iVersion;
-  char zName[64];
-
-  //int (*xInit)(aergolite*, void**);   <- returning the plugin instance as parameter (maybe not supported on some wrappers)
-  void* (*xInit)(aergolite*, char* uri);  /* must return the plugin instance as return value */
-  int (*xEnd)(void*);
-  int (*xOnNewLocalTransaction)(void*);   // on_new_local_transaction
-  int (*xStatus)(void*, int extended);  // or xProtocolStatus
-
-  aergolite_plugin *next;  /* must be NULL */
-
-  /* Methods above are valid for version 1 */
-  /* Additional methods may be added in future releases */
-};
-
-SQLITE_API int aergolite_plugin_register(aergolite_plugin*);
-
-#endif
 
 SQLITE_API int aergolite_plugin_register(
   char *name,                            /* name of the plugin */
@@ -11762,15 +11726,26 @@ SQLITE_API int aergolite_plugin_register(
   char* (*xStatus)(void*, int extended)  /* used to retrieve the protocol status */
 );
 
+/*
+** This function must be called by the plugin periodically
+** using a timer. The suggested interval is 250 ms.
+** The interval must not be greater than 1 second.
+*/
 SQLITE_API void aergolite_periodic(aergolite *this_node);
 
 
+/*
+** Retrieving info from this node
+*/
 SQLITE_API int aergolite_get_node_id(aergolite *this_node);
 SQLITE_API int aergolite_set_node_id(aergolite *this_node, int id);
 
 SQLITE_API char* aergolite_get_node_info(aergolite *this_node);
 
 
+/*
+** Interface to AergoLite
+*/
 
 SQLITE_API int aergolite_store_and_empty_local_db(aergolite *this_node);
 
@@ -11802,7 +11777,9 @@ SQLITE_API int aergolite_execute_transaction_on_blockchain(
 SQLITE_API void aergolite_update_sent_transaction(aergolite *this_node, int64 tid, int included);
 
 
-/* local config */
+/*
+** Local config
+*/
 
 SQLITE_API int aergolite_set_node_config_str(aergolite *this_node, char *key, char *value);
 SQLITE_API int aergolite_set_node_config_int(aergolite *this_node, char *key, int64 value);
@@ -11813,13 +11790,12 @@ SQLITE_API char*  aergolite_get_node_config_str(aergolite *this_node, char *key)
 SQLITE_API int64  aergolite_get_node_config_int(aergolite *this_node, char *key);
 SQLITE_API double aergolite_get_node_config_double(aergolite *this_node, char *key);
 SQLITE_API char*  aergolite_get_node_config_blob(aergolite *this_node, char *key, int *psize);
+/* Returned memory from _str and _blob must be released with sqlite3_free() */
+
 
 /*
-** Returned memory from _str and _blob must be released with sqlite3_free()
+** Local queue database
 */
-
-
-/* local queue database */
 
 SQLITE_API int aergolite_queue_db_exec(aergolite *this_node, const char *sql, ...);
 
@@ -11828,8 +11804,11 @@ SQLITE_API int aergolite_queue_db_query_int64(aergolite *this_node, int64 *pvalu
 SQLITE_API int aergolite_queue_db_query_double(aergolite *this_node, double *pvalue, char *sql, ...);
 SQLITE_API int aergolite_queue_db_query_str(aergolite *this_node, char **pvalue, char *sql, ...);
 SQLITE_API int aergolite_queue_db_query_blob(aergolite *this_node, char **pvalue, int *psize, char *sql, ...);
+/* Returned memory from _str and _blob must be released with sqlite3_free() */
 
-/* consensus database */
+/*
+** Consensus database
+*/
 
 SQLITE_API int aergolite_consensus_db_exec(aergolite *this_node, const char *sql, ...);
 
@@ -11838,18 +11817,22 @@ SQLITE_API int aergolite_consensus_db_query_int64(aergolite *this_node, int64 *p
 SQLITE_API int aergolite_consensus_db_query_double(aergolite *this_node, double *pvalue, char *sql, ...);
 SQLITE_API int aergolite_consensus_db_query_str(aergolite *this_node, char **pvalue, char *sql, ...);
 SQLITE_API int aergolite_consensus_db_query_blob(aergolite *this_node, char **pvalue, int *psize, char *sql, ...);
+/* Returned memory from _str and _blob must be released with sqlite3_free() */
+
 
 /*
-** Returned memory from _str and _blob must be released with sqlite3_free()
+** General functions
 */
-
-
 
 SQLITE_API void *sqlite3_malloc_zero(int64 n);
 SQLITE_API char *sqlite3_memdup(char *source, int size);
 SQLITE_API char *sqlite3_strdup(char *text);
 SQLITE_API char *stripchr(char *mainstr, int separator);
 
+
+/*
+** Encryption
+*/
 
 #ifdef SQLITE_HAS_CODEC
 uchar* aergolite_encrypt(aergolite *this_node, uchar *data, int *psize, int counter);
