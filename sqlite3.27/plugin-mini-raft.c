@@ -3738,7 +3738,7 @@ void * plugin_init(aergolite *this_node, char *uri) {
 
   /* start the worker thread */
   SYNCTRACE("starting worker thread\n");
-  uv_thread_create(&plugin->worker_thread, node_thread, this_node);
+  uv_thread_create(&plugin->worker_thread, node_thread, plugin);
   plugin->thread_running = TRUE;
 
   //send_request_to_worker(plugin->worker_address, msg, size, &response);
