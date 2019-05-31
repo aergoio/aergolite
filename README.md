@@ -85,7 +85,7 @@ cd ..
 
 ```
 git clone https://github.com/aergoio/aergolite-poc
-cd aergolite-poc/sqlite3.27
+cd aergolite-poc
 make
 sudo make install
 cd -
@@ -117,7 +117,7 @@ cd ..
 
 ```
 git clone https://github.com/aergoio/aergolite-poc
-cd aergolite-poc/sqlite3.27
+cd aergolite-poc
 make
 cd -
 ```
