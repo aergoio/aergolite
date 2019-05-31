@@ -5,8 +5,8 @@
 # in the executable.
 
 ifeq ($(OS),Windows_NT)
-    CFLAGS   = -I../../libuv/include -I../../binn/src
-    LFLAGS   = -L../../libuv/Release -L../../binn/src/win32/Release
+    CFLAGS   = -I../libuv/include -I../binn/src
+    LFLAGS   = -L../libuv/Release -L../binn/src/win32/Release
     IMPLIB   = litesync-0.1
     LIBRARY  = litesync-0.1.dll
     LDFLAGS  += -static-libgcc -static-libstdc++
