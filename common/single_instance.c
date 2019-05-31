@@ -84,7 +84,7 @@ static int LockFile(int fd, enum LockOperation lock) {
 SQLITE_PRIVATE BOOL check_single_instance(aergolite *this_node, char *dbpath) {
   BOOL success=FALSE;
 
-#if _WIN32
+#ifdef _WIN32
 
   char mutex_name[128];
   HANDLE hMutex;
@@ -173,7 +173,7 @@ SQLITE_PRIVATE void release_single_instance(aergolite *this_node) {
 
   SYNCTRACE("release_single_instance\n");
 
-#if _WIN32
+#ifdef _WIN32
 
   if( this_node->single_instance ){
     ReleaseMutex(this_node->single_instance);
