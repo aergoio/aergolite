@@ -1,4 +1,5 @@
 #if defined(__linux__)  /* includes Android */
+#include <sys/socket.h>
 #include <sys/un.h>
 #endif
 
