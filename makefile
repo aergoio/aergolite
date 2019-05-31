@@ -147,7 +147,7 @@ else
 	cd $(LIBPATH2) && ln -sf ../$(LIBRARY) $(LIBNICK3)
 	cd $(LIBPATH2) && ln -sf $(LIBNICK3) $(LIBNICK4)
 endif
-	cp $(SHORT).h $(INCPATH)
+	cp core/sqlite3.h $(INCPATH)
 	cp $(SSHELL) $(EXEPATH)
 
 clean:
