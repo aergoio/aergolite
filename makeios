@@ -41,11 +41,11 @@ buildit()
     export STRIP="$(xcrun -sdk iphoneos -find strip)"
     export LD="$(xcrun -sdk iphoneos -find ld)"
     export CPP="$CC -E"
-    export CFLAGS="-arch ${target} -isysroot $PLATFORMPATH/$platform.platform/Developer/SDKs/$platform$SDKVERSION.sdk -miphoneos-version-min=$SDKMINVERSION -I../../binn/src -I../../libuv/include"
+    export CFLAGS="-arch ${target} -isysroot $PLATFORMPATH/$platform.platform/Developer/SDKs/$platform$SDKVERSION.sdk -miphoneos-version-min=$SDKMINVERSION -I../binn/src -I../libuv/include"
     export AR=$(xcrun -sdk iphoneos -find ar)
     export RANLIB=$(xcrun -sdk iphoneos -find ranlib)
     export CPPFLAGS="-arch ${target} -isysroot $PLATFORMPATH/$platform.platform/Developer/SDKs/$platform$SDKVERSION.sdk -miphoneos-version-min=$SDKMINVERSION"
-    export LDFLAGS="-arch ${target} -isysroot $PLATFORMPATH/$platform.platform/Developer/SDKs/$platform$SDKVERSION.sdk -L."  # -L../../binn/output/$target/lib -L../../libuv/output/$target/lib
+    export LDFLAGS="-arch ${target} -isysroot $PLATFORMPATH/$platform.platform/Developer/SDKs/$platform$SDKVERSION.sdk -L."  # -L../binn/output/$target/lib -L../libuv/output/$target/lib
 
     #export LIBFLAGS="-DSQLITE_ENABLE_LOCKING_STYLE=0"  -- to remove warning on getuuid()
 
@@ -60,10 +60,10 @@ buildit()
     mv liblitesync.dylib $pwd/ios/$target
 }
 
-cp ../../binn/ios/libbinn.a .
-cp ../../binn/ios/libbinn.dylib .
-cp ../../libuv/ios/libuv.a .
-cp ../../libuv/ios/libuv.1.dylib libuv.dylib
+cp ../binn/ios/libbinn.a .
+cp ../binn/ios/libbinn.dylib .
+cp ../libuv/ios/libuv.a .
+cp ../libuv/ios/libuv.1.dylib libuv.dylib
 
 install_name_tool -id @rpath/libuv.dylib libuv.dylib
 install_name_tool -id @rpath/libbinn.dylib libbinn.dylib
