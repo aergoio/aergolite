@@ -114,10 +114,10 @@ liblitesync.so.0.0.1: $(OBJECTS)
 	ln -sf $(LIBNICK3) $(LIBNICK4)
 
 
-$(SHORT).o: $(SHORT).c litesync-int.h ../common/single_instance.h ../common/single_instance.c ../common/checksum.c ../common/linked_list.c
+sqlite3.o: core/sqlite3.c core/aergolite.h core/single_instance.h core/single_instance.c common/sha256.c common/sha256.h common/checksum.c common/linked_list.c
 	$(CC) $(LIBFLAGS) -c $< -o $@
 
-plugin-mini-raft.o: plugin-mini-raft.c plugin-mini-raft.h ../common/sha256.c ../common/sha256.h ../common/uv_msg_framing.c ../common/uv_msg_framing.h ../common/uv_send_message.c ../common/uv_callback.c ../common/uv_callback.h
+plugin-mini-raft.o: plugins/mini-raft/mini-raft.c plugins/mini-raft/mini-raft.h common/sha256.c common/sha256.h plugins/common/uv_msg_framing.c plugins/common/uv_msg_framing.h plugins/common/uv_send_message.c plugins/common/uv_callback.c plugins/common/uv_callback.h
 	$(CC) $(LIBFLAGS) -c $< -o $@
 
 

@@ -1,7 +1,7 @@
 #include <string.h>
 #include <stdio.h>
 //#include "chacha.h"
-#include "endianess.h"
+#include "../common/endianess.h"
 
 typedef unsigned char u8;
 typedef unsigned int u32;
@@ -84,7 +84,7 @@ static void ChaChaCore(
     }
 }
 
-static const unsigned char sigma[16] = "L1t3R3pl1k4 c0d3";   // "expand 32-byte k"
+static const unsigned char sigma[16] = "A326oL1t3_r0CK5!";   // "expand 32-byte k"
 
 /* the iv can be 0, 4, 8 or 12 bytes */
 

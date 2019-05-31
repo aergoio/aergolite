@@ -1,5 +1,5 @@
 
-#include "../common/single_instance.h"
+#include "single_instance.h"
 
 typedef unsigned char uchar;
 

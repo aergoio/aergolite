@@ -14,9 +14,9 @@
 
 #include <unistd.h>  /* for unlink */
 
-#include "plugin-mini-raft.h"
+#include "mini-raft.h"
 
-#include "../common/linked_list.c"
+#include "../../common/linked_list.c"
 
 /*****************************************************************************/
 

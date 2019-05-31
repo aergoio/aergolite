@@ -4,11 +4,11 @@
 #include "../common/uv_callback.c"
 #endif
 
-#include "sqlite3.h"
+#include "../../core/sqlite3.h"
 
 #define SQLITE_PRIVATE static
 
-#include "../common/sha256.h"
+#include "../../common/sha256.h"
 
 
 /* peer communication */
