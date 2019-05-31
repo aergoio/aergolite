@@ -2154,7 +2154,7 @@ SQLITE_PRIVATE void worker_thread_on_close(uv_handle_t *handle) {
 
 /****************************************************************************/
 
-void worker_thread_on_walk(uv_handle_t *handle, void *arg) {
+SQLITE_PRIVATE void worker_thread_on_walk(uv_handle_t *handle, void *arg) {
   uv_close2(handle, worker_thread_on_close);
 }
 
@@ -3514,7 +3514,7 @@ SQLITE_API void plugin_end(void *arg){
 
 #define DEFAULT_RECONNECT_INTERVAL   3000  // milliseconds = 3 seconds
 
-struct tcp_address * parse_tcp_address(char *address, int common_reconnect_interval) {
+SQLITE_PRIVATE struct tcp_address * parse_tcp_address(char *address, int common_reconnect_interval) {
   struct tcp_address *first=0, *prev=0, *addr=0;
 
   if( !address ) return NULL;
@@ -3591,7 +3591,7 @@ loc_failed:
 
 /****************************************************************************/
 
-struct tcp_address * parse_discovery_address(char *address, int common_reconnect_interval) {
+SQLITE_PRIVATE struct tcp_address * parse_discovery_address(char *address, int common_reconnect_interval) {
   struct tcp_address *first=0, *prev=0, *addr=0;
 
   if( !address ) return NULL;
