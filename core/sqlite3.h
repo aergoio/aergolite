@@ -11777,8 +11777,7 @@ SQLITE_API int aergolite_execute_transaction_on_blockchain(
   aergolite *this_node, int node_id, int64 tid, void *list, uchar *hash
 );
 
-// -- not 'sent'...  processed
-SQLITE_API void aergolite_update_sent_transaction(aergolite *this_node, int64 tid, int included);
+SQLITE_API void aergolite_update_local_transaction(aergolite *this_node, int64 tid, int accepted);
 
 
 /*

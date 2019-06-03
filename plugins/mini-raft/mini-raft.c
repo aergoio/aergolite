@@ -725,7 +725,7 @@ SQLITE_PRIVATE void on_new_transaction_commit(plugin *plugin, struct transaction
 
   /* if the txn is from this node and it succeded */
   if( txn->node_id==plugin->node_id && rc==SQLITE_OK ){
-    aergolite_update_sent_transaction(this_node, txn->tid, TRUE);
+    aergolite_update_local_transaction(this_node, txn->tid, TRUE);
 //! or not needed, it can be done by aergolite on the aergolite_execute_transaction_on_blockchain() fn
   }
 
@@ -874,7 +874,7 @@ SQLITE_PRIVATE void on_transaction_exists(node *node, void *msg, int size) {
 
   SYNCTRACE("on_transaction_exists - tid=%" INT64_FORMAT "\n", tid);
 
-  aergolite_update_sent_transaction(this_node, tid, TRUE);
+  aergolite_update_local_transaction(this_node, tid, TRUE);
 
   send_next_local_transaction(plugin);
 
@@ -899,7 +899,7 @@ SQLITE_PRIVATE void on_transaction_failed(plugin *plugin, int64 tid, int rc) {
     if( txn ){
       if( txn->node_id==plugin->node_id ){
         /* mark that this local txn was processed */
-        aergolite_update_sent_transaction(this_node, tid, FALSE);
+        aergolite_update_local_transaction(this_node, tid, FALSE);
       }
       /* remove the transaction from the mempool */
       discard_mempool_transaction(plugin, txn);
@@ -1155,7 +1155,7 @@ SQLITE_PRIVATE int commit_transaction_to_blockchain(plugin *plugin, struct trans
   /* if the txn is from this node */
   if( txn->node_id==plugin->node_id ){
     //this_node->last_ack_tid = txn->tid;
-    aergolite_update_sent_transaction(this_node, txn->tid, rc==SQLITE_OK);
+    aergolite_update_local_transaction(this_node, txn->tid, rc==SQLITE_OK);
   }
 
   if( rc ) return rc;
