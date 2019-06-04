@@ -612,7 +612,7 @@ SQLITE_PRIVATE void on_requested_remote_transaction(node *node, void *msg, int s
             INT64_FORMAT " tid=%" INT64_FORMAT "\n", node_id, prev_tid, tid);
 
   /* check if the prev_tid equals the last tid on the blockchain */
-  last_remote_tid = aergolite_get_last_blockchain_tid(this_node);
+  last_remote_tid = aergolite_get_last_blockchain_transaction_id(this_node);
   if( last_remote_tid!=0 && last_remote_tid!=prev_tid ){
     sqlite3_log(1, "on_requested_remote_transaction: last_remote_tid != prev_tid  "
                    "last_remote_tid=%" INT64_FORMAT " prev_tid=%" INT64_FORMAT,
@@ -705,7 +705,7 @@ SQLITE_PRIVATE void on_new_transaction_commit(plugin *plugin, struct transaction
   //}
 
   /* check if the prev_tid equals the last tid on the blockchain */
-  last_remote_tid = aergolite_get_last_blockchain_tid(this_node);   //! it could check for error here
+  last_remote_tid = aergolite_get_last_blockchain_transaction_id(this_node);   //! it could check for error here
   if( last_remote_tid==txn->prev_tid ){
     uchar hash[SHA256_BLOCK_SIZE];
     //calculate_hash(tid, node_id, list, datetime, this_node->prev_hash, hash);
@@ -948,7 +948,7 @@ SQLITE_PRIVATE void start_downstream_db_sync(plugin *plugin) {
   plugin->sync_down_state = DB_STATE_SYNCHRONIZING;
 
   /* get the last transaction id from the blockchain */
-  last_tid = aergolite_get_last_blockchain_tid(this_node);
+  last_tid = aergolite_get_last_blockchain_transaction_id(this_node);
   /* request the next transaction from the primary node */
   request_next_blockchain_transaction(plugin, last_tid);
 
@@ -1098,7 +1098,7 @@ SQLITE_PRIVATE void on_get_next_transaction(node *node, void *msg, int size) {
   map = binn_map();
   if (!map) goto loc_failed;
 
-  rc = aergolite_get_next_blockchain_txn(this_node, prev_tid, &tid, &log, &node_id);
+  rc = aergolite_get_next_blockchain_transaction(this_node, prev_tid, &tid, &log, &node_id);
   switch( rc ){
   case SQLITE_NOTFOUND: /* there is no record with the given prev_tid */
     binn_map_set_int32(map, LITESYNC_CMD, LITESYNC_LOG_NOTFOUND);
@@ -1143,7 +1143,7 @@ SQLITE_PRIVATE int commit_transaction_to_blockchain(plugin *plugin, struct trans
             " node=%d tid=%" INT64_FORMAT " sql_count=%d\n",
             txn->seq, txn->node_id, txn->tid, binn_count(txn->log)-2 );
 
-  prev_tid = aergolite_get_last_blockchain_tid(this_node);
+  prev_tid = aergolite_get_last_blockchain_transaction_id(this_node);
 
 //! do we need the prev_tid ??????
 //  the fn bellow could return the seq
@@ -2923,7 +2923,7 @@ SQLITE_PRIVATE int calculate_new_leader(plugin *plugin){
 
   SYNCTRACE("calculate_new_leader\n");
 
-  num_blockchain_txns = aergolite_get_num_blockchain_txns(this_node);
+  num_blockchain_txns = aergolite_get_num_blockchain_transactions(this_node);
 
   /* check the highest number of transactions */
   max_txns = num_blockchain_txns;
@@ -3098,7 +3098,7 @@ SQLITE_PRIVATE void on_udp_message(uv_udp_t *socket, ssize_t nread, const uv_buf
       {
         //send_broadcast_messagef(plugin, "num_txns:%d:%d", num_blockchain_txns, plugin->node_id);
         char message[64];
-        int num_blockchain_txns = aergolite_get_num_blockchain_txns(this_node);
+        int num_blockchain_txns = aergolite_get_num_blockchain_transactions(this_node);
         SYNCTRACE("this node has %d transactions\n", num_blockchain_txns);
         sprintf(message, "num_txns:%d:%d", num_blockchain_txns, plugin->node_id);
         send_broadcast_message(plugin, message);

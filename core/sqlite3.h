@@ -11754,20 +11754,28 @@ SQLITE_API char* aergolite_get_node_info(aergolite *this_node);
 SQLITE_API int aergolite_store_and_empty_local_db(aergolite *this_node);
 
 
+/*
+** Local queue
+*/
+
 SQLITE_API int aergolite_get_next_local_transaction(aergolite *this_node, int64 *ptid, binn **plog);
 
 SQLITE_API void aergolite_free_transaction(binn *log);
 
-SQLITE_API int aergolite_get_next_blockchain_txn(
+SQLITE_API void aergolite_update_local_transaction(aergolite *this_node, int64 tid, int accepted);
+
+
+/*
+** Local blockchain
+*/
+
+SQLITE_API int aergolite_get_num_blockchain_transactions(aergolite *this_node);
+
+SQLITE_API int64 aergolite_get_last_blockchain_transaction_id(aergolite *this_node);
+
+SQLITE_API int aergolite_get_next_blockchain_transaction(
   aergolite *this_node, int64 prev_tid, int64 *ptid, void **plist, int *pnode_id
 );
-
-SQLITE_API int64 aergolite_get_last_blockchain_tid(aergolite *this_node);
-//  prev_tid = aergolite_get_last_blockchain_transaction_id(this_node);
-SQLITE_API int aergolite_get_num_blockchain_txns(aergolite *this_node);
-
-SQLITE_API char * aergolite_get_blockchain_status(aergolite *this_node);
-
 
 SQLITE_API int aergolite_check_transaction_in_blockchain(
   aergolite *this_node, int64 tid, BOOL *ppresent
@@ -11777,7 +11785,7 @@ SQLITE_API int aergolite_execute_transaction_on_blockchain(
   aergolite *this_node, int node_id, int64 tid, void *list, uchar *hash
 );
 
-SQLITE_API void aergolite_update_local_transaction(aergolite *this_node, int64 tid, int accepted);
+SQLITE_API char * aergolite_get_blockchain_status(aergolite *this_node);
 
 
 /*
