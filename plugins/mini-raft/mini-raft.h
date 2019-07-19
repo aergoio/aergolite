@@ -3,12 +3,14 @@
 #if TARGET_OS_IPHONE
 #include "../common/uv_callback.c"
 #endif
-
 #include "../../core/sqlite3.h"
-
 #define SQLITE_PRIVATE static
-
 #include "../../common/sha256.h"
+
+
+
+#define NEW_BLOCK_WAIT_INTERVAL  3000  /* 3 seconds - it should be a variable! */
+
 
 
 /* peer communication */
@@ -209,6 +211,7 @@ struct plugin {
   uv_timer_t election_end_timer;
 
   uv_timer_t process_transactions_timer;
+  uv_timer_t new_block_timer;
 
   uv_timer_t reconnect_timer;
   int reconnect_timer_enabled;

@@ -41,8 +41,15 @@ struct aergolite {
   Pager *main_pager1;         /* pager for 'local' data - used by the app */
   Pager *main_pager2;         /* pager for 'local' data - used by the worker thread */
   Pager *worker_pager;        /* pager for 'remote' data */
+
+  sqlite3 *state_db;          /* database connection for the state database - used by the worker thread */
+
   BOOL dbWasEmpty;            /* if the db was empty when open */
   char *extensions;           /* the SQLite extensions to be loaded */
+
+  void *txn_ids;              /* The transactions on a specific block */
+  void *mod_pages;            /* The modified pages on a specific block */
+  void *pages_hashes;         /* The list of pages hashes */
 
   int64 current_local_tid;    /* the current transaction being logged in the wal-local */
   int64 current_remote_tid;   /* the current transaction being logged in the wal-remote, if not using log table */
@@ -58,7 +65,7 @@ struct aergolite {
   binn *failed_txns;          /* list of failed transactions */
 
 //int    num_local_txns;      /* number of transactions on the wal-local */
-  int    num_blockchain_txns; /* number of transactions on the blockchain */
+//int    num_blockchain_txns; /* number of transactions on the blockchain */
 
   BOOL   useSqliteRowids;     /* do not use node id in the rowids */
 
@@ -99,7 +106,7 @@ SQLITE_PRIVATE void litesyncDiscardLog(Pager *pPager);
 SQLITE_PRIVATE void litesyncSetSqlCommand(Pager *pPager, char *sql);
 SQLITE_PRIVATE void litesyncDiscardLastCommand(sqlite3 *db);
 SQLITE_PRIVATE int  litesyncStoreLastCommand(Pager *pPager);
-SQLITE_PRIVATE void litesyncStoreLogTransactionId(Pager *pPager);
+SQLITE_PRIVATE int  litesyncStoreLogTransactionId(Pager *pPager);
 SQLITE_PRIVATE void litesyncStoreLogTransactionTime(Pager *pPager);
 
 SQLITE_PRIVATE sqlite_int64 litesyncBuildRowId(int node_id, u32 seq_num);
@@ -112,6 +119,10 @@ SQLITE_PRIVATE int64 last_tid_from_wal_log(Pager *pPager);
 SQLITE_PRIVATE int  open_detached_worker_db(aergolite *this_node, sqlite3 **pworker_db);
 SQLITE_PRIVATE int  open_main_db_connection2(aergolite *this_node);
 SQLITE_PRIVATE int  open_worker_db(aergolite *this_node);
+
+
+
+SQLITE_PRIVATE int check_page(aergolite *this_node, Pgno pgno, void *data, int size);
 
 
 

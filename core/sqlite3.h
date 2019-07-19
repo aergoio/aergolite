@@ -11769,6 +11769,7 @@ SQLITE_API void aergolite_update_local_transaction(aergolite *this_node, int64 t
 ** Local blockchain
 */
 
+#if 0
 SQLITE_API int aergolite_get_num_blockchain_transactions(aergolite *this_node);
 
 SQLITE_API int64 aergolite_get_last_blockchain_transaction_id(aergolite *this_node);
@@ -11780,10 +11781,34 @@ SQLITE_API int aergolite_get_next_blockchain_transaction(
 SQLITE_API int aergolite_check_transaction_in_blockchain(
   aergolite *this_node, int64 tid, BOOL *ppresent
 );
+#endif
 
-SQLITE_API int aergolite_execute_transaction_on_blockchain(
-  aergolite *this_node, int node_id, int64 tid, void *list, uchar *hash
+
+
+SQLITE_API int aergolite_insert_allowed_node(
+  litesync *this_node,
+  int node_id,
+  char *pubkey,
+  int pklen,
+  int64 last_nonce
 );
+
+SQLITE_API int aergolite_get_allowed_node(
+  litesync *this_node,
+  int node_id,
+  char *pubkey,
+  int *ppklen,
+  int64 *plast_nonce
+);
+
+
+
+SQLITE_API int aergolite_execute_transaction(
+  aergolite *this_node, int64 tid, int node_id, int64 nonce, void *list
+);
+
+
+
 
 SQLITE_API char * aergolite_get_blockchain_status(aergolite *this_node);
 
