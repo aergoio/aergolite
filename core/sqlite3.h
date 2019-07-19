@@ -11758,11 +11758,9 @@ SQLITE_API int aergolite_store_and_empty_local_db(aergolite *this_node);
 ** Local queue
 */
 
-SQLITE_API int aergolite_get_next_local_transaction(aergolite *this_node, int64 *ptid, binn **plog);
+SQLITE_API int aergolite_get_local_transaction(aergolite *this_node, int64 *pnonce, binn **plog);
 
 SQLITE_API void aergolite_free_transaction(binn *log);
-
-SQLITE_API void aergolite_update_local_transaction(aergolite *this_node, int64 tid, int accepted);
 
 
 /*
