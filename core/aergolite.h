@@ -23,6 +23,42 @@ struct transaction {
   int ack_count;              /* Number of nodes that acknowledged the sent transaction */
 };
 
+/*
+typedef struct blob blob;
+
+struct blob {
+  char *ptr;
+  int  size;
+};
+
+struct block {
+  struct block *next;
+  blob header;
+  blob body;
+  blob signatures;
+};
+*/
+
+/*
+** The blobs are returned as binn buffers. They have the size on them,
+** which can retrieved using binn_size()
+*/
+struct block {
+  struct block *next;
+  int64 height;
+  int txn_count;
+  void *header;
+  void *body;
+  void *signatures;
+};
+
+
+#define HEADER_DATA     0x11
+#define HEADER_SIG      0x12
+
+#define BODY_MOD_PAGES  0x21
+#define BODY_TXN_IDS    0x22
+
 
 struct aergolite {
   int id;                     /* Node id */
@@ -47,6 +83,8 @@ struct aergolite {
   BOOL dbWasEmpty;            /* if the db was empty when open */
   char *extensions;           /* the SQLite extensions to be loaded */
 
+  int64 block_height;         /* ... */
+  struct block current_block; /* ... */
   void *txn_ids;              /* The transactions on a specific block */
   void *mod_pages;            /* The modified pages on a specific block */
   void *pages_hashes;         /* The list of pages hashes */
@@ -100,27 +138,58 @@ SQLITE_PRIVATE void litesyncDiscardLog(Pager *pPager);
 SQLITE_PRIVATE void litesyncSetSqlCommand(Pager *pPager, char *sql);
 SQLITE_PRIVATE void litesyncDiscardLastCommand(sqlite3 *db);
 SQLITE_PRIVATE int  litesyncStoreLastCommand(Pager *pPager);
-SQLITE_PRIVATE int  litesyncStoreLogTransactionId(Pager *pPager);
+SQLITE_PRIVATE int  litesyncStoreLogTransactionNonce(Pager *pPager);
 SQLITE_PRIVATE void litesyncStoreLogTransactionTime(Pager *pPager);
 
 SQLITE_PRIVATE sqlite_int64 litesyncBuildRowId(int node_id, u32 seq_num);
 SQLITE_PRIVATE int  litesyncNodeIdFromRowId(sqlite_int64 value);
 SQLITE_PRIVATE u32  litesyncSeqFromRowId(sqlite_int64 value);
 
-SQLITE_PRIVATE int   litesyncGetWalLog(Pager *pPager, u32 start, int64 tid, binn **plog);
-SQLITE_PRIVATE int64 last_tid_from_wal_log(Pager *pPager);
+//SQLITE_PRIVATE int   litesyncGetWalLog(Pager *pPager, u32 start, int64 tid, binn **plog);
+//SQLITE_PRIVATE int64 last_tid_from_wal_log(Pager *pPager);
+
+SQLITE_PRIVATE int64 get_last_remote_nonce(aergolite *this_node);
 
 SQLITE_PRIVATE int  open_detached_worker_db(aergolite *this_node, sqlite3 **pworker_db);
 SQLITE_PRIVATE int  open_main_db_connection2(aergolite *this_node);
 SQLITE_PRIVATE int  open_worker_db(aergolite *this_node);
 
 
+SQLITE_PRIVATE int add_node_command(
+  aergolite *this_node,
+  int op,
+  int node_id,
+  int64 nonce,
+  char *pubkey,
+  int pklen
+);
+SQLITE_PRIVATE int process_node_commands(aergolite *this_node, void *node_commands);
+
+SQLITE_PRIVATE int update_node_last_nonce(
+  aergolite *this_node,
+  int node_id,
+  int64 last_nonce
+);
+
+SQLITE_API int aergolite_insert_allowed_node(
+  aergolite *this_node,
+  int node_id,
+  char *pubkey,
+  int pklen,
+  int64 last_nonce
+);
+
+SQLITE_API int aergolite_get_allowed_node(
+  aergolite *this_node,
+  int node_id,
+  char *pubkey,
+  int *ppklen,
+  int64 *plast_nonce
+);
+
 
 SQLITE_PRIVATE int check_page(aergolite *this_node, Pgno pgno, void *data, int size);
 
-
-
-SQLITE_PRIVATE int check_if_failed_txn(aergolite *this_node, int64 tid);
 
 SQLITE_PRIVATE char * blockchain_status_json_db(sqlite3 *db, const char *name);
 SQLITE_PRIVATE char * blockchain_status_json(Pager *pPager);

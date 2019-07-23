@@ -11751,21 +11751,28 @@ SQLITE_API char* aergolite_get_node_info(aergolite *this_node);
 ** Interface to AergoLite
 */
 
+SQLITE_API int aergolite_load_current_state(
+  aergolite *this_node,
+  int64 *pblock_height,
+  void **pheader,
+  void **pbody,
+  void **psignatures
+);
+
 SQLITE_API int aergolite_store_and_empty_local_db(aergolite *this_node);
 
 
+
 /*
-** Local queue
+** Local transaction queue
 */
+
+SQLITE_API int64 aergolite_get_node_last_nonce(aergolite *this_node);
 
 SQLITE_API int aergolite_get_local_transaction(aergolite *this_node, int64 *pnonce, binn **plog);
 
 SQLITE_API void aergolite_free_transaction(binn *log);
 
-
-/*
-** Local blockchain
-*/
 
 #if 0
 SQLITE_API int aergolite_get_num_blockchain_transactions(aergolite *this_node);
@@ -11783,8 +11790,29 @@ SQLITE_API int aergolite_check_transaction_in_blockchain(
 
 
 
+SQLITE_API int aergolite_execute_transaction(
+  aergolite *this_node, int64 tid, int node_id, int64 nonce, void *list
+);
+
+
+
+/*
+** Blocks | State agreements
+*/
+
+SQLITE_API int aergolite_begin_block(aergolite *this_node);
+SQLITE_API int aergolite_create_block(aergolite *this_node, binn **pheader, binn **pbody);
+SQLITE_API int aergolite_apply_block(aergolite *this_node, binn *header, binn *body);
+
+
+
+/*
+** Allowed nodes
+*/
+
+
 SQLITE_API int aergolite_insert_allowed_node(
-  litesync *this_node,
+  aergolite *this_node,
   int node_id,
   char *pubkey,
   int pklen,
@@ -11792,7 +11820,7 @@ SQLITE_API int aergolite_insert_allowed_node(
 );
 
 SQLITE_API int aergolite_get_allowed_node(
-  litesync *this_node,
+  aergolite *this_node,
   int node_id,
   char *pubkey,
   int *ppklen,
@@ -11801,14 +11829,14 @@ SQLITE_API int aergolite_get_allowed_node(
 
 
 
-SQLITE_API int aergolite_execute_transaction(
-  aergolite *this_node, int64 tid, int node_id, int64 nonce, void *list
-);
-
-
+/*
+** Status
+*/
 
 
 SQLITE_API char * aergolite_get_blockchain_status(aergolite *this_node);
+
+
 
 
 /*
