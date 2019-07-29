@@ -50,9 +50,11 @@ SQLITE_PRIVATE void * new_array(int num_items, int item_size){
 }
 
 SQLITE_PRIVATE void array_free(void **parray){
-  void *array = *parray;
-  sqlite3_free(array);
-  *parray = NULL;
+  if( parray ){
+    void *array = *parray;
+    sqlite3_free(array);
+    *parray = NULL;
+  }
 }
 
 SQLITE_PRIVATE void * array_copy(void *array){
@@ -106,13 +108,16 @@ SQLITE_PRIVATE void * array_get(void *array, int pos){
 
 /* increases the array size automatically if needed */
 static int array_insert_ex(void **parray, void *item, int pos, int(*compare_fn)(void*,void*), int replace){
-  void *array = *parray;
-  uint16_t *pshort = (uint16_t *) array;
+  void *array;
+  uint16_t *pshort;
   char *base, *new_item = (char *) item;
   int i, item_size, alloc_items, used_items;
 
+  if( !parray ) return return ARRAY_INVALID;
+  array = *parray;
   if( !array || !item ) return ARRAY_INVALID;
 
+  pshort = (uint16_t *) array;
   item_size   = pshort[0];
   alloc_items = pshort[1];  /* allocated items */
   used_items  = pshort[2];  /* used items */
