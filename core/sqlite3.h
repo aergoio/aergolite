@@ -11762,6 +11762,20 @@ SQLITE_API int aergolite_load_current_state(
 SQLITE_API int aergolite_store_and_empty_local_db(aergolite *this_node);
 
 
+/*
+** State update
+*/
+
+SQLITE_API int aergolite_begin_state_read(aergolite* this_node);
+SQLITE_API int aergolite_get_modified_pages(aergolite* this_node, int64 from, int64 to, binn **plist);
+SQLITE_API int aergolite_get_db_page(aergolite* this_node, uint32_t pgno, void *data, int *psize);
+SQLITE_API int aergolite_end_state_read(aergolite* this_node);
+
+SQLITE_API int aergolite_begin_state_update(aergolite* this_node);
+SQLITE_API int aergolite_update_db_page(aergolite* this_node, uint32_t pgno, char *data, int size);
+SQLITE_API int aergolite_apply_state_update(aergolite* this_node, void *header, void *signatures, void *list);
+SQLITE_API void aergolite_cancel_state_update(aergolite* this_node);
+
 
 /*
 ** Local transaction queue
@@ -11802,7 +11816,7 @@ SQLITE_API int aergolite_execute_transaction(
 
 SQLITE_API int aergolite_begin_block(aergolite *this_node);
 SQLITE_API int aergolite_create_block(aergolite *this_node, binn **pheader, binn **pbody);
-SQLITE_API int aergolite_apply_block(aergolite *this_node, binn *header, binn *body);
+SQLITE_API int aergolite_apply_block(aergolite *this_node, binn *header, binn *body, binn *signatures);
 
 
 

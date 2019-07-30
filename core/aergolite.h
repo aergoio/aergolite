@@ -190,6 +190,21 @@ SQLITE_API int aergolite_get_allowed_node(
 
 SQLITE_PRIVATE int check_page(aergolite *this_node, Pgno pgno, void *data, int size);
 
+SQLITE_PRIVATE int read_block_header(
+  aergolite *this_node,
+  void *header,
+  int64 *ptimestamp,
+  int64 *pblock_height,
+  char **ptxns_hash,
+  char **pstate_hash
+);
+
+SQLITE_PRIVATE int save_block(
+  aergolite *this_node,
+  int64 block_height,
+  struct block *block
+);
+
 
 SQLITE_PRIVATE char * blockchain_status_json_db(sqlite3 *db, const char *name);
 SQLITE_PRIVATE char * blockchain_status_json(Pager *pPager);

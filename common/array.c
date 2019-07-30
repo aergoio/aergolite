@@ -113,7 +113,7 @@ static int array_insert_ex(void **parray, void *item, int pos, int(*compare_fn)(
   char *base, *new_item = (char *) item;
   int i, item_size, alloc_items, used_items;
 
-  if( !parray ) return return ARRAY_INVALID;
+  if( !parray ) return ARRAY_INVALID;
   array = *parray;
   if( !array || !item ) return ARRAY_INVALID;
 
