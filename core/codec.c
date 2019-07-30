@@ -671,7 +671,7 @@ SQLITE_API int sqlite3_rekey(sqlite3 *db, const void *pKey, int nKey){
 }
 
 /* Encrypt a message if a codec is used */
-u8 * litesync_msg_encrypt(Pager *pPager, u8 *data, int *psize, int counter) {
+u8 * aergolite_msg_encrypt(Pager *pPager, u8 *data, int *psize, int counter) {
   int size;
   u8 *data2, *dest, *iv;
   CRYPTBLOCK *pBlock = (CRYPTBLOCK*)sqlite3pager_get_codecarg(pPager);
@@ -714,7 +714,7 @@ u8 * litesync_msg_encrypt(Pager *pPager, u8 *data, int *psize, int counter) {
 }
 
 /* Decrypt a message if a codec is used */
-u8 * litesync_msg_decrypt(Pager *pPager, u8 *data, int *psize, int counter) {
+u8 * aergolite_msg_decrypt(Pager *pPager, u8 *data, int *psize, int counter) {
   int size;
   u8 *dest, *iv;
   CRYPTBLOCK *pBlock = (CRYPTBLOCK*)sqlite3pager_get_codecarg(pPager);

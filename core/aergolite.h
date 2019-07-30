@@ -4,7 +4,7 @@
 typedef unsigned char uchar;
 
 
-#define LITESYNC_USE_SHORT_FILENAMES
+#define AERGOLITE_USE_SHORT_FILENAMES
 
 
 typedef struct aergolite aergolite;
@@ -126,27 +126,24 @@ SQLITE_PRIVATE int aergolitePluginsInit();
 SQLITE_PRIVATE Pager * getPager(sqlite3 *db, const char *name);
 SQLITE_PRIVATE Pager * getPagerFromiDb(sqlite3 *db, int iDb);
 
-SQLITE_PRIVATE int  disable_litesync(Pager *pPager);
+SQLITE_PRIVATE int  disable_aergolite(Pager *pPager);
 
-SQLITE_PRIVATE void litesyncCheckUserCommand(sqlite3 *db, Vdbe *p, char *zTrace);
-SQLITE_PRIVATE void litesyncProcessUserCommand(sqlite3 *db, int iDb, Pager *pPager, char *zSql);
-SQLITE_PRIVATE void litesyncCheckUserCmdResponse(sqlite3 *db, int rc);
-//SQLITE_PRIVATE int  litesyncAddSqlCommand(Pager *pPager, char *sql);
-SQLITE_PRIVATE int  litesyncSaveSession(Pager *pPager);
-SQLITE_PRIVATE void litesyncDiscardLog(Pager *pPager);
+SQLITE_PRIVATE void aergoliteCheckUserCommand(sqlite3 *db, Vdbe *p, char *zTrace);
+SQLITE_PRIVATE void aergoliteProcessUserCommand(sqlite3 *db, int iDb, Pager *pPager, char *zSql);
+SQLITE_PRIVATE void aergoliteCheckUserCmdResponse(sqlite3 *db, int rc);
+//SQLITE_PRIVATE int  aergoliteAddSqlCommand(Pager *pPager, char *sql);
+SQLITE_PRIVATE int  aergoliteSaveSession(Pager *pPager);
+SQLITE_PRIVATE void aergoliteDiscardLog(Pager *pPager);
 
-SQLITE_PRIVATE void litesyncSetSqlCommand(Pager *pPager, char *sql);
-SQLITE_PRIVATE void litesyncDiscardLastCommand(sqlite3 *db);
-SQLITE_PRIVATE int  litesyncStoreLastCommand(Pager *pPager);
-SQLITE_PRIVATE int  litesyncStoreLogTransactionNonce(Pager *pPager);
-SQLITE_PRIVATE void litesyncStoreLogTransactionTime(Pager *pPager);
+SQLITE_PRIVATE void aergoliteSetSqlCommand(Pager *pPager, char *sql);
+SQLITE_PRIVATE void aergoliteDiscardLastCommand(sqlite3 *db);
+SQLITE_PRIVATE int  aergoliteStoreLastCommand(Pager *pPager);
+SQLITE_PRIVATE int  aergoliteStoreLogTransactionNonce(Pager *pPager);
+SQLITE_PRIVATE void aergoliteStoreLogTransactionTime(Pager *pPager);
 
-SQLITE_PRIVATE sqlite_int64 litesyncBuildRowId(int node_id, u32 seq_num);
-SQLITE_PRIVATE int  litesyncNodeIdFromRowId(sqlite_int64 value);
-SQLITE_PRIVATE u32  litesyncSeqFromRowId(sqlite_int64 value);
-
-//SQLITE_PRIVATE int   litesyncGetWalLog(Pager *pPager, u32 start, int64 tid, binn **plog);
-//SQLITE_PRIVATE int64 last_tid_from_wal_log(Pager *pPager);
+SQLITE_PRIVATE sqlite_int64 aergoliteBuildRowId(int node_id, u32 seq_num);
+SQLITE_PRIVATE int  aergoliteNodeIdFromRowId(sqlite_int64 value);
+SQLITE_PRIVATE u32  aergoliteSeqFromRowId(sqlite_int64 value);
 
 SQLITE_PRIVATE int64 get_last_remote_nonce(aergolite *this_node);
 
