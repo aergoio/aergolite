@@ -114,7 +114,7 @@ liblitesync.so.0.0.1: $(OBJECTS)
 	ln -sf $(LIBNICK3) $(LIBNICK4)
 
 
-sqlite3.o: core/sqlite3.c core/aergolite.h core/single_instance.h core/single_instance.c common/sha256.c common/sha256.h common/checksum.c common/linked_list.c
+sqlite3.o: core/sqlite3.c core/aergolite.h core/single_instance.h core/single_instance.c common/sha256.c common/sha256.h common/checksum.c common/linked_list.c common/array.c
 	$(CC) $(LIBFLAGS) -c $< -o $@
 
 plugin-mini-raft.o: plugins/mini-raft/mini-raft.c plugins/mini-raft/mini-raft.h common/sha256.c common/sha256.h plugins/common/uv_msg_framing.c plugins/common/uv_msg_framing.h plugins/common/uv_send_message.c plugins/common/uv_callback.c plugins/common/uv_callback.h

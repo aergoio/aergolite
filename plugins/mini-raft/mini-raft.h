@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include "../common/uv_msg_framing.c"
 #include "../common/uv_send_message.c"
 #if TARGET_OS_IPHONE
@@ -15,45 +16,69 @@
 
 /* peer communication */
 
-#define LITESYNC_CMD                 0x43292173
+#define PLUGIN_CMD                 0x43292173
 
 /* peer message commands */
-#define LITESYNC_CMD_ID              0xcd01     /* peer identification */
-//#define LITESYNC_REQUEST_NODE_ID     0xcd02     /* request a node id */
-//#define LITESYNC_NEW_NODE_ID         0xcd03     /* send the new node id */
-#define LITESYNC_ID_CONFLICT         0xcd04     /* there is another node with the same id */
+#define PLUGIN_CMD_ID              0xcd01     /* peer identification */
+//#define PLUGIN_REQUEST_NODE_ID     0xcd02     /* request a node id */
+//#define PLUGIN_NEW_NODE_ID         0xcd03     /* send the new node id */
+#define PLUGIN_ID_CONFLICT         0xcd04     /* there is another node with the same id */
 
-#define LITESYNC_CMD_PING            0xcd05     /* check if alive */
-#define LITESYNC_CMD_PONG            0xcd06     /* I am alive */
+#define PLUGIN_CMD_PING            0xcd05     /* check if alive */
+#define PLUGIN_CMD_PONG            0xcd06     /* I am alive */
 
-#define LITESYNC_LOG_INSERT          0xdb01     /* secondary -> primary */
-#define LITESYNC_LOG_NEW             0xdb02     /* secondary <- primary -> secondary (broadcast) */
-#define LITESYNC_LOG_NEW_OK          0xdb03     /* secondary -> primary */
-#define LITESYNC_LOG_COMMIT          0xdb04     /* secondary <- primary -> secondary (broadcast) */
 
-#define LITESYNC_LOG_NEXT            0xdb05     /* secondary -> primary (request) */
-#define LITESYNC_LOG_GET             0xdb06     /* secondary -> primary (request) */
-#define LITESYNC_LOG_NOTFOUND        0xdb07     /* secondary <- primary (response) */
-#define LITESYNC_LOG_DATA            0xdb08     /* secondary <- primary (response) */
-#define LITESYNC_IN_SYNC             0xdb09     /* secondary <- primary (response) */
+#define PLUGIN_REQUEST_STATE_DIFF  0xdb01
+#define PLUGIN_UPTODATE            0xdb02
+#define PLUGIN_DB_PAGE             0xdb03
+#define PLUGIN_APPLY_UPDATE        0xdb04
 
-#define LITESYNC_LOG_EXISTS          0xdb10     /* secondary <- primary (response) */
-#define LITESYNC_LOG_INSERT_FAILED   0xdb11     /* secondary <- primary (response) */
+#define PLUGIN_INSERT_TRANSACTION  0xdb11     /* follower -> leader */
+#define PLUGIN_NEW_TRANSACTION     0xdb12     /* follower <- leader -> follower (broadcast) */
+#define PLUGIN_TRANSACTION_FAILED  0xdb13     /* follower <- leader (response) */
+
+#define PLUGIN_NEW_BLOCK           0xdb21     /* follower -> leader */
+#define PLUGIN_NEW_BLOCK_ACK       0xdb22     /* follower -> leader */
+#define PLUGIN_COMMIT_BLOCK        0xdb23     /* follower <- leader -> follower (broadcast) */
+
+#define PLUGIN_GET_TRANSACTION     0xdb31     /* follower -> leader (request) */
+#define PLUGIN_REQUESTED_TRANSACTION  0xdb32     /* follower <- leader (response) */
+#define PLUGIN_TXN_NOTFOUND        0xdb33     /* follower <- leader (response) */
+
+#define PLUGIN_GET_BLOCK           0xdb41     /* follower -> leader (request) */
+#define PLUGIN_REQUESTED_BLOCK     0xdb42     /* follower <- leader (response) */
+#define PLUGIN_BLOCK_NOTFOUND      0xdb43     /* follower <- leader (response) */
+
+//#define PLUGIN_LOG_EXISTS          0xdb20     /* follower <- leader (response) */
+
+
+
+#define PLUGIN_CONTENT             0xc0de011
+#define PLUGIN_PGNO                0xc0de012
+#define PLUGIN_DBPAGE              0xc0de013
+#define PLUGIN_STATE               0xc0de014
+#define PLUGIN_HEIGHT              0xc0de015
+#define PLUGIN_HEADER              0xc0de016
+#define PLUGIN_BODY                0xc0de017
+#define PLUGIN_SIGNATURES          0xc0de018
+#define PLUGIN_MOD_PAGES           0xc0de019
 
 
 /* peer message parameters */
-#define LITESYNC_OK                  0xc0de001  /*  */
-#define LITESYNC_ERROR               0xc0de002  /*  */
+#define PLUGIN_OK                  0xc0de001  /*  */
+#define PLUGIN_ERROR               0xc0de002  /*  */
 
-#define LITESYNC_NODE_ID             0xc0de004  /*  */
+#define PLUGIN_NODE_ID             0xc0de003  /*  */
 
-#define LITESYNC_SEQ                 0xc0de005  /*  */
-#define LITESYNC_TID                 0xc0de006  /*  */
-#define LITESYNC_SQL_CMDS            0xc0de007  /*  */
-#define LITESYNC_PREV_TID            0xc0de008  /*  */
-#define LITESYNC_HASH                0xc0de009  /*  */
-//#define LITESYNC_LAST_TID            0xc0de010  /*  */
+#define PLUGIN_SEQ                 0xc0de004  /*  */
+#define PLUGIN_TID                 0xc0de005  /*  */
+#define PLUGIN_NONCE               0xc0de006  /*  */
+#define PLUGIN_SQL_CMDS            0xc0de007  /*  */
+//#define PLUGIN_HASH                0xc0de008  /*  */
 
+
+#define BLOCK_HEIGHT    0x34
+#define STATE_HASH      0x35
 
 
 // the state of the slave peer or connection
@@ -108,12 +133,16 @@ struct connect_req {
 #define DB_STATE_IN_SYNC         2
 #define DB_STATE_LOCAL_CHANGES   3  /* there are local changes */
 #define DB_STATE_OUTDATED        4  /* if the connection dropped while updating, or some other error state */
+#define DB_STATE_ERROR           5
 
 
 /* worker thread commands */
 #define WORKER_THREAD_NEW_TRANSACTION  0xcd01  /*  */
 #define WORKER_THREAD_EXIT             0xcd02  /*  */
 #define WORKER_THREAD_OK               0xcd03  /*  */
+
+
+typedef uint32_t Pgno;
 
 
 typedef struct plugin plugin;
@@ -149,26 +178,29 @@ struct node {
   aergolite *this_node;  /* x */
   plugin *plugin;        /* x */
 
-  int num_txns;          /* How many transactions on its blockchain */
+  int num_blocks;        /* The height of the last block */
 
   /* used for the query status */
   int     db_state;
-  //uint64  last_conn;        /* (monotonic time) the last time a connection was made */
-  //uint64  last_conn_loss;   /* (monotonic time) the last time the connection was lost -- used??? */
-  //uint64  last_sync;        /* (monotonic time) the last time the db was synchronized with this node */
-  //uint64  time_out_of_date; /* (monotonic time) the first time a synchronization was not processed. cleared when the db is synchronized */
 };
 
 
 struct transaction {
   struct transaction *next;
-  int64 seq;
   int node_id;
-  int64 tid;
+  int64 nonce;
+  int64 id;
   void *log;
-  int64 prev_tid;
-  uchar hash[32];
-  int ack_count;              /* Number of nodes that acknowledged the sent transaction */
+};
+
+struct block {
+  struct block *next;
+  int64 height;
+  void *header;
+  void *body;
+  void *signatures;
+  int  ack_count;
+  int  downloading_txns;
 };
 
 
@@ -191,6 +223,8 @@ struct plugin {
 
   struct transaction *mempool;
 
+  struct block *current_block;
+  struct block *new_block;
 
 #if TARGET_OS_IPHONE
   uv_callback_t worker_cb;    /* callback handle to send msg to the worker thread */
@@ -216,6 +250,7 @@ struct plugin {
   uv_timer_t reconnect_timer;
   int reconnect_timer_enabled;
 
+  bool is_updating_state;
   int sync_down_state;        /* downstream synchronization state */
   int sync_up_state;          /* upstream synchronization state */
 };
@@ -238,7 +273,7 @@ SQLITE_PRIVATE void leader_node_process_local_transactions(plugin *plugin);
 /* mempool */
 
 SQLITE_PRIVATE struct transaction * store_transaction_on_mempool(
-  plugin *plugin, int node_id, int64 tid, void *log
+  plugin *plugin, int node_id, int64 nonce, void *log
 );
 SQLITE_PRIVATE void discard_mempool_transaction(plugin *plugin, struct transaction *txn);
 
@@ -247,9 +282,10 @@ SQLITE_PRIVATE void discard_mempool_transaction(plugin *plugin, struct transacti
 SQLITE_PRIVATE void start_downstream_db_sync(plugin *plugin);
 SQLITE_PRIVATE void start_upstream_db_sync(plugin *plugin);
 
-SQLITE_PRIVATE void send_next_local_transaction(plugin *plugin);
+SQLITE_PRIVATE int  load_current_state(plugin *plugin);
+SQLITE_PRIVATE void request_state_update(plugin *plugin);
 
-SQLITE_PRIVATE int commit_transaction_to_blockchain(plugin *plugin, struct transaction *txn);
+SQLITE_PRIVATE int broadcast_new_block(plugin *plugin, struct block *block);
 
 /* event loop and timers */
 

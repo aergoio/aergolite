@@ -16,6 +16,7 @@
 
 #include "mini-raft.h"
 
+#include "../../common/array.c"
 #include "../../common/linked_list.c"
 
 /*****************************************************************************/
@@ -153,12 +154,12 @@ SQLITE_API char * get_protocol_status(void *arg, BOOL extended) {
         char *timestamp=NULL;
         binn_list_get(last->log, binn_count(last->log), BINN_DATETIME, &timestamp, NULL);
         sqlite3_str_appendall(str, "{\n");
-        sqlite3_str_appendf(str, "    \"id\": %lld,\n", last->tid);
+        sqlite3_str_appendf(str, "    \"id\": %lld,\n", last->id);
         sqlite3_str_appendf(str, "    \"node_id\": %d,\n", last->node_id);
         sqlite3_str_appendf(str, "    \"timestamp\": \"%s\"\n", timestamp);
         sqlite3_str_appendall(str, "  }");
       }else{
-        sqlite3_str_appendf(str, "%lld", last->tid);
+        sqlite3_str_appendf(str, "%lld", last->id);
       }
     }
 
@@ -413,20 +414,32 @@ SQLITE_PRIVATE BOOL send_peer_message(node *node, binn *map, send_message_cb cal
 
 #ifdef DEBUGSYNC
   SYNCTRACE("send_peer_message size=%d ", binn_size(map));
-  switch( binn_map_int32(map,LITESYNC_CMD) ){
-  case LITESYNC_CMD_ID:          SYNCTRACE("LITESYNC_CMD_ID\n");          break;
-  case LITESYNC_LOG_GET:         SYNCTRACE("LITESYNC_LOG_GET\n");         break;
-  case LITESYNC_LOG_DATA:        SYNCTRACE("LITESYNC_LOG_DATA\n");        break;
-  case LITESYNC_IN_SYNC:         SYNCTRACE("LITESYNC_IN_SYNC\n");         break;
-  case LITESYNC_LOG_NEW:         SYNCTRACE("LITESYNC_LOG_NEW\n");         break;
-  case LITESYNC_LOG_NEW_OK:      SYNCTRACE("LITESYNC_LOG_NEW_OK\n");      break;
-  case LITESYNC_LOG_COMMIT:      SYNCTRACE("LITESYNC_LOG_COMMIT\n");      break;
-  case LITESYNC_LOG_EXISTS:      SYNCTRACE("LITESYNC_LOG_EXISTS\n");      break;
-  case LITESYNC_LOG_NOTFOUND:    SYNCTRACE("LITESYNC_LOG_NOTFOUND\n");    break;
-  case LITESYNC_LOG_NEXT:        SYNCTRACE("LITESYNC_LOG_NEXT\n");        break;
-  case LITESYNC_LOG_INSERT:      SYNCTRACE("LITESYNC_LOG_INSERT\n");      break;
-  case LITESYNC_LOG_INSERT_FAILED: SYNCTRACE("LITESYNC_LOG_INSERT_FAILED\n"); break;
-  default:                       SYNCTRACE("UPDATE HERE!\n");             break;
+
+  switch( binn_map_int32(map,PLUGIN_CMD) ){
+  case PLUGIN_CMD_ID:             SYNCTRACE("PLUGIN_CMD_ID\n");             break;
+
+  case PLUGIN_REQUEST_STATE_DIFF: SYNCTRACE("PLUGIN_REQUEST_STATE_DIFF\n"); break;
+  case PLUGIN_DB_PAGE:            SYNCTRACE("PLUGIN_DB_PAGE\n");            break;
+  case PLUGIN_APPLY_UPDATE:       SYNCTRACE("PLUGIN_APPLY_UPDATE\n");       break;
+  case PLUGIN_UPTODATE:           SYNCTRACE("PLUGIN_UPTODATE\n");           break;
+
+  case PLUGIN_INSERT_TRANSACTION: SYNCTRACE("PLUGIN_INSERT_TRANSACTION\n"); break;
+  case PLUGIN_NEW_TRANSACTION:    SYNCTRACE("PLUGIN_NEW_TRANSACTION\n");    break;
+  case PLUGIN_TRANSACTION_FAILED: SYNCTRACE("PLUGIN_TRANSACTION_FAILED\n"); break;
+
+  case PLUGIN_GET_TRANSACTION:    SYNCTRACE("PLUGIN_GET_TRANSACTION\n");    break;
+  case PLUGIN_REQUESTED_TRANSACTION: SYNCTRACE("PLUGIN_REQUESTED_TRANSACTION\n"); break;
+  case PLUGIN_TXN_NOTFOUND:       SYNCTRACE("PLUGIN_TXN_NOTFOUND\n");       break;
+
+  case PLUGIN_NEW_BLOCK:          SYNCTRACE("PLUGIN_NEW_BLOCK\n");          break;
+  case PLUGIN_NEW_BLOCK_ACK:      SYNCTRACE("PLUGIN_NEW_BLOCK_ACK\n");      break;
+  case PLUGIN_COMMIT_BLOCK:       SYNCTRACE("PLUGIN_COMMIT_BLOCK\n");       break;
+
+  case PLUGIN_GET_BLOCK:          SYNCTRACE("PLUGIN_GET_BLOCK\n");          break;
+  case PLUGIN_REQUESTED_BLOCK:    SYNCTRACE("PLUGIN_REQUESTED_BLOCK\n");    break;
+  case PLUGIN_BLOCK_NOTFOUND:     SYNCTRACE("PLUGIN_BLOCK_NOTFOUND\n");     break;
+
+  default:                        SYNCTRACE("UPDATE HERE!\n");              break;
   }
 #endif
 
@@ -540,6 +553,8 @@ SQLITE_PRIVATE BOOL send_request(node *node, int cmd, unsigned int arg) {
 /****************************************************************************/
 /****************************************************************************/
 
+#if 0
+
 SQLITE_PRIVATE void on_transaction_request_sent(send_message_t *req, int status) {
 
   if (status < 0) {
@@ -551,35 +566,14 @@ SQLITE_PRIVATE void on_transaction_request_sent(send_message_t *req, int status)
 
 /****************************************************************************/
 
-SQLITE_PRIVATE void request_next_blockchain_transaction(plugin *plugin, int64 last_tid) {
-  binn *map = binn_map();
-
-  if (!map || !plugin->leader_node) goto loc_failed;
-
-  SYNCTRACE("request_next_blockchain_transaction - last_tid=%" INT64_FORMAT "\n", last_tid);
-
-  if (binn_map_set_int32(map, LITESYNC_CMD, LITESYNC_LOG_NEXT) == FALSE) goto loc_failed;
-  if (binn_map_set_int64(map, LITESYNC_PREV_TID, last_tid) == FALSE) goto loc_failed;
-
-  send_peer_message(plugin->leader_node, map, on_transaction_request_sent);
-
-  binn_free(map);
-
-  return;
-loc_failed:
-  if (map) binn_free(map);
-  plugin->sync_down_state = DB_STATE_UNKNOWN;
-}
-
-/****************************************************************************/
-
 SQLITE_PRIVATE void on_requested_transaction_not_found(node *node, void *msg, int size) {
   int rc;
 
   /* the local transaction (from wal-remote or main db) is not present in the primary node */
 
   /* save the local db and download a new one from the primary node */
-  rc = aergolite_store_and_empty_local_db(node->this_node);
+//  rc = aergolite_store_and_empty_local_db(node->this_node);
+
 //!  if( rc ){
 //    /* disconnect from the primary node */
 //    disconnect_peer(this_node->leader_node);  //! ??  should it retry after an interval? (uv_timer)
@@ -587,50 +581,7 @@ SQLITE_PRIVATE void on_requested_transaction_not_found(node *node, void *msg, in
 
 }
 
-/****************************************************************************/
-
-SQLITE_PRIVATE void on_requested_remote_transaction(node *node, void *msg, int size) {
-  plugin *plugin = node->plugin;
-  aergolite *this_node = node->this_node;
-  uchar hash[SHA256_BLOCK_SIZE];
-  int64 tid, prev_tid, last_remote_tid;
-  void *log;
-  int node_id;
-
-  if( plugin->sync_down_state!=DB_STATE_SYNCHRONIZING ){
-    /* if it is already in sync, then this is an error */
-    SYNCTRACE("--- FAILED: 'requested' remote transaction while this node is not synchronizing\n");
-    return;
-  }
-
-  node_id  = binn_map_int32(msg, LITESYNC_NODE_ID);
-  prev_tid = binn_map_int64(msg, LITESYNC_PREV_TID);
-  tid      = binn_map_int64(msg, LITESYNC_TID);
-  log      = binn_map_list (msg, LITESYNC_SQL_CMDS);
-
-  SYNCTRACE("on_requested_remote_transaction - node_id=%d prev_tid=%"
-            INT64_FORMAT " tid=%" INT64_FORMAT "\n", node_id, prev_tid, tid);
-
-  /* check if the prev_tid equals the last tid on the blockchain */
-  last_remote_tid = aergolite_get_last_blockchain_transaction_id(this_node);
-  if( last_remote_tid!=0 && last_remote_tid!=prev_tid ){
-    sqlite3_log(1, "on_requested_remote_transaction: last_remote_tid != prev_tid  "
-                   "last_remote_tid=%" INT64_FORMAT " prev_tid=%" INT64_FORMAT,
-                last_remote_tid, prev_tid);
-    plugin->sync_down_state = DB_STATE_OUTDATED;
-    return;
-  }
-
-  /* execute the transaction in the worker db */
-  if( aergolite_execute_transaction_on_blockchain(this_node, node_id, tid, log, hash)!=SQLITE_OK ){
-    plugin->sync_down_state = DB_STATE_OUTDATED;
-    return;
-  }
-
-  /* request the next transaction from the primary node */
-  request_next_blockchain_transaction(plugin, tid);
-
-}
+#endif
 
 /****************************************************************************/
 
@@ -649,138 +600,6 @@ SQLITE_PRIVATE void on_in_sync_message(node *node, void *msg, int size) {
 }
 
 /****************************************************************************/
-
-SQLITE_PRIVATE void on_new_remote_transaction(node *node, void *msg, int size) {
-  plugin *plugin = node->plugin;
-  aergolite *this_node = node->this_node;
-  struct transaction *txn;
-  int node_id;
-  int64 tid;
-  void *log;
-  binn *map;
-
-#if 0
-  /* if this node is not ready, ignore this notification */
-  if( !this_node->db_is_ready ){
-    SYNCTRACE("on_new_remote_transaction - db is not ready\n");
-    return;
-  }
-#endif
-
-  node_id  = binn_map_int32(msg, LITESYNC_NODE_ID);
-  tid      = binn_map_int64(msg, LITESYNC_TID);
-  log      = binn_map_list (msg, LITESYNC_SQL_CMDS);
-
-  SYNCTRACE("on_new_remote_transaction - node_id=%d tid=%" INT64_FORMAT
-            " sql_count=%d\n", node_id, tid, binn_count(log)-2 );
-
-  /* store the transaction in the local mempool */
-  txn = store_transaction_on_mempool(plugin, node_id, tid, log);
-  if( !txn ) return;  // SQLITE_NOMEM;
-
-  /* send response to the leader node */
-  map = binn_map();
-  if( !map ) return;
-  binn_map_set_int32(map, LITESYNC_CMD, LITESYNC_LOG_NEW_OK);
-  binn_map_set_int64(map, LITESYNC_TID, tid);
-  send_peer_message(node, map, NULL);
-  binn_free(map);
-
-}
-
-/****************************************************************************/
-// on_commit_txn_to_blockchain
-SQLITE_PRIVATE void on_new_transaction_commit(plugin *plugin, struct transaction *txn) {
-  aergolite *this_node = plugin->this_node;
-  int64 last_remote_tid;
-  int rc=SQLITE_ERROR;
-
-  SYNCTRACE("on_new_transaction_commit - node_id=%d prev_tid=%" INT64_FORMAT
-            " tid=%" INT64_FORMAT "\n", txn->node_id, txn->prev_tid, txn->tid);
-
-  /* if the txn is from this node */
-  //if( txn->node_id==plugin->node_id ){
-  //  this_node->last_ack_tid = txn->tid;
-  //  this_node->last_valid_tid = txn->tid;  /* valid for the leader */
-  //}
-
-  /* check if the prev_tid equals the last tid on the blockchain */
-  last_remote_tid = aergolite_get_last_blockchain_transaction_id(this_node);   //! it could check for error here
-  if( last_remote_tid==txn->prev_tid ){
-    uchar hash[SHA256_BLOCK_SIZE];
-    //calculate_hash(tid, node_id, list, datetime, this_node->prev_hash, hash);
-    /* execute the transaction in the worker db */
-    rc = aergolite_execute_transaction_on_blockchain(this_node, txn->node_id, txn->tid, txn->log, hash);
-    if( rc!=SQLITE_OK ){
-      plugin->sync_down_state = DB_STATE_OUTDATED; /* it may download this txn later */
-    }
-  }else{
-    SYNCTRACE("on_new_transaction_commit - last_remote_tid != txn->prev_tid "
-              "last_remote_tid=%" INT64_FORMAT " prev_tid=%" INT64_FORMAT "\n",
-              last_remote_tid, txn->prev_tid);
-    if( plugin->sync_down_state==DB_STATE_IN_SYNC ){
-      plugin->sync_down_state = DB_STATE_OUTDATED;
-    }
-  }
-
-  /* if the txn is from this node and it succeded */
-  if( txn->node_id==plugin->node_id && rc==SQLITE_OK ){
-    aergolite_update_local_transaction(this_node, txn->tid, TRUE);
-//! or not needed, it can be done by aergolite on the aergolite_execute_transaction_on_blockchain() fn
-  }
-
-  /* remove the transaction from the mempool */
-  llist_remove(&plugin->mempool, txn);
-
-  /* was this txn sent from this node? */
-  if( txn->node_id==plugin->node_id ){
-    /* send the next local transaction */
-    if( plugin->is_leader ){
-      leader_node_process_local_transactions(plugin);
-    }else{
-      send_next_local_transaction(plugin);
-    }
-  }
-
-  if( txn->log ) sqlite3_free(txn->log);
-  sqlite3_free(txn);
-
-}
-
-/****************************************************************************/
-// remove 'remote'
-SQLITE_PRIVATE void on_commit_remote_transaction(node *node, void *msg, int size) {
-  aergolite *this_node = node->this_node;
-  plugin *plugin = node->plugin;
-  struct transaction *txn;
-  int64 tid, prev_tid;
-  uchar *hash;
-
-  //seq      = binn_map_int32(msg, LITESYNC_SEQ);
-  prev_tid = binn_map_int64(msg, LITESYNC_PREV_TID);
-  tid      = binn_map_int64(msg, LITESYNC_TID);
-  hash     = binn_map_blob (msg, LITESYNC_HASH, NULL);  //&hash_size);
-
-//  SYNCTRACE("on_commit_remote_transaction - seq=%d tid=%" INT64_FORMAT "\n", seq, tid);
-  SYNCTRACE("on_commit_remote_transaction - tid=%" INT64_FORMAT "\n", tid);
-
-  for( txn=plugin->mempool; txn; txn=txn->next ){
-    if( txn->tid==tid ) break;
-  }
-  if( !txn ){
-    SYNCTRACE("on_commit_remote_transaction - NOT FOUND on mempool\n");
-    return;
-  }
-
-  //txn->seq = seq;
-  txn->prev_tid = prev_tid;
-  //txn->hash = hash;
-
-  on_new_transaction_commit(plugin, txn);  //, hash);
-
-}
-
-/****************************************************************************/
 /****************************************************************************/
 
 SQLITE_PRIVATE void on_local_transaction_sent(send_message_t *req, int status) {
@@ -795,88 +614,95 @@ SQLITE_PRIVATE void on_local_transaction_sent(send_message_t *req, int status) {
 
 /****************************************************************************/
 
-SQLITE_PRIVATE void send_local_transaction_data(plugin *plugin, int64 tid, binn *log) {
+SQLITE_PRIVATE int send_local_transaction_data(plugin *plugin, int64 nonce, binn *log) {
   aergolite *this_node = plugin->this_node;
   binn *map=NULL;
   BOOL ret;
 
-  SYNCTRACE("send_local_transaction_data - tid = %" INT64_FORMAT "\n", tid);
+  SYNCTRACE("send_local_transaction_data - nonce=%" INT64_FORMAT "\n", nonce);
 
   plugin->sync_up_state = DB_STATE_SYNCHRONIZING;
 
   map = binn_map();
-  if (!map) goto loc_failed;
+  if( !map ) goto loc_failed;
 
-  binn_map_set_int32(map, LITESYNC_CMD, LITESYNC_LOG_INSERT);
-  binn_map_set_int32(map, LITESYNC_NODE_ID, plugin->node_id);
-  binn_map_set_int64(map, LITESYNC_TID, tid);
-  binn_map_set_list(map, LITESYNC_SQL_CMDS, log);
+  binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_INSERT_TRANSACTION);
+  binn_map_set_int32(map, PLUGIN_NODE_ID, plugin->node_id);
+  binn_map_set_int64(map, PLUGIN_NONCE, nonce);
+  binn_map_set_list(map, PLUGIN_SQL_CMDS, log);
 
   ret = send_peer_message(plugin->leader_node, map, on_local_transaction_sent);
   if( ret==FALSE ) goto loc_failed;
 
   binn_free(map);
 
-  return;
+  return SQLITE_OK;
 
 loc_failed:
 
   sqlite3_log(1, "send_local_transaction_data failed");
 
-  if (map) binn_free(map);
-
   plugin->sync_up_state = DB_STATE_LOCAL_CHANGES;
+
+  if( map ) binn_free(map);
+
+  return SQLITE_ERROR;
 
 }
 
 /****************************************************************************/
 
-SQLITE_PRIVATE void send_next_local_transaction(plugin *plugin) {
+SQLITE_PRIVATE void send_local_transactions(plugin *plugin) {
   aergolite *this_node = plugin->this_node;
-  int64 tid;
+  int64 nonce;
   binn *log = NULL;
   int rc;
 
-  //SYNCTRACE("send_next_local_transaction - last_sent_tid = %" INT64_FORMAT "\n", this_node->last_sent_tid);
-  SYNCTRACE("send_next_local_transaction\n");
+  SYNCTRACE("send_local_transactions\n");
 
-  rc = aergolite_get_next_local_transaction(this_node, &tid, &log);
+  nonce = 0; /* we don't know what is the nonce of the first txn in the queue */
 
-  if( rc==SQLITE_EMPTY ){
-    SYNCTRACE("send_next_local_transaction - no more local wal logs - IN SYNC\n");
-    plugin->sync_up_state = DB_STATE_IN_SYNC;
-    return;
-  } else if( rc!=SQLITE_OK || tid==0 || log==0 ){
-    sqlite3_log(rc, "send_next_local_transaction FAILED - tid=%" INT64_FORMAT, tid);
-    plugin->sync_up_state = DB_STATE_LOCAL_CHANGES;
-    return;
+  while( 1 ){
+    rc = aergolite_get_local_transaction(this_node, &nonce, &log);
+
+    if( rc==SQLITE_EMPTY ){
+      SYNCTRACE("send_local_transactions - no more local transactions - IN SYNC\n");
+      plugin->sync_up_state = DB_STATE_IN_SYNC;
+      return;
+    } else if( rc!=SQLITE_OK || nonce==0 || log==0 ){
+      sqlite3_log(rc, "send_local_transactions FAILED - nonce=%" INT64_FORMAT, nonce);
+      plugin->sync_up_state = DB_STATE_LOCAL_CHANGES;
+      return;
+    }
+
+    if( !plugin->leader_node ){
+      SYNCTRACE("send_local_transactions - no leader node\n");
+      plugin->sync_up_state = DB_STATE_LOCAL_CHANGES;
+      aergolite_free_transaction(log);
+      return;
+    }
+
+    rc = send_local_transaction_data(plugin, nonce, log);
+    aergolite_free_transaction(log);
+    if( rc ) return;
+
+    nonce++;
   }
-
-  if( !plugin->leader_node ){
-    SYNCTRACE("send_next_local_transaction - no leader node\n");
-    plugin->sync_up_state = DB_STATE_LOCAL_CHANGES;
-  } else {
-    send_local_transaction_data(plugin, tid, log);
-  }
-
-  aergolite_free_transaction(log);
 
 }
 
 /****************************************************************************/
+
+#if 0
 
 SQLITE_PRIVATE void on_transaction_exists(node *node, void *msg, int size) {
   plugin *plugin = node->plugin;
   aergolite *this_node = node->this_node;
   int64 tid;
 
-  tid = binn_map_int64(msg, LITESYNC_TID);
+  tid = binn_map_int64(msg, PLUGIN_TID);
 
   SYNCTRACE("on_transaction_exists - tid=%" INT64_FORMAT "\n", tid);
-
-  aergolite_update_local_transaction(this_node, tid, TRUE);
-
-  send_next_local_transaction(plugin);
 
 }
 
@@ -894,23 +720,12 @@ SQLITE_PRIVATE void on_transaction_failed(plugin *plugin, int64 tid, int rc) {
     SYNCTRACE("on_transaction_failed - DEFINITIVE FAILURE - tid=%" INT64_FORMAT " rc=%d\n", tid, rc);
     /* search for the transaction in the mempool */
     for( txn=plugin->mempool; txn; txn=txn->next ){
-      if( txn->tid==tid ) break;
+      if( txn->id==tid ) break;
     }
     if( txn ){
-      if( txn->node_id==plugin->node_id ){
-        /* mark that this local txn was processed */
-        aergolite_update_local_transaction(this_node, tid, FALSE);
-      }
       /* remove the transaction from the mempool */
       discard_mempool_transaction(plugin, txn);
     }
-  }
-
-  /* retry the same or send the next command */
-  if( plugin->is_leader ){
-    leader_node_process_local_transactions(plugin);
-  }else{
-    send_next_local_transaction(plugin);
   }
 
 }
@@ -923,34 +738,39 @@ SQLITE_PRIVATE void on_transaction_failed_msg(node *node, void *msg, int size) {
   int64 tid;
   int rc;
 
-  tid = binn_map_int64(msg, LITESYNC_TID);
-  rc = binn_map_int32(msg, LITESYNC_ERROR);
+  tid = binn_map_int64(msg, PLUGIN_TID);
+  rc = binn_map_int32(msg, PLUGIN_ERROR);
 
   on_transaction_failed(plugin, tid, rc);
 
 }
 
-/****************************************************************************/
-/****************************************************************************/
+#endif
 
-//	check if the base db is the same, if they have the same base transaction
-//		...
-//	check if it has local transactions (on the -wal-local file)
-//		if yes, send each one to the primary node starting from the oldest one
-//	check if the remote node has new commands
+/****************************************************************************/
+/****************************************************************************/
 
 SQLITE_PRIVATE void start_downstream_db_sync(plugin *plugin) {
   aergolite *this_node = plugin->this_node;
-  int64 last_tid;
 
-  SYNCTRACE("start_downstream_db_sync\n");
+  SYNCTRACE("start_downstream_synchronization\n");
+
+  if( !plugin->current_block ){
+    int rc = load_current_state(plugin);
+    if( rc==SQLITE_BUSY || rc==SQLITE_NOMEM ){
+      /* do not request download. it was a failure on the state loading. try again later */
+      plugin->sync_down_state = DB_STATE_ERROR;
+      return;
+    }else if( rc!=SQLITE_INVALID ){
+      /* do not request download of the db from other node on unexpected error */
+      plugin->sync_down_state = DB_STATE_ERROR;
+      return;
+    }
+  }
 
   plugin->sync_down_state = DB_STATE_SYNCHRONIZING;
 
-  /* get the last transaction id from the blockchain */
-  last_tid = aergolite_get_last_blockchain_transaction_id(this_node);
-  /* request the next transaction from the primary node */
-  request_next_blockchain_transaction(plugin, last_tid);
+  request_state_update(plugin);
 
 }
 
@@ -961,16 +781,14 @@ SQLITE_PRIVATE void start_upstream_db_sync(plugin *plugin) {
   SYNCTRACE("start_upstream_db_sync\n");
 
   /* send the local transactions */
-  send_next_local_transaction(plugin);
+  send_local_transactions(plugin);
 
 }
 
 /****************************************************************************/
 
 SQLITE_PRIVATE void check_base_db(plugin *plugin) {
-  aergolite *this_node = plugin->this_node;
-//  int64 last_tid;
-//  int rc = SQLITE_OK;
+  //aergolite *this_node = plugin->this_node;
 
   SYNCTRACE("check_base_db\n");
 
@@ -1001,19 +819,6 @@ SQLITE_PRIVATE void check_base_db(plugin *plugin) {
   check_current_leader(plugin);
 
 
-
-#if 0
-
-    /* it does not contain a last transaction id */
-    if (xxx!=yyy) {
-      store_and_replace_local_db(this_node);
-      goto loc_exit;
-    }
-
-    /* start the db synchronization */
-    start_downstream_db_sync(plugin);
-
-#endif
 
 }
 
@@ -1046,9 +851,9 @@ SQLITE_PRIVATE void after_connections_timer_cb(uv_timer_t* handle){
 
 /****************************************************************************/
 
-SQLITE_PRIVATE void secondary_node_on_local_transaction(plugin *plugin) {
+SQLITE_PRIVATE void follower_node_on_local_transaction(plugin *plugin) {
 
-  SYNCTRACE("secondary_node_on_local_transaction\n");
+  SYNCTRACE("follower_node_on_local_transaction\n");
 
   /* if this node is in sync, just send the new local transaction. otherwise start the sync process */
 
@@ -1058,7 +863,7 @@ SQLITE_PRIVATE void secondary_node_on_local_transaction(plugin *plugin) {
     /* check if already downloaded all txns */
     if( plugin->sync_down_state==DB_STATE_IN_SYNC ){
       /* send the new local transaction */
-      send_next_local_transaction(plugin);
+      send_local_transactions(plugin);
     }
   }
 
@@ -1072,10 +877,10 @@ SQLITE_PRIVATE void secondary_node_on_local_transaction(plugin *plugin) {
 
 /****************************************************************************/
 
-SQLITE_PRIVATE void on_get_transaction_sent(send_message_t *req, int status) {
+SQLITE_PRIVATE void on_transaction_request_sent(send_message_t *req, int status) {
 
   if (status < 0) {
-    SYNCTRACE("on_get_transaction_sent FAILED - (%d) %s\n", status, uv_strerror(status));
+    SYNCTRACE("on_transaction_request_sent FAILED - (%d) %s\n", status, uv_strerror(status));
     uv_close2( (uv_handle_t*) ((uv_write_t*)req)->handle, worker_thread_on_close);  /* disconnect */
   }
 
@@ -1083,47 +888,38 @@ SQLITE_PRIVATE void on_get_transaction_sent(send_message_t *req, int status) {
 
 /****************************************************************************/
 
-get_next_block?  state
-for nodes that are a little behind? note: the leader must have the txns stored...
-for others they may download the full db?
+#if 0
 
-SQLITE_PRIVATE void on_get_next_transaction(node *node, void *msg, int size) {
+SQLITE_PRIVATE void on_get_block(node *node, void *msg, int size) {
   plugin *plugin = node->plugin;
   aergolite *this_node = node->this_node;
-  int64 tid, prev_tid;
-  binn *map=0;
-  void *log=0;
-  int rc, node_id;
 
-  prev_tid = binn_map_int64(msg, LITESYNC_PREV_TID);
+  int64 height = binn_map_int64(msg, PLUGIN_HEIGHT);
 
-  SYNCTRACE("on_get_next_transaction - request from node %d - prev_tid=%" INT64_FORMAT "\n", node->id, prev_tid);
+  SYNCTRACE("on_get_block - request from node %d - height=%" INT64_FORMAT "\n", node->id, height);
 
   map = binn_map();
   if (!map) goto loc_failed;
 
-  rc = aergolite_get_next_blockchain_transaction(this_node, prev_tid, &tid, &log, &node_id);
+  rc = aergolite_get_block(this_node, height, &block->header, &block->body, &block->signatures);
+
   switch( rc ){
   case SQLITE_NOTFOUND: /* there is no record with the given prev_tid */
-    binn_map_set_int32(map, LITESYNC_CMD, LITESYNC_LOG_NOTFOUND);
-    break;
-  case SQLITE_EMPTY:    /* there is no record after this one */
-    binn_map_set_int32(map, LITESYNC_CMD, LITESYNC_IN_SYNC);
+    binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_BLOCK_NOTFOUND);
     break;
   case SQLITE_OK:
-    binn_map_set_int32(map, LITESYNC_CMD, LITESYNC_LOG_DATA);
-    binn_map_set_int64(map, LITESYNC_PREV_TID, prev_tid);
-    binn_map_set_int64(map, LITESYNC_TID, tid);
-    binn_map_set_list (map, LITESYNC_SQL_CMDS, log);
-    binn_map_set_int32(map, LITESYNC_NODE_ID, node_id);
-    sqlite3_free(log);
+    binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_REQUESTED_BLOCK);
+    binn_map_set_int64(map, PLUGIN_HEIGHT, height);
+    binn_map_set_blob(map, PLUGIN_HEADER, block->header, binn_size(block->header));
+    binn_map_set_blob(map, PLUGIN_BODY, block->body, binn_size(block->body));
+    binn_map_set_blob(map, PLUGIN_SIGNATURES, block->signatures, binn_size(block->signatures));
     break;
   default:
-    sqlite3_log(rc, "on_get_next_transaction: get_next_blockchain_txn failed");
+    sqlite3_log(rc, "on_get_block: get_block failed");
     goto loc_failed;
   }
 
-  send_peer_message(node, map, on_get_transaction_sent);
+  send_peer_message(node, map, on_data_sent);
 
   return;
 
@@ -1135,80 +931,96 @@ loc_failed:
 
 /****************************************************************************/
 
-/*
-** Used by the leader.
-*/
-SQLITE_PRIVATE int commit_transaction_to_blockchain(plugin *plugin, struct transaction *txn) {
-  aergolite *this_node = plugin->this_node;
-  int64 prev_tid;
-  int rc;
+// retrieve it from the mempool or, if not found, from the db (if full node)
 
-  SYNCTRACE("commit_transaction_to_blockchain - seq=%" INT64_FORMAT
-            " node=%d tid=%" INT64_FORMAT " sql_count=%d\n",
-            txn->seq, txn->node_id, txn->tid, binn_count(txn->log)-2 );
+SQLITE_PRIVATE void on_get_transaction(node *node, void *msg, int size) {
+  plugin *plugin = node->plugin;
+  aergolite *this_node = node->this_node;
+  int64 tid, nonce;
+  binn *map;
+  void *log=0;
+  int rc, node_id;
 
-  prev_tid = aergolite_get_last_blockchain_transaction_id(this_node);
+  tid = binn_map_int64(msg, PLUGIN_TID);
 
-//! do we need the prev_tid ??????
-//  the fn bellow could return the seq
+  SYNCTRACE("on_get_transaction - request from node %d - tid=%" INT64_FORMAT "\n", node->id, tid);
 
-  /* execute the transaction in the worker db */
-  rc = aergolite_execute_transaction_on_blockchain(this_node, txn->node_id, txn->tid, txn->log, txn->hash);
-  //rc = aergolite_execute_transaction_on_blockchain(this_node, txn);
+  map = binn_map();
+  if (!map) goto loc_failed;
 
-  /* if the txn is from this node */
-  if( txn->node_id==plugin->node_id ){
-    //this_node->last_ack_tid = txn->tid;
-    aergolite_update_local_transaction(this_node, txn->tid, rc==SQLITE_OK);
+  /* check if it is in the mempool */
+  ...
+
+
+  /* load it from the database */
+  rc = aergolite_get_transaction(this_node, tid, &node_id, &nonce, &log);
+
+  switch( rc ){
+  case SQLITE_NOTFOUND: /* there is no record with the given prev_tid */
+    binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_LOG_NOTFOUND);
+    break;
+  case SQLITE_OK:
+    binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_REQUESTED_TRANSACTION);
+    binn_map_set_int64(map, PLUGIN_TID, tid);
+    binn_map_set_int32(map, PLUGIN_NODE_ID, node_id);
+    binn_map_set_int64(map, PLUGIN_NONCE, nonce);
+    binn_map_set_list (map, PLUGIN_SQL_CMDS, log);
+    sqlite3_free(log);
+    break;
+  default:
+    sqlite3_log(rc, "on_get_transaction: get_next_blockchain_txn failed");
+    goto loc_failed;
   }
 
-  if( rc ) return rc;
+  send_peer_message(node, map, on_data_sent);
 
-  txn->prev_tid = prev_tid;
-  //memcpy(this_node->prev_hash, txn->hash, SHA256_BLOCK_SIZE);
+  return;
 
+loc_failed:
 
-//! for a real Raft we would need to start a transaction, execute the commands and not commit it...
-//  so the engine should support this
+  if (map) binn_free(map);
 
-// maybe a simple PITR (of a single txn) could be useful - it could be used to implement some protocols
-// maybe truncating the wal-remote file, avoiding a log rotation / checkpoint if the txn is not on a 
-//    consensus / reached finality
+}
 
+#endif
 
+/****************************************************************************/
 
-  //  COMMIT  tid at seq with hash
+SQLITE_PRIVATE void request_transaction(plugin *plugin, int64 tid){
+  binn *map;
 
+  SYNCTRACE("request_transaction - tid=%" INT64_FORMAT "\n", tid);
 
+  if( !plugin->leader_node ) return;
 
-  /* was this txn sent from this node? */
-  if( txn->node_id==plugin->node_id ){
-    /* send the next local transaction */
-    leader_node_process_local_transactions(plugin);
-  }
+  /* create request packet */
+  map = binn_map();
+  if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_GET_TRANSACTION)==FALSE ) goto loc_failed;
+  if( binn_map_set_int64(map, PLUGIN_TID, tid)==FALSE ) goto loc_failed;
 
-  return rc;
+  /* send the packet */
+  if( send_peer_message(plugin->leader_node, map, on_transaction_request_sent)==FALSE ) goto loc_failed;
+
+  binn_free(map);
+
+  return;
+loc_failed:
+  if( map ) binn_free(map);
+//  plugin->sync_down_state = DB_STATE_ERROR;
 
 }
 
 /****************************************************************************/
 
-struct block {   // state_change
-  struct block *next;
-  binn *header;  // state
-  binn *body;    // payload
-  binn *signatures;
-  int  ack_count;
-  char *pbuf;
-};
+SQLITE_PRIVATE void discard_block(struct block *block) {
 
-SQLITE_PRIVATE void discard_block(plugin *plugin, struct block *block) {
+  SYNCTRACE("discard_block\n");
 
-  llist_remove(&plugin->blocks, block);
+  if( !block ) return;
 
-  binn_free(block->header);
-  binn_free(block->body);
-  binn_free(block->signatures);
+  if( block->header     ) sqlite3_free(block->header);
+  if( block->body       ) sqlite3_free(block->body);
+  if( block->signatures ) sqlite3_free(block->signatures);
   sqlite3_free(block);
 
 }
@@ -1216,26 +1028,24 @@ SQLITE_PRIVATE void discard_block(plugin *plugin, struct block *block) {
 /****************************************************************************/
 
 SQLITE_PRIVATE int load_current_state(plugin *plugin) {
+  aergolite *this_node = plugin->this_node;
   struct block *block = NULL;
   int rc;
+
+  SYNCTRACE("load_current_state\n");
 
   block = sqlite3_malloc_zero(sizeof(struct block));
   if( !block ) return SQLITE_NOMEM;
 
   /* load and verify the current local database state */
-  rc = aergolite_load_current_state(this_node, &block->header, &block->body,
-                                    &block->signatures);
-  if( rc ){  //goto loc_failed;
+  rc = aergolite_load_current_state(this_node, &block->height,
+            &block->header, &block->body, &block->signatures);
+  if( rc ){
     sqlite3_free(block);
     return rc;
   }
 
-// maybe in a fn:
-  block->height = binn_map_int64(block->header, BLOCK_HEIGHT);
-
-  /* store the current block in the list */
-//  llist_add(&plugin->blocks, block);
-// or:
+  /* store the current block */
   plugin->current_block = block;
 
   return SQLITE_OK;
@@ -1260,26 +1070,34 @@ SQLITE_PRIVATE void on_state_update_request_sent(send_message_t *req, int status
 SQLITE_PRIVATE void request_state_update(plugin *plugin) {
   int64 current_height;
   char *state_hash;
-  binn *map = binn_map();
+  binn *map;
 
-  if( !map || !plugin->leader_node ) goto loc_failed;
+  SYNCTRACE("request_state_update\n");
+
+  if( !plugin->leader_node ){
+    plugin->sync_down_state = DB_STATE_UNKNOWN;
+    return;
+  }
+
+  map = binn_map();
+  if( !map ) goto loc_failed;
 
   if( plugin->current_block ){
     current_height = plugin->current_block->height;
-    state_hash = binn_map_blob(plugin->current_block->header, STATE_HASH, NULL);
+    //state_hash = plugin->current_block->state_hash;
   }else{
     current_height = 0;
-    state_hash = NULL;
+    //state_hash = NULL;
   }
 
   SYNCTRACE("request_state_update - current_height=%" INT64_FORMAT "\n", current_height);
 
   /* create request packet */
-  if( binn_map_set_int32(map, LITESYNC_CMD, LITESYNC_REQUEST_STATE_DIFF)==FALSE ) goto loc_failed;
+  if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_REQUEST_STATE_DIFF)==FALSE ) goto loc_failed;
   if( binn_map_set_int64(map, BLOCK_HEIGHT, current_height)==FALSE ) goto loc_failed;
-  if( state_hash ){
-    if( binn_map_set_blob(map, STATE_HASH, state_hash, SHA256_BLOCK_SIZE)==FALSE ) goto loc_failed;
-  }
+  //if( state_hash ){
+  //  if( binn_map_set_blob(map, STATE_HASH, state_hash, SHA256_BLOCK_SIZE)==FALSE ) goto loc_failed;
+  //}
 
   /* send the packet */
   if( send_peer_message(plugin->leader_node, map, on_state_update_request_sent)==FALSE ) goto loc_failed;
@@ -1289,91 +1107,11 @@ SQLITE_PRIVATE void request_state_update(plugin *plugin) {
   return;
 loc_failed:
   if( map ) binn_free(map);
-  plugin->sync_down_state = DB_STATE_UNKNOWN;
+  plugin->sync_down_state = DB_STATE_ERROR;
 
 // use a timer if it is off-line
-// also call this fn when it reconnects, also for the first time
-  xxx
+// also call this fn when it reconnects
 
-}
-
-/****************************************************************************/
-
-void startup() {
-  int rc;
-
-  rc = load_current_state(plugin);
-  if( rc ){
-    /* do not request download. it was a failure on the state loading. try again later */
-//    xx;
-    return;
-  }
-
-  /* update this node's db state with the peers' current state  (sync down) */
-  /* if the this node's current state is invalid or empty, download a new db from the peers */
-  request_state_update(plugin);
-
-}
-
-/****************************************************************************/
-
-/*
-
-maybe by the core:
-** Check the hashes for each modified db page
-** Add the modified pages hashes to a new array
-** Calculate the new state hash and compare it with the state agreement (block header)
-
-** Start a write transaction
-** Save the db pages
-** Commit the new state
-
-
-** The peer will send:
-** 1. the list of modified pages (height, pgno, hash)
-** 2. the last version for each modified db page
-** 3. the state agreement
-
-*/
-
-SQLITE_PRIVATE void on_update_modified_pages(node *node, void *msg, int size) {
-  plugin *plugin = node->plugin;
-  aergolite *this_node = node->this_node;
-  binn_iter iter;
-  binn value;
-  void *list;
-  int  rc;
-
-  /* get the list of modified pages */
-  list = binn_map_list(msg, LITESYNC_MODIFIED_PAGES);
-
-  SYNCTRACE("on_update_modified_pages - count: %d\n", binn_count(list) );
-
-  /* start the state update */
-  rc = aergolite_begin_state_update(this_node);
-  if( rc ) goto loc_failed;
-
-  /* save the modified db pages */
-  binn_list_foreach(list, value) {
-    unsigned int height = binn_map_uint(value.ptr, MODPAGE_HEIGHT);
-    unsigned int pgno = binn_map_uint(value.ptr, MODPAGE_PGNO);
-    unsigned char *hash = binn_map_blob(value.ptr, MODPAGE_HASH, NULL);
-    /* x */
-    rc = aergolite_update_modified_page(this_node, height, pgno, hash);
-    if( rc!=SQLITE_OK ){
-      sqlite3_log(1, "on_update_modified_pages - save modified page failed - height: %d  pgno: %d", height, pgno);
-      aergolite_rollback_block(this_node);  // cancel_state_update
-      goto loc_failed;
-    }
-  }
-
-  return;
-loc_failed:
-  SYNCTRACE("on_update_modified_pages FAILED\n");
-  /* disconnect from the leader node */
-//  uv_close2( (uv_handle_t*) node->socket, worker_thread_on_close);
-  // or try again? use a timer?
-  xxx;
 }
 
 /****************************************************************************/
@@ -1384,88 +1122,256 @@ SQLITE_PRIVATE void on_update_db_page(node *node, void *msg, int size) {
   plugin *plugin = node->plugin;
   aergolite *this_node = node->this_node;
   unsigned int pgno;
-  unsigned char *data;
-//  binn_iter iter;
-//  binn value;
-//  void *list;
-  int  rc;
+  char *data;
+  int rc;
 
-  pgno = binn_map_uint(msg, LITESYNC_PGNO);
-  data = binn_map_blob(msg, LITESYNC_DBPAGE, &size);
+  pgno = binn_map_uint32(msg, PLUGIN_PGNO);
+  data = binn_map_blob(msg, PLUGIN_DBPAGE, &size);
 
   SYNCTRACE("on_update_db_page - pgno: %d  size: %d\n", pgno, size);
 
-  /* get the list of db pages */
-//  list = binn_map_list(msg, LITESYNC_DBPAGE);
+  if( !plugin->is_updating_state ){
+    /* start the state update */
+    rc = aergolite_begin_state_update(this_node);
+    if( rc ) goto loc_failed;
+    plugin->is_updating_state = true;
+  }
 
-  /* save the modified db pages */
-//  binn_list_foreach(list, value) {
-//    unsigned int pgno = binn_map_uint(value.ptr, DBPAGE_PGNO);
-//    unsigned char *data = binn_map_blob(value.ptr, DBPAGE_DATA, &size);
-    /* x */
-    rc = aergolite_update_db_page(this_node, pgno, data, size);
-    if( rc!=SQLITE_OK ){
-      sqlite3_log(1, "apply_state_update - save db failed - pgno: %u", pgno);
-      aergolite_rollback_block(this_node);  // cancel_state_update
-      return XX;
-    }
-//  }
-
-
+  /* x */
+  rc = aergolite_update_db_page(this_node, pgno, data, size);
+  if( rc!=SQLITE_OK ){
+    sqlite3_log(1, "on_update_db_page - save page failed - pgno: %u", pgno);
+    aergolite_cancel_state_update(this_node);
+    goto loc_failed;
+  }
 
   return;
-loc_failed:
-// close connection?
-// or try again? use a timer?
 
-  /* start the process again, after a time interval */
-  xxx;
+loc_failed:
+  plugin->is_updating_state = false;
+  plugin->sync_down_state = DB_STATE_ERROR;
+
 }
 
+/****************************************************************************/
 
 //SQLITE_PRIVATE int apply_state_update(plugin *plugin, struct block *block) {
 SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
   plugin *plugin = node->plugin;
   aergolite *this_node = node->this_node;
-  void *state, *payload, *signatures;
-  int state_size, payload_size, sig_size;
-  unsigned int height;
+  //void *state, *payload, *signatures;
+  void *header, *body, *signatures, *mod_pages;
+  //int state_size, payload_size, sig_size;
+  int header_size, body_size, sig_size;
+  int64 height;
   struct block *block = NULL;
-  int  rc;
+  int rc;
 
-  state = binn_map_blob(msg, LITESYNC_STATE, &state_size);
-  payload = binn_map_blob(msg, LITESYNC_PAYLOAD, &payload_size);
-  signatures = binn_map_blob(msg, LITESYNC_SIGNATURES, &sig_size);
+  height = binn_map_uint64(msg, BLOCK_HEIGHT);
+  //state = binn_map_blob(msg, PLUGIN_STATE, &state_size);
+  //payload = binn_map_blob(msg, PLUGIN_PAYLOAD, &payload_size);
+  header = binn_map_blob(msg, PLUGIN_STATE, &header_size);
+//  body = binn_map_blob(msg, PLUGIN_PAYLOAD, &payload_size);
+  signatures = binn_map_blob(msg, PLUGIN_SIGNATURES, &sig_size);
+  mod_pages = binn_map_list(msg, PLUGIN_MOD_PAGES);
 
-  height = binn_map_uint(state, BLOCK_HEIGHT);
-  //hash = binn_map_uint(state, STATE_DBHASH);
+  //height = binn_map_uint32(state, BLOCK_HEIGHT);
+  //hash = binn_map_uint32(state, STATE_DBHASH);
 
-  SYNCTRACE("on_apply_state_update - height: %d\n", height);
+  SYNCTRACE("on_apply_state_update - height: %" INT64_FORMAT
+            " modified pages: %d\n", height, binn_count(mod_pages));
 
   /* commit the new state */
   //rc = aergolite_apply_state_update(this_node, block->header, block->body);
-  rc = aergolite_apply_state_update(this_node, state, payload);
+  //rc = aergolite_apply_state_update(this_node, state, payload, signatures);
+  //rc = aergolite_apply_state_update(this_node, header, body, signatures);
+  rc = aergolite_apply_state_update(this_node, header, signatures, mod_pages);
   if( rc ) goto loc_failed;
 
   /* keep the new state on the memory */
   block = sqlite3_malloc_zero(sizeof(struct block));
-  if( !block ) return NULL;
+  if( !block ) goto loc_failed2;
 
-  block->header = sqlite3_memdup(state, state_size);
-  block->body = sqlite3_memdup(payload, payload_size);  // needed?
+  block->height = height;
+  block->header = sqlite3_memdup(header, header_size);
+//  block->body = sqlite3_memdup(payload, payload_size);  // needed on full nodes?
   block->signatures = sqlite3_memdup(signatures, sig_size);
 
+  if( !block->header ) goto loc_failed2;
+//  if( !block->signatures ) goto loc_failed2;
+
   /* replace the previous block by the new one */
-  discard_block(plugin, plugin->current_block);
+  discard_block(plugin->current_block);
   plugin->current_block = block;
 
+  plugin->sync_down_state = DB_STATE_IN_SYNC;
+
+loc_exit:
+  plugin->is_updating_state = false;
   return;
+
 loc_failed:
-// close connection?
-// or try again? use a timer?
+  plugin->sync_down_state = DB_STATE_ERROR;
+  goto loc_exit;
+
+loc_failed2:
+  /* force to reload the current state */
+  discard_block(plugin->current_block);
+  plugin->current_block = NULL;
+  plugin->sync_down_state = DB_STATE_UNKNOWN;
+  goto loc_exit;
 
 }
 
+/****************************************************************************/
+/****************************************************************************/
+
+SQLITE_PRIVATE int compare_pgno(void *item1, void *item2){
+  Pgno existing = *(Pgno*)item1;
+  Pgno new = *(Pgno*)item2;
+  if( new==existing ){
+    return 0;
+  }else if( new > existing ){
+    return 1;
+  }else{
+    return -1;
+  }
+}
+
+// what if the nodes use different base dbs?
+// 1. they could check the base db, and:
+//  1-a. do not update
+//  1-b. the db is overwriten
+// 2. no checking. the db is overwriten
+
+SQLITE_PRIVATE void on_request_state_update(node *node, void *msg, int size) {
+  plugin *plugin = node->plugin;
+  aergolite *this_node = node->this_node;
+
+  //void *state, *payload, *signatures;
+  void *header, *body, *signatures;
+  //int state_size, payload_size, sig_size;
+  //int header_size, body_size, sig_size;
+  //struct block *block = NULL;
+
+  int64 height, current_height;
+  binn *map=NULL, *list=NULL;
+  binn_iter iter;
+  binn item;
+  void *array=NULL;
+  int rc;
+
+  height = binn_map_uint64(map, BLOCK_HEIGHT);
+
+  if( !plugin->current_block ){
+    return;
+  }
+
+  current_height = plugin->current_block->height;
+  header = plugin->current_block->header;
+  signatures = plugin->current_block->signatures;
+
+  SYNCTRACE("on_request_state_update - from height: %" INT64_FORMAT
+            " current height: %" INT64_FORMAT "\n", height, current_height);
+
+  //if( height<0 ) ...
+//!  if( height>current_height ) ...
+
+  if( height==current_height ){
+    /* inform that it is up-to-date */
+    SYNCTRACE("on_request_state_update - peer is up-to-date\n");
+    map = binn_map();
+    if( !map ) goto loc_failed;
+    if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_UPTODATE)==FALSE ) goto loc_failed;
+    if( binn_map_set_map(map, PLUGIN_STATE, header)==FALSE ) goto loc_failed;
+    if( binn_map_set_list(map, PLUGIN_SIGNATURES, signatures)==FALSE ) goto loc_failed;
+    if( send_peer_message(node, map, NULL)==FALSE ) goto loc_failed;
+    binn_free(map); map = NULL;
+    return;
+  }
+
+
+  /*  */
+  rc = aergolite_begin_state_read(this_node);
+  if( rc ) goto loc_failed;
+
+  /*  */
+  rc = aergolite_get_modified_pages(this_node, height + 1, current_height, &list);
+  if( rc ) goto loc_failed;
+
+#if 0
+  /* send the list of modified pages to the peer */
+  SYNCTRACE("on_request_state_update - sending list of modified pages\n")
+  map = binn_map();
+  if( !map ) goto loc_failed;
+  if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_MODIFIED_PAGES)==FALSE ) goto loc_failed;
+  if( binn_map_set_list(map, PLUGIN_CONTENT, list)==FALSE ) goto loc_failed;
+  if( send_peer_message(node, map, NULL)==FALSE ) goto loc_failed;
+  binn_free(map); map = NULL;
+#endif
+
+  /* build an array with the distinct modified pages */
+  array = new_array(16, sizeof(Pgno));
+  if( !array ){ rc = SQLITE_NOMEM; goto loc_failed; }
+  binn_list_foreach(list, item) {
+    //Pgno pgno = item.vuint32;
+    Pgno pgno = binn_list_uint32(item.ptr, 2);
+    int pos = array_insert_sorted(&array, &pgno, compare_pgno, TRUE);
+    if( pos<0 ){ rc = SQLITE_NOMEM; goto loc_failed; }
+  }
+
+  /* for each modified page */
+  {
+  int i;
+  int count = array_count(array);
+  Pgno *pages = (Pgno*) array_ptr(array); // or  Pgno pages[];
+  for( i=0; i<count; i++ ){
+    Pgno pgno = pages[i];
+    char data[4096];  //! should it support bigger page sizes?
+    int size;
+    SYNCTRACE("on_request_state_update - sending page %d...\n", pgno);
+    /* read the page content */
+    rc = aergolite_get_db_page(this_node, pgno, data, &size); // -- it can return a ptr
+    if( rc ) goto loc_failed;
+    /* send the page to the peer */
+    map = binn_map();
+    if( !map ) goto loc_failed;
+    if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_DB_PAGE)==FALSE ) goto loc_failed;
+    if( binn_map_set_uint32(map, PLUGIN_PGNO, pgno)==FALSE ) goto loc_failed;
+    if( binn_map_set_blob(map, PLUGIN_DBPAGE, data, size)==FALSE ) goto loc_failed;
+    if( send_peer_message(node, map, NULL)==FALSE ) goto loc_failed;
+    binn_free(map); map = NULL;
+  }
+  array_free(&array);
+  }
+
+  aergolite_end_state_read(this_node);
+  //if( rc ) ...
+
+  /* send the block header (state agreement) to the peer */
+  SYNCTRACE("on_request_state_update - sending the state agreement\n");
+  map = binn_map();
+  if( !map ) goto loc_failed;
+  if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_APPLY_UPDATE)==FALSE ) goto loc_failed;
+  if( binn_map_set_map(map, PLUGIN_STATE, header)==FALSE ) goto loc_failed;
+  if( binn_map_set_list(map, PLUGIN_SIGNATURES, signatures)==FALSE ) goto loc_failed;
+  if( binn_map_set_list(map, PLUGIN_MOD_PAGES, list)==FALSE ) goto loc_failed;
+  if( send_peer_message(node, map, NULL)==FALSE ) goto loc_failed;
+  binn_free(map); map = NULL;
+
+  binn_free(list); list = NULL;
+
+  return;
+loc_failed:
+  SYNCTRACE("on_request_state_update - FAILED\n");
+  if( map ) binn_free(map);
+  if( list ) binn_free(list);
+  if( array ) array_free(&array);
+  aergolite_end_state_read(this_node);
+
+}
+
+/****************************************************************************/
 /****************************************************************************/
 
 // iterate the payload to check the transactions
@@ -1473,27 +1379,26 @@ loc_failed:
 // when they arrive, call fn to check if it can apply
 // execute txns from the payload
 
-//SQLITE_PRIVATE int apply_new_block(plugin *plugin, binn *block, binn *payload) {
-SQLITE_PRIVATE int apply_new_block(plugin *plugin, struct block *block) {
+SQLITE_PRIVATE int apply_last_block(plugin *plugin) {
+  aergolite *this_node = plugin->this_node;
+  struct block *block;
+  struct transaction *txn;
+  BOOL all_present = TRUE;
   binn_iter iter;
   binn value;
   void *list;
-  struct transaction *txn;
-  BOOL all_present = TRUE;
   int rc;
 
-// WHAT IF this update should be applied via pages?
-// maybe use another function for that
+  block = plugin->new_block;
+  if( !block ) return SQLITE_EMPTY;
 
   /* get the list of transactions ids */
-  list = binn_map_list(block->body, BLOCK_TRANSACTIONS);
+  list = binn_map_list(block->body, BODY_TXN_IDS);  //  BLOCK_TRANSACTIONS);
 
   /* check whether all the transactions are present on the local mempool */
   binn_list_foreach(list, value){
-//! ??    assert( value.type==BINN_BLOB );
-    //int64 txn_id = value.ptr;
     int64 txn_id = value.vint64;
-    //SYNCTRACE("execute_transaction - sql: %s\n", sql);
+    assert( value.type==BINN_INT64 );
     /* check the transaction in the mempool */
     for( txn=plugin->mempool; txn; txn=txn->next ){
       if( txn->id==txn_id ) break;
@@ -1503,17 +1408,17 @@ SQLITE_PRIVATE int apply_new_block(plugin *plugin, struct block *block) {
       all_present = FALSE;
       /* to avoid making a second request for non-arrived txns */
       if( !block->downloading_txns ){
-        request_transaction(txn_id);  // call this fn again on txn arrival
+        request_transaction(plugin, txn_id);
       }
     }
   }
 
   block->downloading_txns = !all_present;
 
-  if( !all_present ) return XXX;
+  if( !all_present ) return SQLITE_BUSY;
 
-  /* start a db transaction */
-  rc = aergolite_begin_block(this_node);  // begin_new_state
+  /* start a new block */
+  rc = aergolite_begin_block(this_node);
   if( rc ) goto loc_failed;
 
   /* execute the transactions from the local mempool */
@@ -1523,18 +1428,16 @@ SQLITE_PRIVATE int apply_new_block(plugin *plugin, struct block *block) {
       if( txn->id==value.vint64 ) break;
     }
     /* x */
-    rc = aergolite_execute_transaction(this_node, txn->tid, txn->node_id, txn->log);
+    rc = aergolite_execute_transaction(this_node, txn->node_id, txn->nonce, txn->log);
     if( rc!=SQLITE_OK ){
-      sqlite3_log(1, "apply_block - failed transaction");
+      sqlite3_log(rc, "apply_block - failed transaction");
       aergolite_rollback_block(this_node);
-      return XX;
+      return rc;
     }
   }
 
-  //rc = aergolite_rollback_block(this_node); -- not needed. it can rollback it auto in the fn bellow
-
-  rc = aergolite_apply_block(this_node, block->header, block->body);
-  //rc = aergolite_apply_new_state(this_node, state->state, state->payload);
+  rc = aergolite_apply_block(this_node, block->header, block->body, block->signatures);
+  //rc = aergolite_apply_new_state(this_node, state->header, state->payload);
   if( rc ) goto loc_failed;
 
   /* remove the used transactions from the mempool */
@@ -1547,30 +1450,117 @@ SQLITE_PRIVATE int apply_new_block(plugin *plugin, struct block *block) {
     }
   }
 
-  /* store the block on the database */  -- done by the core
-//  store_new_block(plugin, block);
-
   /* replace the previous block by the new one */
-  discard_block(plugin, plugin->current_block);
+  discard_block(plugin->current_block);
   plugin->current_block = block;
+  plugin->new_block = NULL;
 
-  return;
+  return SQLITE_OK;
+
 loc_failed:
 // close connection?
 // or try again? use a timer?
+  return rc;
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE int apply_block(plugin *plugin, struct block *block){
+
+  plugin->new_block = block;
+
+  return apply_last_block(plugin);
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
+  aergolite *this_node = node->this_node;
+  plugin *plugin = node->plugin;
+  struct block *block;
+  int64 height;
+  void *header, *body;
+  binn *map;
+
+  height = binn_map_int64(msg, PLUGIN_HEIGHT);
+  header = binn_map_blob(msg, PLUGIN_HEADER, NULL);
+  body   = binn_map_blob(msg, PLUGIN_BODY, NULL);
+
+  SYNCTRACE("on_new_block - height=%" INT64_FORMAT "\n", height);
+
+  block = sqlite3_malloc_zero(sizeof(struct block));
+  if( !block ) return;  // SQLITE_NOMEM;
+
+  block->height = height;
+  block->header = sqlite3_memdup(header, binn_size(header));
+  block->body   = sqlite3_memdup(body,   binn_size(body));
+
+  if( !block->header || !block->body ){
+    sqlite3_free(block);
+    return;
+  }
+
+  plugin->new_block = block;
+
+  map = binn_map();
+  binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_NEW_BLOCK_ACK);
+  binn_map_set_int64(map, PLUGIN_HEIGHT, block->height);
+  send_peer_message(node, map, NULL);
+  binn_free(map);
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void on_commit_block(node *node, void *msg, int size) {
+  aergolite *this_node = node->this_node;
+  plugin *plugin = node->plugin;
+  struct block *block;
+  int64 height;
+  //uchar *hash;
+  int rc;
+
+  height = binn_map_int64(msg, PLUGIN_HEIGHT);
+  //hash = binn_map_blob (msg, PLUGIN_HASH, NULL);  //&hash_size);
+
+  SYNCTRACE("on_commit_block - height=%" INT64_FORMAT "\n", height);
+
+  block = plugin->new_block;
+  if( !block ) return;
+
+  if( block->height!=height ){
+    SYNCTRACE("on_commit_block - NOT FOUND\n");
+    return;
+  }
+
+  /* apply the new block on this node */
+  rc = apply_block(plugin, block);
+
+  if( rc==SQLITE_OK ){
+    discard_block(plugin->current_block);
+    plugin->current_block = block;
+    plugin->new_block = NULL;
+  }else{
+    plugin->sync_down_state = DB_STATE_OUTDATED; /* it may download this block later */
+    discard_block(block);
+    plugin->new_block = NULL;
+  }
 
 }
 
 /****************************************************************************/
 
 
----> it can only create it if the previous state is applied on the db!!!
-it must check this
+//! ---> it can only create it if the previous state is applied on the db!!!
+//!      it must check this
 
 
 //SQLITE_PRIVATE int create_new_block(plugin *plugin, binn **pblock, binn **ppayload) {
 SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
-  struct block *block = NULL;
+  aergolite *this_node = plugin->this_node;
+  struct transaction *txn;
+  struct block *block;
   int rc;
 
   if( plugin->mempool==NULL ) return NULL;
@@ -1584,11 +1574,8 @@ SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
 
   /* execute the transactions from the local mempool */
   for( txn=plugin->mempool; txn; txn=txn->next ){
-    rc = aergolite_execute_transaction(this_node, txn->tid, txn->node_id, txn->log);
-//    if( rc==SQLITE_OK ){
-      /* include this transaction on the block */  -- this is done by the core...
-//      xx(txn->tid);
-//    }
+    /* include this transaction on the block */
+    rc = aergolite_execute_transaction(this_node, txn->node_id, txn->nonce, txn->log);
     if( rc!=SQLITE_OK ){
   // not included in the block. inform the source node -> it must mark the txn as failed! even after having sent it.
   // for now: each node can send at most 1 txn per block
@@ -1657,8 +1644,9 @@ SQLITE_PRIVATE void new_block_timer_cb(uv_timer_t* handle) {
     return;
   }
 
-  /* store the block in the list */
-  llist_add(&plugin->blocks, block);
+  /* store the new block */
+  //llist_add(&plugin->blocks, block);
+  plugin->new_block = block;
 
   /* broadcast the block to the peers */
   block->ack_count = 1;  /* ack by this node */
@@ -1675,33 +1663,56 @@ SQLITE_PRIVATE void new_block_timer_cb(uv_timer_t* handle) {
 /*
 ** Used by the leader.
 */
-//SQLITE_PRIVATE int broadcast_transaction_commit(plugin *plugin, struct transaction *txn) {
-// signed block, signed state, state commit
-SQLITE_PRIVATE int broadcast_block_commit(plugin *plugin, struct block *block) {
+SQLITE_PRIVATE int broadcast_new_block(plugin *plugin, struct block *block) {
   struct node *node;
-  binn *map=0;
-  int rc;
+  binn *map;
 
-  SYNCTRACE("broadcast_block_commit - seq=%" INT64_FORMAT
-            " node=%d tid=%" INT64_FORMAT " txn_count=%d\n",
-            txn->seq, txn->node_id, txn->tid, block->num_txns );
+  SYNCTRACE("broadcast_new_block - height=%" INT64_FORMAT "\n",
+            block->height);
 
   /* signal other peers that there is a new transaction */
   map = binn_map();
   if( !map ) return SQLITE_BUSY;  /* flag to retry the command later */
 
-  binn_map_set_int32(map, LITESYNC_CMD, LITESYNC_LOG_COMMIT);
-  binn_map_set_int64(map, LITESYNC_TID, txn->tid);
-  //binn_map_set_int32(map, LITESYNC_SEQ, txn->seq);
-//  binn_map_set_int64(map, LITESYNC_PREV_TID, txn->prev_tid);
-  binn_map_set_blob(map, LITESYNC_HASH, txn->hash, SHA256_BLOCK_SIZE);
+  binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_NEW_BLOCK);
+  binn_map_set_int64(map, PLUGIN_HEIGHT, block->height);
+  binn_map_set_blob(map, PLUGIN_HEADER, block->header, binn_size(block->header));
+  binn_map_set_blob(map, PLUGIN_BODY, block->body, binn_size(block->body));
 
   for( node=plugin->peers; node; node=node->next ){
     send_peer_message(node, map, NULL);
   }
 
   binn_free(map);
+  return SQLITE_OK;
+}
 
+/****************************************************************************/
+
+/*
+** Used by the leader.
+*/
+// signed block, signed state, state commit
+SQLITE_PRIVATE int broadcast_block_commit(plugin *plugin, struct block *block) {
+  struct node *node;
+  binn *map;
+
+  SYNCTRACE("broadcast_block_commit - height=%" INT64_FORMAT "\n",
+            block->height);
+
+  /* signal other peers that there is a new transaction */
+  map = binn_map();
+  if( !map ) return SQLITE_BUSY;  /* flag to retry the command later */
+
+  binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_COMMIT_BLOCK);
+  binn_map_set_int64(map, PLUGIN_HEIGHT, block->height);
+  //binn_map_set_blob(map, PLUGIN_HASH, block->hash, SHA256_BLOCK_SIZE);
+
+  for( node=plugin->peers; node; node=node->next ){
+    send_peer_message(node, map, NULL);
+  }
+
+  binn_free(map);
   return SQLITE_OK;
 }
 
@@ -1712,54 +1723,54 @@ SQLITE_PRIVATE int broadcast_block_commit(plugin *plugin, struct block *block) {
 */
 SQLITE_PRIVATE int broadcast_transaction(plugin *plugin, struct transaction *txn) {
   struct node *node;
-  binn *map=0;
+  binn *map;
 
-  SYNCTRACE("broadcast_transaction - seq=%" INT64_FORMAT
-            " node=%d tid=%" INT64_FORMAT " sql_count=%d\n",
-            txn->seq, txn->node_id, txn->tid, binn_count(txn->log)-2 );
+  SYNCTRACE("broadcast_transaction"
+            " node=%d nonce=%" INT64_FORMAT " sql_count=%d\n",
+            txn->node_id, txn->nonce, binn_count(txn->log)-2 );
 
   /* signal other peers that there is a new transaction */
   map = binn_map();
   if( !map ) return SQLITE_BUSY;  /* flag to retry the command later */
 
-  binn_map_set_int32(map, LITESYNC_CMD, LITESYNC_LOG_NEW);
-  binn_map_set_int32(map, LITESYNC_NODE_ID, txn->node_id);
-  binn_map_set_int64(map, LITESYNC_TID, txn->tid);
-  binn_map_set_list (map, LITESYNC_SQL_CMDS, txn->log);
+  binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_NEW_TRANSACTION);
+  binn_map_set_int32(map, PLUGIN_NODE_ID, txn->node_id);
+  binn_map_set_int64(map, PLUGIN_NONCE, txn->nonce);
+  binn_map_set_list (map, PLUGIN_SQL_CMDS, txn->log);
 
   for( node=plugin->peers; node; node=node->next ){
-    send_peer_message(node, map, NULL);
+//    if( node->id!=txn->node_id ){   -- should it notify the same node?
+      send_peer_message(node, map, NULL);
+//    }
   }
 
   binn_free(map);
 
   return SQLITE_OK;
-
 }
 
 /****************************************************************************/
 
 SQLITE_PRIVATE struct transaction * store_transaction_on_mempool(
-  plugin *plugin, int node_id, int64 tid, void *log
+  plugin *plugin, int node_id, int64 nonce, void *log
 ){
   struct transaction *txn;
 
   txn = sqlite3_malloc_zero(sizeof(struct transaction));
   if( !txn ) return NULL;
 
-  //txn->next = plugin->mempool->next;
-  //plugin->mempool = txn;
   llist_add(&plugin->mempool, txn);
 
   /* transaction data */
   txn->node_id = node_id;
-  txn->tid = tid;
+  txn->nonce = nonce;
+  txn->id = aergolite_get_transaction_id(node_id, nonce);
   txn->log = sqlite3_memdup(binn_ptr(log), binn_size(log));
   //! it could create a copy here using only the SQL commands and removing not needed data. or maybe use netstring...
   //txn->data = xxx(log);    //! or maybe let the consensus protocol decide what to store here...
+  //! or the core could supply the txn already without the metadata
 
   return txn;
-
 }
 
 /****************************************************************************/
@@ -1782,28 +1793,31 @@ SQLITE_PRIVATE void discard_mempool_transaction(plugin *plugin, struct transacti
 ** -if the timer to generate a new block is not started, start it now, and
 ** -broadcast the transaction to all the peers.
 */
-SQLITE_PRIVATE int process_new_transaction(plugin *plugin, int node_id, int64 tid, void *log) {
+SQLITE_PRIVATE int process_new_transaction(plugin *plugin, int node_id, int64 nonce, void *log) {
   struct transaction *txn;
+  int64 tid;
   int rc;
 
-  SYNCTRACE("process_new_transaction - node=%d tid=%" INT64_FORMAT " sql_count=%d\n",
-            node_id, tid, binn_count(log)-2 );
+  SYNCTRACE("process_new_transaction - node=%d nonce=%" INT64_FORMAT " sql_count=%d\n",
+            node_id, nonce, binn_count(log)-2 );
+
+  tid = aergolite_get_transaction_id(node_id, nonce);
 
   /* check if the transaction is already in the local mempool */
   for( txn=plugin->mempool; txn; txn=txn->next ){
-    if( txn->tid==tid ){
-      sqlite3_log(1, "process_new_transaction - transaction already on mempool");
-      break;
+    if( txn->id==tid ){
+      SYNCTRACE("process_new_transaction - transaction already on mempool\n");
+      return SQLITE_EXISTS;
     }
   }
   if( !txn ){
     /* store the transaction in the local mempool */
-    txn = store_transaction_on_mempool(plugin, node_id, tid, log);
+    txn = store_transaction_on_mempool(plugin, node_id, nonce, log);
     if( !txn ) return SQLITE_NOMEM;
   }
 
   /* start the timer to generate a new block */
-  if( !uv_is_active(&plugin->new_block_timer) ){
+  if( !uv_is_active((uv_handle_t*)&plugin->new_block_timer) ){
     uv_timer_start(&plugin->new_block_timer, new_block_timer_cb, NEW_BLOCK_WAIT_INTERVAL, 0);
   }
 
@@ -1811,49 +1825,32 @@ SQLITE_PRIVATE int process_new_transaction(plugin *plugin, int node_id, int64 ti
   rc = broadcast_transaction(plugin, txn);
 
   return rc;
-
 }
 
 /****************************************************************************/
 
-#if 0   // probably not needed anymore
-SQLITE_PRIVATE void broadcast_transaction_failed(plugin *plugin, int64 tid, int rc) {
-  node *node;
-
-  binn *map = binn_map();
-  if (!map) return;
-
-  binn_map_set_int32(map, LITESYNC_CMD, LITESYNC_LOG_INSERT_FAILED);
-  binn_map_set_int64(map, LITESYNC_TID, tid);
-  binn_map_set_int32(map, LITESYNC_ERROR, rc);
-
-  //send_peer_message(source_node, map, NULL);
-  for( node=plugin->peers; node; node=node->next ){
-    send_peer_message(node, map, NULL);
-  }
-
-  binn_free(map);
-
-}
-#endif
-
-/****************************************************************************/
-
+/*
+** The leader node received a new transaction from a follower node
+*/
 SQLITE_PRIVATE void on_insert_transaction(node *source_node, void *msg, int size) {
   plugin *plugin = source_node->plugin;
   aergolite *this_node = source_node->this_node;
-  int64 tid;
+  int64 nonce;
   BOOL tr_exists;
   void *log=0;
   int  rc;
 
-  tid = binn_map_int64(msg, LITESYNC_TID);
-  log = binn_map_list(msg, LITESYNC_SQL_CMDS);
+  nonce = binn_map_int64(msg, PLUGIN_NONCE);
+  log = binn_map_list(msg, PLUGIN_SQL_CMDS);
 
-  SYNCTRACE("on_insert_transaction - request from node %d - tid: %" INT64_FORMAT "  sql count: %d\n",
-            source_node->id, tid, binn_count(log)-2 );
+  SYNCTRACE("on_insert_transaction - from node %d - nonce: %" INT64_FORMAT
+            " sql count: %d\n", source_node->id, nonce, binn_count(log)-2 );
 
-//! instead, it can call a fn to check the nonce ...
+
+#if 0
+
+  //! instead, it must call a fn to check the nonce for this node
+
 
   if( aergolite_check_transaction_in_blockchain(this_node,tid,&tr_exists)!=SQLITE_OK ){
     sqlite3_log(1, "check_transaction_in_blockchain failed");
@@ -1864,41 +1861,92 @@ SQLITE_PRIVATE void on_insert_transaction(node *source_node, void *msg, int size
   if( tr_exists ){
     binn *map = binn_map();
     if (!map) return;
-    binn_map_set_int32(map, LITESYNC_CMD, LITESYNC_LOG_EXISTS);
-    binn_map_set_int64(map, LITESYNC_TID, tid);
+    binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_LOG_EXISTS);
+    binn_map_set_int64(map, PLUGIN_NONCE, nonce);
     send_peer_message(source_node, map, NULL);
     binn_free(map);
     return;
   }
 
-  rc = process_new_transaction(plugin, source_node->id, tid, log);
+#endif
+
+
+  rc = process_new_transaction(plugin, source_node->id, nonce, log);
   if( rc ) goto loc_failed;
 
   return;
 
 loc_failed:
 
-  rc = SQLITE_BUSY;  /* to retry again */
-  broadcast_transaction_failed(plugin, tid, rc);
+  if( rc==SQLITE_OK ) rc = SQLITE_BUSY;  /* to retry again */
+  {
+    binn *map = binn_map();
+    if (!map) return;
+    binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_TRANSACTION_FAILED);
+    binn_map_set_int64(map, PLUGIN_NONCE, nonce);
+    binn_map_set_int32(map, PLUGIN_ERROR, rc);
+    send_peer_message(source_node, map, NULL);
+    binn_free(map);
+  }
 
 }
 
 /****************************************************************************/
 
-_new_state
+/*
+** A new transaction was received from the leader node
+*/
+SQLITE_PRIVATE int on_new_remote_transaction(node *node, void *msg, int size) {
+  plugin *plugin = node->plugin;
+  struct transaction *txn;
+  int node_id;
+  int64 nonce;
+  void *log;
 
-//SQLITE_PRIVATE void on_acknowledged_transaction(plugin *plugin, struct transaction *txn) {
+  node_id = binn_map_int32(msg, PLUGIN_NODE_ID);
+  nonce   = binn_map_int64(msg, PLUGIN_NONCE);
+  log     = binn_map_list (msg, PLUGIN_SQL_CMDS);
+
+  SYNCTRACE("on_new_remote_transaction - node_id=%d nonce=%" INT64_FORMAT
+            " sql_count=%d\n", node_id, nonce, binn_count(log)-2 );
+
+  /* store the transaction in the local mempool */
+  txn = store_transaction_on_mempool(plugin, node_id, nonce, log);
+  if( !txn ) return SQLITE_NOMEM;
+
+  return SQLITE_OK;
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void on_requested_remote_transaction(node *node, void *msg, int size){
+  plugin *plugin = node->plugin;
+  int rc;
+
+  SYNCTRACE("on_requested_remote_transaction\n");
+
+  if( plugin->sync_down_state!=DB_STATE_SYNCHRONIZING ){
+    SYNCTRACE("--- FAILED: 'requested' remote transaction while this node is not synchronizing\n");
+    return;
+  }
+
+  rc = on_new_remote_transaction(node, msg, size);
+
+  if( rc==SQLITE_OK ){
+    apply_last_block(plugin);
+  }
+
+}
+
+/****************************************************************************/
+
 SQLITE_PRIVATE void on_acknowledged_block(plugin *plugin, struct block *block) {
   int rc;
 
   SYNCTRACE("on_acknowledged_block - height=%" INT64_FORMAT "\n", block->height);
 
-1. broadcast  (if it fails, does not apply the block)
-2. apply
-3. discard
-
-  /* send command to apply the new block */  -- is this needed?  it depends on enough signatures
-  rc = broadcast_block_commit(plugin, block);  -- or apply
+  /* send command to apply the new block */  //! -- is this needed?  it depends on enough signatures
+  rc = broadcast_block_commit(plugin, block);
   if( rc ) goto loc_failed;
 
   /* apply the new block on this node */
@@ -1909,59 +1957,42 @@ SQLITE_PRIVATE void on_acknowledged_block(plugin *plugin, struct block *block) {
 
 loc_failed:
   /* discard the block */
-  discard_block(plugin, block);
+  discard_block(block);
+  plugin->new_block = NULL;
 
-
-#if 0
-  rc = commit_transaction_to_blockchain(plugin, txn);
-
-  if( rc==SQLITE_OK ){
-    /* for this leader node */
-    broadcast_transaction_commit(plugin, txn);
-    /* remove the transaction from the mempool */
-    discard_mempool_transaction(plugin, txn);
-  }else{
-    /* for other nodes */
-    broadcast_transaction_failed(plugin, txn->tid, rc);
-    /* for this node */
-    on_transaction_failed(plugin, txn->tid, rc);  /* also removes the transaction from the mempool */
-  }
-#endif
 }
 
 /****************************************************************************/
 
-_block
+//! ack or signed?
 
-ack or signed?
-
-SQLITE_PRIVATE void on_node_acknowledged_transaction(node *source_node, void *msg, int size) {
+SQLITE_PRIVATE void on_node_acknowledged_block(node *source_node, void *msg, int size) {
   plugin *plugin = source_node->plugin;
   aergolite *this_node = source_node->this_node;
-  struct transaction *txn;
-  int64 tid;
+  struct block *block;
+  int64 height;
 
-  tid = binn_map_int64(msg, LITESYNC_TID);
+  height = binn_map_int64(msg, PLUGIN_HEIGHT);
 
-  SYNCTRACE("on_node_acknowledged_transaction - tid=%" INT64_FORMAT "\n", tid);
+  SYNCTRACE("on_node_acknowledged_block - height=%" INT64_FORMAT "\n", height);
 
-  for( txn=plugin->mempool; txn; txn=txn->next ){
-    if( txn->tid==tid ) break;
+  block = plugin->new_block; //! ??
+  if( !block ) return;  /* already committed */
+
+  if( block->height!=height ){
+    SYNCTRACE("on_node_acknowledged_block - NOT FOUND\n");
+    return;
   }
-  if( !txn ) return;  /* the txn may already have been commited */
-  //  sqlite3_log ... "transaction not found";
-  //  return;
-  //}
 
-  /* increment the number of nodes that acknowledged the transaction */
-  txn->ack_count++;
+  /* increment the number of nodes that acknowledged the block */
+  block->ack_count++;
 
-  SYNCTRACE("on_node_acknowledged_transaction - ack_count=%d total_known_nodes=%d\n",
-            txn->ack_count, plugin->total_known_nodes);
+  SYNCTRACE("on_node_acknowledged_block - ack_count=%d total_known_nodes=%d\n",
+            block->ack_count, plugin->total_known_nodes);
 
   /* check if we reached the majority of the nodes */
-  if( txn->ack_count >= majority(plugin->total_known_nodes) ){
-    on_acknowledged_transaction(plugin, txn);
+  if( block->ack_count >= majority(plugin->total_known_nodes) ){
+    on_acknowledged_block(plugin, block);
   }
 
 }
@@ -1970,21 +2001,23 @@ SQLITE_PRIVATE void on_node_acknowledged_transaction(node *source_node, void *ms
 
 SQLITE_PRIVATE void leader_node_process_local_transactions(plugin *plugin) {
   aergolite *this_node = plugin->this_node;
-  int64 tid;
+  int64 nonce;
   binn *log=NULL;
   int   rc;
 
   SYNCTRACE("leader_node_process_local_transactions\n");
 
+  nonce = 0;
+
   while( 1 ){
-    rc = aergolite_get_next_local_transaction(this_node, &tid, &log);
+    rc = aergolite_get_local_transaction(this_node, &nonce, &log);
 
     if( rc==SQLITE_EMPTY ){
       SYNCTRACE("leader_node_process_local_transactions - no more local transactions - IN SYNC\n");
       plugin->sync_up_state = DB_STATE_IN_SYNC;
       return;
-    } else if( rc!=SQLITE_OK || tid==0 || log==0 ){
-      SYNCTRACE("--- leader_node_process_local_transactions FAILED - rc=%d tid=%" INT64_FORMAT " log=%p\n", rc, tid, log);
+    } else if( rc!=SQLITE_OK || nonce==0 || log==0 ){
+      SYNCTRACE("--- leader_node_process_local_transactions FAILED - rc=%d nonce=%" INT64_FORMAT " log=%p\n", rc, nonce, log);
       plugin->sync_up_state = DB_STATE_UNKNOWN;
       goto loc_try_later;
     }
@@ -1997,10 +2030,12 @@ SQLITE_PRIVATE void leader_node_process_local_transactions(plugin *plugin) {
     // so the nodes must store the total number of nodes (or the list of nodes) and they must
     // agree on this list - it can be on the blockchain!
 
-    rc = process_new_transaction(plugin, plugin->node_id, tid, log);
+    rc = process_new_transaction(plugin, plugin->node_id, nonce, log);
     if( rc ) goto loc_try_later;
 
     aergolite_free_transaction(log);
+
+    nonce++;
   }
 
 
@@ -2019,10 +2054,10 @@ loc_try_later:
 /****************************************************************************/
 
 /*
-** On secondary nodes this function exists for continuing the synchronization
+** On follower nodes this function exists for continuing the synchronization
 ** process when it is stopped due to a failure.
 **
-** Maybe it could also work when it sends a request to the primary node but
+** Maybe it could also work when it sends a request to the leader node but
 ** no answer is returned.
 */
 SQLITE_PRIVATE void process_transactions_timer_cb(uv_timer_t* handle) {
@@ -2031,7 +2066,7 @@ SQLITE_PRIVATE void process_transactions_timer_cb(uv_timer_t* handle) {
   if( plugin->is_leader ){
     leader_node_process_local_transactions(plugin);
   }else{
-    //secondary_node_process_local_transactions(plugin);
+    //follower_node_process_local_transactions(plugin);
     if( !plugin->leader_node ) return;
     /* downstream synchronization */
     if( plugin->sync_down_state!=DB_STATE_SYNCHRONIZING && plugin->sync_down_state!=DB_STATE_IN_SYNC ){
@@ -2040,7 +2075,7 @@ SQLITE_PRIVATE void process_transactions_timer_cb(uv_timer_t* handle) {
     /* upstream synchronization */
     if( plugin->sync_down_state==DB_STATE_IN_SYNC ){
       if( plugin->sync_up_state!=DB_STATE_SYNCHRONIZING && plugin->sync_up_state!=DB_STATE_IN_SYNC ){
-        send_next_local_transaction(plugin);
+        send_local_transactions(plugin);
       }
     }
   }
@@ -2054,7 +2089,7 @@ SQLITE_PRIVATE void leader_node_on_local_transaction(plugin *plugin) {
 
   // if this is a primary node, it must:
   // -save the command on the -wal-remote, using the log table
-  // -send the 'new command' notification to the connected [secondary] nodes
+  // -send the 'new command' notification to the connected [follower] nodes
   // -start a log rotation
 
   plugin->sync_up_state = DB_STATE_LOCAL_CHANGES;
@@ -2074,7 +2109,7 @@ SQLITE_PRIVATE void db_sync_on_local_transaction(plugin *plugin) {
   if( plugin->is_leader ){
     leader_node_on_local_transaction(plugin);
   }else{
-    secondary_node_on_local_transaction(plugin);
+    follower_node_on_local_transaction(plugin);
   }
 
 }
@@ -2237,7 +2272,7 @@ SQLITE_PRIVATE void on_id_conflict_sent(send_message_t *req, int status) {
 
 SQLITE_PRIVATE void on_ping_received(node *node, void *msg, int size) {
   binn *map = binn_map();
-  if( binn_map_set_int32(map, LITESYNC_CMD, LITESYNC_CMD_PONG) == FALSE ||
+  if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_CMD_PONG) == FALSE ||
       send_peer_message(node, map, NULL) == FALSE )
   {
     sqlite3_log(1, "on_ping_received: send_peer_message failed");
@@ -2254,7 +2289,7 @@ SQLITE_PRIVATE void on_ping_response(node *node, void *msg, int size) {
 
   /* send a message to the new node informing about the conflict */
   map = binn_map();
-  if( binn_map_set_int32(map, LITESYNC_CMD, LITESYNC_ID_CONFLICT) == FALSE ||
+  if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_ID_CONFLICT) == FALSE ||
       send_peer_message(id_conflict->new_node, map, on_id_conflict_sent) == FALSE )
   {
     sqlite3_log(1, "on_ping_response: send_peer_message failed");
@@ -2292,7 +2327,7 @@ SQLITE_PRIVATE void on_new_node_with_same_id(node *existing_node, node *new_node
 
   /* send a packet to the already connected node */
   map = binn_map();
-  if (binn_map_set_int32(map, LITESYNC_CMD, LITESYNC_CMD_PING) == FALSE) goto loc_failed1;
+  if (binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_CMD_PING) == FALSE) goto loc_failed1;
   if (send_peer_message(existing_node, map, NULL) == FALSE) goto loc_failed1;
   binn_free(map); map = 0;
 
@@ -2374,7 +2409,7 @@ SQLITE_PRIVATE void on_new_node_id_received(node *node, void *msg, int size) {
   aergolite *this_node = node->this_node;
   int node_id;
 
-  node_id = binn_map_int32(msg, LITESYNC_NODE_ID);
+  node_id = binn_map_int32(msg, PLUGIN_NODE_ID);
 
   if( node_id > 0 ){
     /* save the node id in the local config */
@@ -2423,8 +2458,8 @@ SQLITE_PRIVATE void on_new_node_id_request(node *node, void *msg, int size) {
 
   /* send it to the secondary node */
   map = binn_map();
-  if (binn_map_set_int32(map, LITESYNC_CMD, LITESYNC_NEW_NODE_ID) == FALSE) goto loc_failed;
-  if (binn_map_set_int32(map, LITESYNC_NODE_ID, node_id) == FALSE) goto loc_failed;
+  if (binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_NEW_NODE_ID) == FALSE) goto loc_failed;
+  if (binn_map_set_int32(map, PLUGIN_NODE_ID, node_id) == FALSE) goto loc_failed;
   if (send_peer_message(node, map, on_new_id_request_sent) == FALSE) {
     sqlite3_log(1, "on_new_node_id_request: send_peer_message failed");
 loc_failed:
@@ -2449,7 +2484,7 @@ SQLITE_PRIVATE void on_new_node_identified(node *node, void *msg, int size) {
   aergolite *this_node = node->this_node;
   //struct node *tnode;
 
-  node->id = binn_map_int32(msg, LITESYNC_NODE_ID);
+  node->id = binn_map_int32(msg, PLUGIN_NODE_ID);
 
   SYNCTRACE("remote node identified - node_id=%d\n", node->id);
 
@@ -2501,8 +2536,8 @@ SQLITE_PRIVATE void on_new_node_connected(node *node) {
   map = binn_map();
   if (!map) goto loc_failed;
 
-  if (binn_map_set_int32(map, LITESYNC_CMD, LITESYNC_CMD_ID) == FALSE) goto loc_failed;
-  if (binn_map_set_int32(map, LITESYNC_NODE_ID, plugin->node_id) == FALSE) goto loc_failed;
+  if (binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_CMD_ID) == FALSE) goto loc_failed;
+  if (binn_map_set_int32(map, PLUGIN_NODE_ID, plugin->node_id) == FALSE) goto loc_failed;
 
   if (send_peer_message(node, map, on_id_msg_sent) == FALSE) {
     sqlite3_log(1, "on_new_node_connected: send_peer_message failed");
@@ -2557,11 +2592,6 @@ SQLITE_PRIVATE void on_node_disconnected(node *node) {
 
 /****************************************************************************/
 
-// one socket for each connection?
-// how many connections?
-//  -in the primary node:  many connections
-//  -in the secondary nodes:  1 connection
-
 SQLITE_PRIVATE node * node_from_socket(uv_msg_t *socket) {
   uv_loop_t *loop = ((uv_handle_t*)socket)->loop;
   plugin *plugin = (struct plugin *) loop->data;
@@ -2572,8 +2602,8 @@ SQLITE_PRIVATE node * node_from_socket(uv_msg_t *socket) {
 
   if (!this_node) return NULL;
 
-  for (node = plugin->peers; node; node = node->next) {
-     if (&node->socket == socket) return node;
+  for(node=plugin->peers; node; node=node->next){
+    if( &node->socket==socket ) return node;
   }
 
   SYNCTRACE("node_from_socket - NOT FOUND\n");
@@ -2703,69 +2733,101 @@ SQLITE_PRIVATE void worker_thread_on_peer_message(uv_msg_t *stream, void *msg, i
 
   SYNCTRACE("msg size: %d bytes\n", size);
 
-  cmd = binn_map_int32(msg, LITESYNC_CMD);
+  cmd = binn_map_int32(msg, PLUGIN_CMD);
 
   switch (cmd) {
 
-  case LITESYNC_CMD_ID:
-    SYNCTRACE("   received message: LITESYNC_CMD_ID\n");
+  case PLUGIN_CMD_ID:
+    SYNCTRACE("   received message: PLUGIN_CMD_ID\n");
     on_new_node_identified(node, msg, size);
     break;
 
-  /* messages sent to the secondary nodes */
-  case LITESYNC_ID_CONFLICT:
-    SYNCTRACE("   received message: LITESYNC_ID_CONFLICT\n");
+  /* messages sent to the follower nodes */
+  case PLUGIN_ID_CONFLICT:
+    SYNCTRACE("   received message: PLUGIN_ID_CONFLICT\n");
     on_id_conflict_recvd(node, msg, size);
     break;
-  case LITESYNC_CMD_PING:
-    SYNCTRACE("   received message: LITESYNC_CMD_PING\n");
+  case PLUGIN_CMD_PING:
+    SYNCTRACE("   received message: PLUGIN_CMD_PING\n");
     on_ping_received(node, msg, size);
     break;
-  case LITESYNC_LOG_NOTFOUND:
-    SYNCTRACE("   received message: LITESYNC_LOG_NOTFOUND\n");
-    on_requested_transaction_not_found(node, msg, size);
+
+  case PLUGIN_DB_PAGE:
+    SYNCTRACE("   received message: PLUGIN_DB_PAGE\n");
+    on_update_db_page(node, msg, size);
     break;
-  case LITESYNC_LOG_DATA:
-    SYNCTRACE("   received message: LITESYNC_LOG_DATA\n");
-    on_requested_remote_transaction(node, msg, size);
+  case PLUGIN_APPLY_UPDATE:
+    SYNCTRACE("   received message: PLUGIN_APPLY_UPDATE\n");
+    on_apply_state_update(node, msg, size);
     break;
-  case LITESYNC_IN_SYNC:
-    SYNCTRACE("   received message: LITESYNC_IN_SYNC\n");
+  case PLUGIN_UPTODATE: // or PLUGIN_IN_SYNC
+    SYNCTRACE("   received message: PLUGIN_UPTODATE\n");
     on_in_sync_message(node, msg, size);
     break;
-  case LITESYNC_LOG_NEW:
-    SYNCTRACE("   received message: LITESYNC_LOG_NEW\n");
+
+/*
+  case PLUGIN_TXN_NOTFOUND:
+    SYNCTRACE("   received message: PLUGIN_TXN_NOTFOUND\n");
+    on_requested_transaction_not_found(node, msg, size);
+    break;
+  case PLUGIN_BLOCK_NOTFOUND:
+    SYNCTRACE("   received message: PLUGIN_BLOCK_NOTFOUND\n");
+    on_requested_block_not_found(node, msg, size);
+    break;
+*/
+  case PLUGIN_REQUESTED_TRANSACTION:
+    SYNCTRACE("   received message: PLUGIN_REQUESTED_TRANSACTION\n");
+    on_requested_remote_transaction(node, msg, size);
+    break;
+  case PLUGIN_NEW_TRANSACTION:
+    SYNCTRACE("   received message: PLUGIN_NEW_TRANSACTION\n");
     on_new_remote_transaction(node, msg, size);
     break;
-  case LITESYNC_LOG_COMMIT:
-    SYNCTRACE("   received message: LITESYNC_LOG_COMMIT\n");
-    on_commit_remote_transaction(node, msg, size);
+  case PLUGIN_NEW_BLOCK:
+    SYNCTRACE("   received message: PLUGIN_NEW_BLOCK\n");
+    on_new_block(node, msg, size);
     break;
-  case LITESYNC_LOG_EXISTS:
-    SYNCTRACE("   received message: LITESYNC_LOG_EXISTS\n");
+  case PLUGIN_COMMIT_BLOCK:
+    SYNCTRACE("   received message: PLUGIN_COMMIT_BLOCK\n");
+    on_commit_block(node, msg, size);
+    break;
+/*
+  case PLUGIN_LOG_EXISTS:
+    SYNCTRACE("   received message: PLUGIN_LOG_EXISTS\n");
     on_transaction_exists(node, msg, size);
     break;
-  case LITESYNC_LOG_INSERT_FAILED:
-    SYNCTRACE("   received message: LITESYNC_LOG_INSERT_FAILED\n");
+  case PLUGIN_TRANSACTION_FAILED:
+    SYNCTRACE("   received message: PLUGIN_TRANSACTION_FAILED\n");
     on_transaction_failed_msg(node, msg, size);
     break;
+*/
 
   /* messages sent to the leader node */
-  case LITESYNC_CMD_PONG:
-    SYNCTRACE("   received message: LITESYNC_CMD_PONG\n");
+  case PLUGIN_CMD_PONG:
+    SYNCTRACE("   received message: PLUGIN_CMD_PONG\n");
     on_ping_response(node, msg, size);
     break;
-  case LITESYNC_LOG_NEXT:
-    SYNCTRACE("   received message: LITESYNC_LOG_NEXT\n");
-    on_get_next_transaction(node, msg, size);
+  case PLUGIN_REQUEST_STATE_DIFF:
+    SYNCTRACE("   received message: PLUGIN_REQUEST_STATE_DIFF\n");
+    on_request_state_update(node, msg, size);
     break;
-  case LITESYNC_LOG_INSERT:
-    SYNCTRACE("   received message: LITESYNC_LOG_INSERT\n");
+/*
+  case PLUGIN_GET_TRANSACTION:
+    SYNCTRACE("   received message: PLUGIN_GET_TRANSACTION\n");
+    on_get_transaction(node, msg, size);
+    break;
+  case PLUGIN_GET_BLOCK:
+    SYNCTRACE("   received message: PLUGIN_GET_BLOCK\n");
+    on_get_block(node, msg, size);
+    break;
+*/
+  case PLUGIN_INSERT_TRANSACTION:
+    SYNCTRACE("   received message: PLUGIN_INSERT_TRANSACTION\n");
     on_insert_transaction(node, msg, size);
     break;
-  case LITESYNC_LOG_NEW_OK:
-    SYNCTRACE("   received message: LITESYNC_LOG_NEW_OK\n");
-    on_node_acknowledged_transaction(node, msg, size);
+  case PLUGIN_NEW_BLOCK_ACK:
+    SYNCTRACE("   received message: PLUGIN_NEW_BLOCK_ACK\n");
+    on_node_acknowledged_block(node, msg, size);
     break;
 
   default:
@@ -3287,6 +3349,8 @@ SQLITE_PRIVATE void on_election_period_timeout(uv_timer_t* handle) {
 
 /****************************************************************************/
 
+//! leader election: full nodes must have the preference, between those who have the last state
+
 SQLITE_PRIVATE void new_leader_election(plugin *plugin) {
 
   SYNCTRACE("new_leader_election\n");
@@ -3436,18 +3500,21 @@ SQLITE_PRIVATE void check_current_leader(plugin *plugin) {
 SQLITE_PRIVATE int calculate_new_leader(plugin *plugin){
   aergolite *this_node = plugin->this_node;
   node *node;
-  //int last_remote_id, number, biggest=0, max_txns=0;
-  int number, biggest=0, max_txns=0;
-  int num_blockchain_txns;
+  int number, biggest=0, max_blocks=0;
+  int num_blocks;
 
   SYNCTRACE("calculate_new_leader\n");
 
-  num_blockchain_txns = aergolite_get_num_blockchain_transactions(this_node);
+  if( plugin->current_block ){
+    num_blocks = plugin->current_block->height;
+  }else{
+    num_blocks = 0;
+  }
 
   /* check the highest number of transactions */
-  max_txns = num_blockchain_txns;
+  max_blocks = num_blocks;
   for( node=plugin->peers; node; node=node->next ){
-    if( node->num_txns>max_txns ) max_txns = node->num_txns;
+    if( node->num_blocks>max_blocks ) max_blocks = node->num_blocks;
   }
 
   // calc: last_remote_tid xor node->id => biggest
@@ -3458,25 +3525,25 @@ SQLITE_PRIVATE int calculate_new_leader(plugin *plugin){
 //  SYNCTRACE("calculate_new_leader last_remote_tid=%" INT64_FORMAT " int32=%d\n",
 //            this_node->last_remote_tid, last_remote_id);
 
-  SYNCTRACE("calculate_new_leader max_txns=%d\n", max_txns);
+  SYNCTRACE("calculate_new_leader max_blocks=%d\n", max_blocks);
 
   SYNCTRACE("calculate_new_leader node_id=%d\n", plugin->node_id);
-  if( num_blockchain_txns==max_txns ){
-    number = max_txns ^ plugin->node_id;
+  if( num_blocks==max_blocks ){
+    number = max_blocks ^ plugin->node_id;
     if( number>biggest ) biggest = number;
   }
 
   for( node=plugin->peers; node; node=node->next ){
     SYNCTRACE("calculate_new_leader node_id=%d\n", node->id);
-    if( node->num_txns==max_txns && node!=plugin->last_leader ){
-      number = max_txns ^ node->id;
+    if( node->num_blocks==max_blocks && node!=plugin->last_leader ){
+      number = max_blocks ^ node->id;
       if( number>biggest ) biggest = number;
     }
   }
 
   for( node=plugin->peers; node; node=node->next ){
-    if( node->num_txns==max_txns && node!=plugin->last_leader ){
-      number = max_txns ^ node->id;
+    if( node->num_blocks==max_blocks && node!=plugin->last_leader ){
+      number = max_blocks ^ node->id;
       if( number==biggest ) return node->id;
     }
   }
@@ -3615,11 +3682,11 @@ SQLITE_PRIVATE void on_udp_message(uv_udp_t *socket, ssize_t nread, const uv_buf
       uv_timer_start(&plugin->election_info_timer, election_info_timeout, 1000, 0);
 
       {
-        //send_broadcast_messagef(plugin, "num_txns:%d:%d", num_blockchain_txns, plugin->node_id);
+        //send_broadcast_messagef(plugin, "num_blocks:%d:%d", num_blocks, plugin->node_id);
         char message[64];
-        int num_blockchain_txns = aergolite_get_num_blockchain_transactions(this_node);
-        SYNCTRACE("this node has %d transactions\n", num_blockchain_txns);
-        sprintf(message, "num_txns:%d:%d", num_blockchain_txns, plugin->node_id);
+        int num_blocks = plugin->current_block ? plugin->current_block->height : 0;
+        SYNCTRACE("this node's last block height: %d\n", num_blocks);
+        sprintf(message, "num_blocks:%d:%d", num_blocks, plugin->node_id);
         send_broadcast_message(plugin, message);
       }
 
@@ -3639,25 +3706,25 @@ SQLITE_PRIVATE void on_udp_message(uv_udp_t *socket, ssize_t nread, const uv_buf
     }
 
 
-  }else if( strncmp(buf->base,"num_txns:",9)==0 ){  /* a response message informing how many txns on the node's blockchain */
+  }else if( strncmp(buf->base,"num_blocks:",9)==0 ){  /* a response message informing how many txns on the node's blockchain */
 
     node *node;
     int node_id=0;
-    int num_txns=0;
+    int num_blocks=0;
     char *pid, *pnum;
 
     check_peer_connection(plugin, sender, get_sockaddr_port(addr));
 
     pnum = buf->base + 9;
     pid = stripchr(pnum, ':');
-    num_txns = atoi(pnum);
+    num_blocks = atoi(pnum);
     node_id = atoi(pid);
 
-    SYNCTRACE("node %d has %d transactions\n", node_id, num_txns);
+    SYNCTRACE("node %d last block height: %d\n", node_id, num_blocks);
 
     for( node=plugin->peers; node; node=node->next ){
       if( node->id==node_id ){
-        node->num_txns = num_txns;
+        node->num_blocks = num_blocks;
       }
     }
 
@@ -3933,6 +4000,11 @@ SQLITE_PRIVATE void node_thread(void *arg) {
     SYNCTRACE("starting the after connections timer\n");
     uv_timer_start(&plugin->after_connections_timer, after_connections_timer_cb, 1500, 0);
   }
+
+
+  /* load the database state */
+  load_current_state(plugin);
+
 
   /* mark this thread as active */
   plugin->thread_active = TRUE;

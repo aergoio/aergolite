@@ -53,11 +53,16 @@ struct block {
 };
 
 
+/*
+** These constants are also present on the sqlite3.h
+*/
+
 #define HEADER_DATA     0x11
 #define HEADER_SIG      0x12
 
 #define BODY_MOD_PAGES  0x21
 #define BODY_TXN_IDS    0x22
+
 
 
 struct aergolite {

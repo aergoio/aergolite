@@ -449,6 +449,8 @@ SQLITE_API int sqlite3_exec(
 #define SQLITE_NOTADB      26   /* File opened that is not a database file */
 #define SQLITE_NOTICE      27   /* Notifications from sqlite3_log() */
 #define SQLITE_WARNING     28   /* Warnings from sqlite3_log() */
+#define SQLITE_INVALID     29   /* Invalid argument or state */
+#define SQLITE_EXISTS      30   /* Something already exists */
 #define SQLITE_ROW         100  /* sqlite3_step() has another row ready */
 #define SQLITE_DONE        101  /* sqlite3_step() has finished executing */
 /* end-of-error-codes */
@@ -11778,12 +11780,14 @@ SQLITE_API void aergolite_cancel_state_update(aergolite* this_node);
 
 
 /*
-** Local transaction queue
+** Transactions
 */
 
 SQLITE_API int64 aergolite_get_node_last_nonce(aergolite *this_node);
 
 SQLITE_API int aergolite_get_local_transaction(aergolite *this_node, int64 *pnonce, binn **plog);
+
+SQLITE_API int64 aergolite_get_transaction_id(int node_id, int64 nonce);
 
 SQLITE_API void aergolite_free_transaction(binn *log);
 
@@ -11805,7 +11809,7 @@ SQLITE_API int aergolite_check_transaction_in_blockchain(
 
 
 SQLITE_API int aergolite_execute_transaction(
-  aergolite *this_node, int64 tid, int node_id, int64 nonce, void *list
+  aergolite *this_node, int node_id, int64 nonce, void *list
 );
 
 
@@ -11815,8 +11819,9 @@ SQLITE_API int aergolite_execute_transaction(
 */
 
 SQLITE_API int aergolite_begin_block(aergolite *this_node);
-SQLITE_API int aergolite_create_block(aergolite *this_node, binn **pheader, binn **pbody);
-SQLITE_API int aergolite_apply_block(aergolite *this_node, binn *header, binn *body, binn *signatures);
+SQLITE_API int aergolite_create_block(aergolite *this_node, void **pheader, void **pbody);
+SQLITE_API int aergolite_apply_block(aergolite *this_node, void *header, void *body, void *signatures);
+SQLITE_API int aergolite_rollback_block(aergolite *this_node);
 
 
 
@@ -11931,6 +11936,17 @@ SQLITE_API void aergolite_log(char *format, ...);
 #define SYNCTRACE(...)
 #define SYNCERROR(...)
 #endif
+
+
+/*
+** Constants
+*/
+
+#define HEADER_DATA     0x11
+#define HEADER_SIG      0x12
+
+#define BODY_MOD_PAGES  0x21
+#define BODY_TXN_IDS    0x22
 
 
 /*
