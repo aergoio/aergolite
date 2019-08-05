@@ -11791,23 +11791,6 @@ SQLITE_API int64 aergolite_get_transaction_id(int node_id, int64 nonce);
 
 SQLITE_API void aergolite_free_transaction(binn *log);
 
-
-#if 0
-SQLITE_API int aergolite_get_num_blockchain_transactions(aergolite *this_node);
-
-SQLITE_API int64 aergolite_get_last_blockchain_transaction_id(aergolite *this_node);
-
-SQLITE_API int aergolite_get_next_blockchain_transaction(
-  aergolite *this_node, int64 prev_tid, int64 *ptid, void **plist, int *pnode_id
-);
-
-SQLITE_API int aergolite_check_transaction_in_blockchain(
-  aergolite *this_node, int64 tid, BOOL *ppresent
-);
-#endif
-
-
-
 SQLITE_API int aergolite_execute_transaction(
   aergolite *this_node, int node_id, int64 nonce, void *list
 );

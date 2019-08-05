@@ -1389,6 +1389,8 @@ SQLITE_PRIVATE int apply_last_block(plugin *plugin) {
   void *list;
   int rc;
 
+  SYNCTRACE("apply_last_block\n");
+
   block = plugin->new_block;
   if( !block ) return SQLITE_EMPTY;
 
@@ -1563,6 +1565,8 @@ SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
   struct block *block;
   int rc;
 
+  SYNCTRACE("create_new_block\n");
+
   if( plugin->mempool==NULL ) return NULL;
 
   block = sqlite3_malloc_zero(sizeof(struct block));
@@ -1636,6 +1640,8 @@ SQLITE_PRIVATE void new_block_timer_cb(uv_timer_t* handle) {
   aergolite *this_node = plugin->this_node;
   struct block *block;
   //int rc;
+
+  SYNCTRACE("new_block_timer_cb\n");
 
   block = create_new_block(plugin);
   if( !block ){
@@ -1756,6 +1762,9 @@ SQLITE_PRIVATE struct transaction * store_transaction_on_mempool(
 ){
   struct transaction *txn;
 
+  SYNCTRACE("store_transaction_on_mempool node_id=%d nonce=%"
+            INT64_FORMAT "\n", node_id, nonce);
+
   txn = sqlite3_malloc_zero(sizeof(struct transaction));
   if( !txn ) return NULL;
 
@@ -1777,10 +1786,14 @@ SQLITE_PRIVATE struct transaction * store_transaction_on_mempool(
 
 SQLITE_PRIVATE void discard_mempool_transaction(plugin *plugin, struct transaction *txn){
 
+  SYNCTRACE("discard_mempool_transaction\n");
+
   /* remove the transaction from the mempool */
-  llist_remove(&plugin->mempool, txn);
-  if( txn->log ) sqlite3_free(txn->log);
-  sqlite3_free(txn);
+  if( txn ){
+    llist_remove(&plugin->mempool, txn);
+    if( txn->log ) sqlite3_free(txn->log);
+    sqlite3_free(txn);
+  }
 
 }
 
