@@ -11770,11 +11770,11 @@ SQLITE_API int aergolite_store_and_empty_local_db(aergolite *this_node);
 
 SQLITE_API int aergolite_begin_state_read(aergolite* this_node);
 SQLITE_API int aergolite_get_modified_pages(aergolite* this_node, int64 from, int64 to, binn **plist);
-SQLITE_API int aergolite_get_db_page(aergolite* this_node, uint32_t pgno, void *data, int *psize);
+SQLITE_API int aergolite_get_db_page(aergolite* this_node, unsigned int pgno, void *data, int *psize);
 SQLITE_API int aergolite_end_state_read(aergolite* this_node);
 
 SQLITE_API int aergolite_begin_state_update(aergolite* this_node);
-SQLITE_API int aergolite_update_db_page(aergolite* this_node, uint32_t pgno, char *data, int size);
+SQLITE_API int aergolite_update_db_page(aergolite* this_node, unsigned int pgno, char *data, int size);
 SQLITE_API int aergolite_apply_state_update(aergolite* this_node, void *header, void *signatures, void *list);
 SQLITE_API void aergolite_cancel_state_update(aergolite* this_node);
 
