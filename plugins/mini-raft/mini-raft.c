@@ -2129,34 +2129,29 @@ SQLITE_PRIVATE void db_sync_on_local_transaction(plugin *plugin) {
 
 /****************************************************************************/
 
+#if 0
 /*
-** Notes:
-** this function is reading from the worker_db and writing to the main_db2.
-** it is writing using node_id = -1
+** Check if the node is allowed to participate in the network
 */
-SQLITE_PRIVATE void check_if_known_node(plugin *plugin, int id) {
+SQLITE_PRIVATE int check_if_allowed_node(plugin *plugin, int id, int *pis_allowed) {
   aergolite *this_node = plugin->this_node;
   int count, rc;
 
-  SYNCTRACE("check_if_known_node id=%d\n", id);
+  SYNCTRACE("check_if_allowed_node id=%d\n", id);
+
+//! should it check the public key?
+//! should it use some authentication?
+
+// this function could be in the core
 
   /* check if already in the list of known nodes */
-  rc = aergolite_consensus_db_query_int32(this_node, &count,
-         "SELECT count(*) FROM aergolite_known_nodes WHERE id=%d", id);
+  rc = aergolite_consensus_db_query_int32(this_node, pis_allowed,
+         "SELECT count(*) FROM aergolite_allowed_nodes WHERE id=%d", id);
   if( rc ) return;
 
-  if( count==0 ){
-    /* as this is not the same connection as the main one, this command will not be included
-    ** on some open transaction from the main thread */
-    aergolite_queue_db_exec(this_node, "INSERT OR IGNORE INTO aergolite_known_nodes VALUES (%d)", id);
-
-    //! or it could send this txn directly to the leader without saving it on the
-    //  queue db. the leader will broadcast it to all the nodes. so it returns
-    //  to be inserted in the blockchain and does not affect the wal-local / local changes.
-
-  }
-
+  return rc;
 }
+#endif
 
 /****************************************************************************/
 
@@ -2173,14 +2168,17 @@ SQLITE_PRIVATE void update_known_nodes(plugin *plugin) {
 
   /* check if nodes already exist in the list of known nodes */
 
-  check_if_known_node(plugin, plugin->node_id);
+  plugin->total_known_nodes = 1; // this node
+
+  //add_known_node(plugin, plugin->node_id);
 
   for( node=plugin->peers; node; node=node->next ){
-    check_if_known_node(plugin, node->id);
+    //add_known_node(plugin, node->id);
+    plugin->total_known_nodes++;
   }
 
   /* the leader must know the number of total known nodes, including those that are off-line */
-  aergolite_queue_db_query_int32(this_node, &plugin->total_known_nodes, "SELECT count(*) FROM aergolite_known_nodes");
+//  aergolite_queue_db_query_int32(this_node, &plugin->total_known_nodes, "SELECT count(*) FROM aergolite_allowed_nodes");
 
   SYNCTRACE("update_known_nodes total_known_nodes=%d\n", plugin->total_known_nodes);
 
