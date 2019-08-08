@@ -1285,8 +1285,10 @@ SQLITE_PRIVATE void on_request_state_update(node *node, void *msg, int size) {
     map = binn_map();
     if( !map ) goto loc_failed;
     if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_UPTODATE)==FALSE ) goto loc_failed;
-    if( binn_map_set_map(map, PLUGIN_STATE, header)==FALSE ) goto loc_failed;
-    if( binn_map_set_list(map, PLUGIN_SIGNATURES, signatures)==FALSE ) goto loc_failed;
+    if( current_height>0 ){
+      if( binn_map_set_map(map, PLUGIN_STATE, header)==FALSE ) goto loc_failed;
+      if( binn_map_set_list(map, PLUGIN_SIGNATURES, signatures)==FALSE ) goto loc_failed;
+    }
     if( send_peer_message(node, map, NULL)==FALSE ) goto loc_failed;
     binn_free(map); map = NULL;
     return;
