@@ -665,7 +665,7 @@ SQLITE_PRIVATE void send_local_transactions(plugin *plugin) {
   while( 1 ){
     rc = aergolite_get_local_transaction(this_node, &nonce, &log);
 
-    if( rc==SQLITE_EMPTY ){
+    if( rc==SQLITE_EMPTY || rc==SQLITE_NOTFOUND ){
       SYNCTRACE("send_local_transactions - no more local transactions - IN SYNC\n");
       plugin->sync_up_state = DB_STATE_IN_SYNC;
       return;
@@ -2029,7 +2029,7 @@ SQLITE_PRIVATE void leader_node_process_local_transactions(plugin *plugin) {
   while( 1 ){
     rc = aergolite_get_local_transaction(this_node, &nonce, &log);
 
-    if( rc==SQLITE_EMPTY ){
+    if( rc==SQLITE_EMPTY || rc==SQLITE_NOTFOUND ){
       SYNCTRACE("leader_node_process_local_transactions - no more local transactions - IN SYNC\n");
       plugin->sync_up_state = DB_STATE_IN_SYNC;
       return;
@@ -2048,17 +2048,14 @@ SQLITE_PRIVATE void leader_node_process_local_transactions(plugin *plugin) {
     // agree on this list - it can be on the blockchain!
 
     rc = process_new_transaction(plugin, plugin->node_id, nonce, log);
-    if( rc ) goto loc_try_later;
-
     aergolite_free_transaction(log);
+    if( rc ) goto loc_try_later;
 
     nonce++;
   }
 
 
 loc_try_later:
-
-  if( log ) aergolite_free_transaction(log);   //! aergolite_free_txn(txn);
 
   plugin->sync_up_state = DB_STATE_LOCAL_CHANGES;
 
