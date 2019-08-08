@@ -990,6 +990,7 @@ SQLITE_PRIVATE void request_transaction(plugin *plugin, int64 tid){
   binn *map;
 
   SYNCTRACE("request_transaction - tid=%" INT64_FORMAT "\n", tid);
+  assert(tid>0);
 
   if( !plugin->leader_node ) return;
 
@@ -1405,6 +1406,8 @@ SQLITE_PRIVATE int apply_last_block(plugin *plugin) {
   binn_list_foreach(list, value){
     int64 txn_id = value.vint64;
     assert( value.type==BINN_INT64 );
+    /* remove the flag of failed transaction */
+    txn_id &= 0x7fffffffffffffff;
     /* check the transaction in the mempool */
     for( txn=plugin->mempool; txn; txn=txn->next ){
       if( txn->id==txn_id ) break;
@@ -1429,16 +1432,21 @@ SQLITE_PRIVATE int apply_last_block(plugin *plugin) {
 
   /* execute the transactions from the local mempool */
   binn_list_foreach(list, value) {
+    int64 txn_id = value.vint64 & 0x7fffffffffffffff;
     /* x */
     for( txn=plugin->mempool; txn; txn=txn->next ){
-      if( txn->id==value.vint64 ) break;
+      if( txn->id==txn_id ) break;
     }
     /* x */
     rc = aergolite_execute_transaction(this_node, txn->node_id, txn->nonce, txn->log);
-    if( rc!=SQLITE_OK ){
-      sqlite3_log(rc, "apply_block - failed transaction");
+    if( rc==SQLITE_BUSY ){  /* try again later */
       aergolite_rollback_block(this_node);
       return rc;
+    }
+    if( (rc!=SQLITE_OK) != (value.vint64<0) ){
+      sqlite3_log(rc, "apply_block - transaction with different result");
+      aergolite_rollback_block(this_node);
+      goto loc_failed;
     }
   }
 
