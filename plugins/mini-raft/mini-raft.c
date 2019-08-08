@@ -1263,13 +1263,15 @@ SQLITE_PRIVATE void on_request_state_update(node *node, void *msg, int size) {
 
   height = binn_map_uint64(map, BLOCK_HEIGHT);
 
-  if( !plugin->current_block ){
-    return;
+  if( plugin->current_block ){
+    current_height = plugin->current_block->height;
+    header = plugin->current_block->header;
+    signatures = plugin->current_block->signatures;
+  }else{
+    current_height = 0;
+    header = NULL;
+    signatures = NULL;
   }
-
-  current_height = plugin->current_block->height;
-  header = plugin->current_block->header;
-  signatures = plugin->current_block->signatures;
 
   SYNCTRACE("on_request_state_update - from height: %" INT64_FORMAT
             " current height: %" INT64_FORMAT "\n", height, current_height);
