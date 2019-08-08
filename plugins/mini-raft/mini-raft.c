@@ -761,7 +761,7 @@ SQLITE_PRIVATE void start_downstream_db_sync(plugin *plugin) {
       /* do not request download. it was a failure on the state loading. try again later */
       plugin->sync_down_state = DB_STATE_ERROR;
       return;
-    }else if( rc!=SQLITE_INVALID ){
+    }else if( rc!=SQLITE_EMPTY && rc!=SQLITE_INVALID ){
       /* do not request download of the db from other node on unexpected error */
       plugin->sync_down_state = DB_STATE_ERROR;
       return;
