@@ -1503,7 +1503,7 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
   block->body   = sqlite3_memdup(body,   binn_size(body));
 
   if( !block->header || !block->body ){
-    sqlite3_free(block);
+    discard_block(block);
     return;
   }
 
