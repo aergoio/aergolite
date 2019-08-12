@@ -1604,7 +1604,7 @@ SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
   //rc = aergolite_rollback_block(this_node); -- not needed. it can rollback it auto in the fn bellow
 
   //rc = aergolite_create_new_state(this_node, &state->state, &state->payload);
-  rc = aergolite_create_block(this_node, &block->header, &block->body);
+  rc = aergolite_create_block(this_node, &block->height, &block->header, &block->body);
   if( rc ) goto loc_failed;
 
 // if using PITR then it would not need to rollback now and reapply later. it would
