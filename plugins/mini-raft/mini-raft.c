@@ -1595,8 +1595,8 @@ SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
     if( rc!=SQLITE_OK ){
   // not included in the block. inform the source node -> it must mark the txn as failed! even after having sent it.
   // for now: each node can send at most 1 txn per block
-      sqlite3_log(1, "new_block - failed transaction");
-      break;
+      //sqlite3_log(1, "new_block - failed transaction");
+      //break;
     }
   }
 
