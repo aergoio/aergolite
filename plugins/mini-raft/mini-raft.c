@@ -1465,7 +1465,7 @@ SQLITE_PRIVATE int apply_last_block(plugin *plugin) {
   }
 
   /* replace the previous block by the new one */
-  discard_block(plugin->current_block);
+  if( plugin->current_block ) discard_block(plugin->current_block);
   plugin->current_block = block;
   plugin->new_block = NULL;
 
@@ -1474,6 +1474,11 @@ SQLITE_PRIVATE int apply_last_block(plugin *plugin) {
 loc_failed:
 // close connection?
 // or try again? use a timer?
+  if( rc!=SQLITE_BUSY ){
+    plugin->sync_down_state = DB_STATE_OUTDATED; /* it may download this block later */
+    discard_block(block);
+    plugin->new_block = NULL;
+  }
   return rc;
 }
 
@@ -1536,7 +1541,6 @@ SQLITE_PRIVATE void on_commit_block(node *node, void *msg, int size) {
   struct block *block;
   int64 height;
   //uchar *hash;
-  int rc;
 
   height = binn_map_int64(msg, PLUGIN_HEIGHT);
   //hash = binn_map_blob (msg, PLUGIN_HASH, NULL);  //&hash_size);
@@ -1552,17 +1556,7 @@ SQLITE_PRIVATE void on_commit_block(node *node, void *msg, int size) {
   }
 
   /* apply the new block on this node */
-  rc = apply_block(plugin, block);
-
-  if( rc==SQLITE_OK ){
-    discard_block(plugin->current_block);
-    plugin->current_block = block;
-    plugin->new_block = NULL;
-  }else{
-    plugin->sync_down_state = DB_STATE_OUTDATED; /* it may download this block later */
-    discard_block(block);
-    plugin->new_block = NULL;
-  }
+  apply_block(plugin, block);
 
 }
 
@@ -1975,18 +1969,14 @@ SQLITE_PRIVATE void on_acknowledged_block(plugin *plugin, struct block *block) {
 
   /* send command to apply the new block */  //! -- is this needed?  it depends on enough signatures
   rc = broadcast_block_commit(plugin, block);
-  if( rc ) goto loc_failed;
+  if( rc ){
+    /* discard the block */
+    discard_block(block);
+    plugin->new_block = NULL;
+  }
 
   /* apply the new block on this node */
-  rc = apply_block(plugin, block);
-  if( rc ) goto loc_failed;
-
-  return;
-
-loc_failed:
-  /* discard the block */
-  discard_block(block);
-  plugin->new_block = NULL;
+  apply_block(plugin, block);
 
 }
 
