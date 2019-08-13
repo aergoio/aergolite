@@ -1503,6 +1503,9 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
 
   SYNCTRACE("on_new_block - height=%" INT64_FORMAT "\n", height);
 
+  /* if this node is not prepared to apply this block, do not acknowledge its receival */
+  if( plugin->current_block && height!=plugin->current_block->height ) return;
+
   block = sqlite3_malloc_zero(sizeof(struct block));
   if( !block ) return;  // SQLITE_NOMEM;
 
