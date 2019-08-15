@@ -178,7 +178,7 @@ struct node {
   aergolite *this_node;  /* x */
   plugin *plugin;        /* x */
 
-  int num_blocks;        /* The height of the last block */
+  int64 num_blocks;      /* The height of the last block */
 
   /* used for the query status */
   int     db_state;

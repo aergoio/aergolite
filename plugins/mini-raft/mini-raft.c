@@ -3546,7 +3546,7 @@ SQLITE_PRIVATE int calculate_new_leader(plugin *plugin){
   }
 
   for( node=plugin->peers; node; node=node->next ){
-    SYNCTRACE("calculate_new_leader node_id=%d\n", node->id);
+    SYNCTRACE("calculate_new_leader node_id=%d num_blocks=%" INT64_FORMAT "\n", node->id, node->num_blocks);
     if( node->num_blocks==max_blocks && node!=plugin->last_leader ){
       number = max_blocks ^ (uint64)node->id;
       if( number>biggest ) biggest = number;
@@ -3718,7 +3718,7 @@ SQLITE_PRIVATE void on_udp_message(uv_udp_t *socket, ssize_t nread, const uv_buf
     }
 
 
-  }else if( strncmp(buf->base,"num_blocks:",9)==0 ){  /* a response message informing how many txns on the node's blockchain */
+  }else if( strncmp(buf->base,"num_blocks:",11)==0 ){  /* a response message informing how many txns on the node's blockchain */
 
     node *node;
     int node_id=0;
@@ -3727,7 +3727,7 @@ SQLITE_PRIVATE void on_udp_message(uv_udp_t *socket, ssize_t nread, const uv_buf
 
     check_peer_connection(plugin, sender, get_sockaddr_port(addr));
 
-    pnum = buf->base + 9;
+    pnum = buf->base + 11;
     pid = stripchr(pnum, ':');
     num_blocks = atoi(pnum);
     node_id = atoi(pid);
