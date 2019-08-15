@@ -3513,8 +3513,7 @@ SQLITE_PRIVATE void check_current_leader(plugin *plugin) {
 SQLITE_PRIVATE int calculate_new_leader(plugin *plugin){
   aergolite *this_node = plugin->this_node;
   node *node;
-  int number, biggest=0, max_blocks=0;
-  int num_blocks;
+  uint64 number, biggest=0, num_blocks, max_blocks=0;
 
   SYNCTRACE("calculate_new_leader\n");
 
@@ -3542,21 +3541,21 @@ SQLITE_PRIVATE int calculate_new_leader(plugin *plugin){
 
   SYNCTRACE("calculate_new_leader node_id=%d\n", plugin->node_id);
   if( num_blocks==max_blocks ){
-    number = max_blocks ^ plugin->node_id;
+    number = max_blocks ^ (uint64)plugin->node_id;
     if( number>biggest ) biggest = number;
   }
 
   for( node=plugin->peers; node; node=node->next ){
     SYNCTRACE("calculate_new_leader node_id=%d\n", node->id);
     if( node->num_blocks==max_blocks && node!=plugin->last_leader ){
-      number = max_blocks ^ node->id;
+      number = max_blocks ^ (uint64)node->id;
       if( number>biggest ) biggest = number;
     }
   }
 
   for( node=plugin->peers; node; node=node->next ){
     if( node->num_blocks==max_blocks && node!=plugin->last_leader ){
-      number = max_blocks ^ node->id;
+      number = max_blocks ^ (uint64)node->id;
       if( number==biggest ) return node->id;
     }
   }
