@@ -1983,6 +1983,7 @@ SQLITE_PRIVATE void on_acknowledged_block(plugin *plugin, struct block *block) {
     /* discard the block */
     discard_block(block);
     plugin->new_block = NULL;
+    return;
   }
 
   /* apply the new block on this node */
