@@ -1509,7 +1509,7 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
   SYNCTRACE("on_new_block - height=%" INT64_FORMAT "\n", height);
 
   /* if this node is not prepared to apply this block, do not acknowledge its receival */
-  if( plugin->current_block && height!=plugin->current_block->height ){
+  if( plugin->current_block && height!=plugin->current_block->height+1 ){
     if( plugin->current_block ){
       SYNCTRACE("on_new_block FAILED plugin->current_block->height=%" INT64_FORMAT "\n", plugin->current_block->height);
     }else{
