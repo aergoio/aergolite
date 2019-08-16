@@ -1509,7 +1509,14 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
   SYNCTRACE("on_new_block - height=%" INT64_FORMAT "\n", height);
 
   /* if this node is not prepared to apply this block, do not acknowledge its receival */
-  if( plugin->current_block && height!=plugin->current_block->height ) return;
+  if( plugin->current_block && height!=plugin->current_block->height ){
+    if( plugin->current_block ){
+      SYNCTRACE("on_new_block FAILED plugin->current_block->height=%" INT64_FORMAT "\n", plugin->current_block->height);
+    }else{
+      SYNCTRACE("on_new_block FAILED plugin->current_block==NULL\n");
+    }
+    return;
+  }
 
   block = sqlite3_malloc_zero(sizeof(struct block));
   if( !block ) return;  // SQLITE_NOMEM;
@@ -1519,10 +1526,12 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
   block->body   = sqlite3_memdup(body,   binn_size(body));
 
   if( !block->header || !block->body ){
+    SYNCTRACE("on_new_block FAILED header=%p body=%p\n", block->header, block->body);
     discard_block(block);
     return;
   }
 
+  if( plugin->new_block ) discard_block(plugin->new_block);
   plugin->new_block = block;
 
   map = binn_map();
