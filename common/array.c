@@ -157,6 +157,8 @@ static int array_insert_ex(void **parray, void *item, int pos, int(*compare_fn)(
         break;
       }
     }
+    /* insert the item on the array */
+    replace = 0;
     /* update the item address */
     item = base + (i * item_size);
   }else{
@@ -168,7 +170,7 @@ static int array_insert_ex(void **parray, void *item, int pos, int(*compare_fn)(
     item = base + (i * item_size);
   }
 
-  if( i<used_items ){
+  if( i<used_items && !replace ){
     /* move the existing items to release the space */
     int count = used_items - i;
     char *item2 = base + ((i+1) * item_size);
@@ -180,7 +182,7 @@ static int array_insert_ex(void **parray, void *item, int pos, int(*compare_fn)(
     char *item2 = base + (used_items * item_size);
     memset(item2, 0, count * item_size);
     used_items = pos + 1;
-  }else{
+  }else if( i==used_items ){
     used_items++;
   }
   memcpy(item, new_item, item_size);
