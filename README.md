@@ -84,8 +84,8 @@ cd ..
 3. Install AergoLite
 
 ```
-git clone https://github.com/aergoio/aergolite-poc
-cd aergolite-poc
+git clone https://github.com/aergoio/aergolite
+cd aergolite
 make
 sudo make install
 cd -
@@ -116,8 +116,8 @@ cd ..
 3. Compile AergoLite
 
 ```
-git clone https://github.com/aergoio/aergolite-poc
-cd aergolite-poc
+git clone https://github.com/aergoio/aergolite
+cd aergolite
 make
 cd -
 ```
