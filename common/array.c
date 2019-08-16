@@ -196,9 +196,14 @@ SQLITE_PRIVATE int array_insert_sorted(void **parray, void *item, int(*compare_f
   return array_insert_ex(parray, item, 0, compare_fn, replace);
 }
 
-SQLITE_PRIVATE int array_insert_at(void **parray, void *item, int pos){
+SQLITE_PRIVATE int array_insert_at(void **parray, int pos, void *item){
   if( pos<0 ) return ARRAY_INVALID;
   return array_insert_ex(parray, item, pos, NULL, 0);
+}
+
+SQLITE_PRIVATE int array_set(void **parray, int pos, void *item){
+  if( pos<0 ) return ARRAY_INVALID;
+  return array_insert_ex(parray, item, pos, NULL, 1);
 }
 
 SQLITE_PRIVATE int array_prepend(void **parray, void *item){
