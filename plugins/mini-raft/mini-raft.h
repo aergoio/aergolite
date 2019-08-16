@@ -77,8 +77,8 @@
 //#define PLUGIN_HASH                0xc0de008  /*  */
 
 
-#define BLOCK_HEIGHT    0x34
-#define STATE_HASH      0x35
+//#define BLOCK_HEIGHT    0x34
+//#define STATE_HASH      0x35
 
 
 // the state of the slave peer or connection

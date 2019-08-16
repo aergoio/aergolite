@@ -1095,7 +1095,7 @@ SQLITE_PRIVATE void request_state_update(plugin *plugin) {
 
   /* create request packet */
   if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_REQUEST_STATE_DIFF)==FALSE ) goto loc_failed;
-  if( binn_map_set_int64(map, BLOCK_HEIGHT, current_height)==FALSE ) goto loc_failed;
+  if( binn_map_set_int64(map, PLUGIN_HEIGHT, current_height)==FALSE ) goto loc_failed;
   //if( state_hash ){
   //  if( binn_map_set_blob(map, STATE_HASH, state_hash, SHA256_BLOCK_SIZE)==FALSE ) goto loc_failed;
   //}
@@ -1168,7 +1168,7 @@ SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
   struct block *block = NULL;
   int rc;
 
-  height = binn_map_uint64(msg, BLOCK_HEIGHT);
+  height = binn_map_uint64(msg, PLUGIN_HEIGHT);
   //state = binn_map_blob(msg, PLUGIN_STATE, &state_size);
   //payload = binn_map_blob(msg, PLUGIN_PAYLOAD, &payload_size);
   header = binn_map_blob(msg, PLUGIN_STATE, &header_size);
@@ -1176,7 +1176,7 @@ SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
   signatures = binn_map_blob(msg, PLUGIN_SIGNATURES, &sig_size);
   mod_pages = binn_map_list(msg, PLUGIN_MOD_PAGES);
 
-  //height = binn_map_uint32(state, BLOCK_HEIGHT);
+  //height = binn_map_uint32(state, PLUGIN_HEIGHT);
   //hash = binn_map_uint32(state, STATE_DBHASH);
 
   SYNCTRACE("on_apply_state_update - height: %" INT64_FORMAT
@@ -1262,7 +1262,7 @@ SQLITE_PRIVATE void on_request_state_update(node *node, void *msg, int size) {
   void *array=NULL;
   int rc;
 
-  height = binn_map_uint64(map, BLOCK_HEIGHT);
+  height = binn_map_uint64(map, PLUGIN_HEIGHT);
 
   if( plugin->current_block ){
     current_height = plugin->current_block->height;
@@ -1358,6 +1358,7 @@ SQLITE_PRIVATE void on_request_state_update(node *node, void *msg, int size) {
   map = binn_map();
   if( !map ) goto loc_failed;
   if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_APPLY_UPDATE)==FALSE ) goto loc_failed;
+  if( binn_map_set_int64(map, PLUGIN_HEIGHT, height)==FALSE ) goto loc_failed;
   if( binn_map_set_map(map, PLUGIN_STATE, header)==FALSE ) goto loc_failed;
   if( binn_map_set_list(map, PLUGIN_SIGNATURES, signatures)==FALSE ) goto loc_failed;
   if( binn_map_set_list(map, PLUGIN_MOD_PAGES, list)==FALSE ) goto loc_failed;
