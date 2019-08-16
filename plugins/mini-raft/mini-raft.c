@@ -1262,7 +1262,7 @@ SQLITE_PRIVATE void on_request_state_update(node *node, void *msg, int size) {
   void *array=NULL;
   int rc;
 
-  height = binn_map_uint64(map, PLUGIN_HEIGHT);
+  height = binn_map_int64(msg, PLUGIN_HEIGHT);
 
   if( plugin->current_block ){
     current_height = plugin->current_block->height;
