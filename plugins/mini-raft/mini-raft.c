@@ -1163,7 +1163,7 @@ SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
   //void *state, *payload, *signatures;
   void *header, *body, *signatures, *mod_pages;
   //int state_size, payload_size, sig_size;
-  int header_size, body_size, sig_size;
+  //int header_size, body_size, sig_size;
   int64 height;
   struct block *block = NULL;
   int rc;
@@ -1171,9 +1171,9 @@ SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
   height = binn_map_uint64(msg, PLUGIN_HEIGHT);
   //state = binn_map_blob(msg, PLUGIN_STATE, &state_size);
   //payload = binn_map_blob(msg, PLUGIN_PAYLOAD, &payload_size);
-  header = binn_map_blob(msg, PLUGIN_STATE, &header_size);
+  header = binn_map_map(msg, PLUGIN_STATE);
 //  body = binn_map_blob(msg, PLUGIN_PAYLOAD, &payload_size);
-  signatures = binn_map_blob(msg, PLUGIN_SIGNATURES, &sig_size);
+  signatures = binn_map_list(msg, PLUGIN_SIGNATURES);
   mod_pages = binn_map_list(msg, PLUGIN_MOD_PAGES);
 
   //height = binn_map_uint32(state, PLUGIN_HEIGHT);
@@ -1181,6 +1181,11 @@ SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
 
   SYNCTRACE("on_apply_state_update - height: %" INT64_FORMAT
             " modified pages: %d\n", height, binn_count(mod_pages));
+
+  assert(height>0);
+  assert(header);
+  assert(signatures);
+  assert(mod_pages);
 
   /* commit the new state */
   //rc = aergolite_apply_state_update(this_node, block->header, block->body);
@@ -1194,9 +1199,9 @@ SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
   if( !block ) goto loc_failed2;
 
   block->height = height;
-  block->header = sqlite3_memdup(header, header_size);
+  block->header = sqlite3_memdup(header, binn_size(header));
 //  block->body = sqlite3_memdup(payload, payload_size);  // needed on full nodes?
-  block->signatures = sqlite3_memdup(signatures, sig_size);
+  block->signatures = sqlite3_memdup(signatures, binn_size(signatures));
 
   if( !block->header ) goto loc_failed2;
 //  if( !block->signatures ) goto loc_failed2;
