@@ -1320,7 +1320,7 @@ SQLITE_PRIVATE void on_request_state_update(node *node, void *msg, int size) {
   if( !array ){ rc = SQLITE_NOMEM; goto loc_failed; }
   binn_list_foreach(list, item) {
     //Pgno pgno = item.vuint32;
-    Pgno pgno = binn_list_uint32(item.ptr, 2);
+    Pgno pgno = binn_list_uint32(item.ptr, 1);
     int pos = array_insert_sorted(&array, &pgno, compare_pgno, TRUE);
     if( pos<0 ){ rc = SQLITE_NOMEM; goto loc_failed; }
   }
