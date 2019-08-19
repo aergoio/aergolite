@@ -833,7 +833,9 @@ SQLITE_PRIVATE void check_base_db(plugin *plugin) {
 SQLITE_PRIVATE void aergolite_core_timer_cb(uv_timer_t* handle){
   plugin *plugin = (struct plugin *) handle->loop->data;
 
-  aergolite_periodic(plugin->this_node);
+  if( !plugin->is_updating_state ){
+    aergolite_periodic(plugin->this_node);
+  }
 
 }
 
