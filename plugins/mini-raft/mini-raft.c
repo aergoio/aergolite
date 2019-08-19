@@ -1186,7 +1186,7 @@ SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
 
   assert(height>0);
   assert(header);
-  assert(signatures);
+  //assert(signatures);
   assert(mod_pages);
 
   /* commit the new state */
@@ -1367,7 +1367,7 @@ SQLITE_PRIVATE void on_request_state_update(node *node, void *msg, int size) {
   if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_APPLY_UPDATE)==FALSE ) goto loc_failed;
   if( binn_map_set_int64(map, PLUGIN_HEIGHT, current_height)==FALSE ) goto loc_failed;
   if( binn_map_set_map(map, PLUGIN_STATE, header)==FALSE ) goto loc_failed;
-  if( binn_map_set_list(map, PLUGIN_SIGNATURES, signatures)==FALSE ) goto loc_failed;
+  //if( binn_map_set_list(map, PLUGIN_SIGNATURES, signatures)==FALSE ) goto loc_failed;
   if( binn_map_set_list(map, PLUGIN_MOD_PAGES, list)==FALSE ) goto loc_failed;
   if( send_peer_message(node, map, NULL)==FALSE ) goto loc_failed;
   binn_free(map); map = NULL;
