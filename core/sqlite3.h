@@ -11769,7 +11769,7 @@ SQLITE_API int aergolite_store_and_empty_local_db(aergolite *this_node);
 */
 
 SQLITE_API int aergolite_begin_state_read(aergolite* this_node);
-SQLITE_API int aergolite_get_modified_pages(aergolite* this_node, int64 from, int64 to, binn **plist);
+SQLITE_API int aergolite_get_modified_pages(aergolite* this_node, int64 from, binn **plist);
 SQLITE_API int aergolite_get_db_page(aergolite* this_node, unsigned int pgno, void *data, int *psize);
 SQLITE_API int aergolite_end_state_read(aergolite* this_node);
 

@@ -1268,7 +1268,7 @@ SQLITE_PRIVATE void on_request_state_update(node *node, void *msg, int size) {
   if( rc ) goto loc_failed;
 
   /* get the list of modified pages since the informed height */
-  rc = aergolite_get_modified_pages(this_node, height + 1, current_height, &list);
+  rc = aergolite_get_modified_pages(this_node, height + 1, &list);
   if( rc ) goto loc_failed;
 
   /* build an array with the distinct modified pages */
