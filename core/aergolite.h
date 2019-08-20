@@ -95,23 +95,14 @@ struct aergolite {
   void *pages_hashes;         /* The list of pages hashes */
 
   int64 current_local_nonce;  /* the current transaction being logged in the wal-local */
-//int64 current_remote_nonce; /* the current transaction being logged in the wal-remote, if not using log table */
   int64 last_local_nonce;     /* last transaction in the wal-local file */
   int64 last_processed_nonce; /* last transaction in the blockchain */
-  u32 last_sent_frame;        /* the WAL frame of the last sent transaction */
+  u32   last_sent_frame;      /* the WAL frame of the last sent transaction */
   int64 last_sent_nonce;      /* last transaction sent to the primary node */
-
-//int    num_local_txns;      /* number of transactions on the wal-local */
-//int    num_blockchain_txns; /* number of transactions on the blockchain */
 
   BOOL   useSqliteRowids;     /* do not use node id in the rowids */
 
   BOOL   db_is_ready;         /* if the app can read and write from/to the database */
-  //u32    total_pages;         /* to calculate the download progress */
-  //u32    downloaded_pages;    /* to calculate the download progress */
-  //int    db_state;
-  //int    sync_down_state;     /* (sync downstream state) UNKNOWN, SYNCING, IN_SYNC, OUTDATED */
-  //int    sync_up_state;       /* (sync upstream state)   HAS_LOCAL_CHANGES, SYNCING, IN_SYNC */
 };
 
 
