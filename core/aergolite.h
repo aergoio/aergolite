@@ -97,7 +97,7 @@ struct aergolite {
   int64 current_local_nonce;  /* the current transaction being logged in the wal-local */
 //int64 current_remote_nonce; /* the current transaction being logged in the wal-remote, if not using log table */
   int64 last_local_nonce;     /* last transaction in the wal-local file */
-  int64 last_remote_nonce;    /* last transaction in the blockchain */
+  int64 last_processed_nonce; /* last transaction in the blockchain */
   u32 last_sent_frame;        /* the WAL frame of the last sent transaction */
   int64 last_sent_nonce;      /* last transaction sent to the primary node */
 
@@ -150,7 +150,7 @@ SQLITE_PRIVATE sqlite_int64 aergoliteBuildRowId(int node_id, u32 seq_num);
 SQLITE_PRIVATE int  aergoliteNodeIdFromRowId(sqlite_int64 value);
 SQLITE_PRIVATE u32  aergoliteSeqFromRowId(sqlite_int64 value);
 
-SQLITE_PRIVATE int64 get_last_remote_nonce(aergolite *this_node);
+SQLITE_PRIVATE int64 get_last_processed_nonce(aergolite *this_node);
 
 SQLITE_PRIVATE int  open_detached_worker_db(aergolite *this_node, sqlite3 **pworker_db);
 SQLITE_PRIVATE int  open_main_db_connection2(aergolite *this_node);
