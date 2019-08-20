@@ -373,12 +373,12 @@ SQLITE_PRIVATE void disconnect_peer(struct node *node) {
 
 SQLITE_PRIVATE void on_msg_sent(send_message_t *req, int status) {
 
-   if ( status < 0 ) {
-      sqlite3_log(status, "send message failed");
-      SYNCTRACE("message send failed: %s   user_data: %d\n", (char*)req->msg, (int)req->data);
-   } else {
-      SYNCTRACE("message sent: %s   user_data: %d\n", (char*)req->msg, (int)req->data);
-   }
+ if ( status < 0 ) {
+  sqlite3_log(status, "send message failed");
+  SYNCTRACE("message send failed: %s   user_data: %d\n", (char*)req->msg, (int)req->data);
+ } else {
+  SYNCTRACE("message sent: %s   user_data: %d\n", (char*)req->msg, (int)req->data);
+ }
 
 }
 
@@ -794,31 +794,10 @@ SQLITE_PRIVATE void check_base_db(plugin *plugin) {
 
 // it could check if the other nodes have the same blockchain / database
 
-
-//!  it can use a dterministic approach to start the db - first block or row
-//    loke using a hash of the db name... but is it even needed?
-
-//    and what if the db is renamed? or open with a diff name on some devices
-
-
-// it can start adding and retieving only after all the nodes answer via UDP and are connected.
-
-// after connect they could have a handshake, exchange of data
-
-
-// LATER:
-// we need another discovery method for testing on a local device:
-// it can be using a separate process or thread (check if already running by just trying to bind to the port)
-// to record the list of nodes. it can add new node, and retrieve the list of nodes
-
-
   /* start the db synchronization */
 //  start_downstream_db_sync(plugin);
 
-
   check_current_leader(plugin);
-
-
 
 }
 
@@ -1119,8 +1098,6 @@ loc_failed:
 
 /****************************************************************************/
 
-// LATER: what about using diff of pages too? check code on cloud9 or linux stick
-
 SQLITE_PRIVATE void on_update_db_page(node *node, void *msg, int size) {
   plugin *plugin = node->plugin;
   aergolite *this_node = node->this_node;
@@ -1140,7 +1117,7 @@ SQLITE_PRIVATE void on_update_db_page(node *node, void *msg, int size) {
     plugin->is_updating_state = true;
   }
 
-  /* x */
+  /* apply the received page on the local database */
   rc = aergolite_update_db_page(this_node, pgno, data, size);
   if( rc!=SQLITE_OK ){
     sqlite3_log(1, "on_update_db_page - save page failed - pgno: %u", pgno);
@@ -1158,28 +1135,19 @@ loc_failed:
 
 /****************************************************************************/
 
-//SQLITE_PRIVATE int apply_state_update(plugin *plugin, struct block *block) {
 SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
   plugin *plugin = node->plugin;
   aergolite *this_node = node->this_node;
-  //void *state, *payload, *signatures;
   void *header, *body, *signatures, *mod_pages;
-  //int state_size, payload_size, sig_size;
-  //int header_size, body_size, sig_size;
   int64 height;
   struct block *block = NULL;
   int rc;
 
   height = binn_map_uint64(msg, PLUGIN_HEIGHT);
-  //state = binn_map_blob(msg, PLUGIN_STATE, &state_size);
-  //payload = binn_map_blob(msg, PLUGIN_PAYLOAD, &payload_size);
   header = binn_map_map(msg, PLUGIN_STATE);
 //  body = binn_map_blob(msg, PLUGIN_PAYLOAD, &payload_size);
   signatures = binn_map_list(msg, PLUGIN_SIGNATURES);
   mod_pages = binn_map_list(msg, PLUGIN_MOD_PAGES);
-
-  //height = binn_map_uint32(state, PLUGIN_HEIGHT);
-  //hash = binn_map_uint32(state, STATE_DBHASH);
 
   SYNCTRACE("on_apply_state_update - height: %" INT64_FORMAT
             " modified pages: %d\n", height, binn_count(mod_pages));
@@ -1190,8 +1158,6 @@ SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
   assert(mod_pages);
 
   /* commit the new state */
-  //rc = aergolite_apply_state_update(this_node, block->header, block->body);
-  //rc = aergolite_apply_state_update(this_node, state, payload, signatures);
   //rc = aergolite_apply_state_update(this_node, header, body, signatures);
   rc = aergolite_apply_state_update(this_node, header, signatures, mod_pages);
   if( rc ) goto loc_failed;
@@ -1255,13 +1221,7 @@ SQLITE_PRIVATE int compare_pgno(void *item1, void *item2){
 SQLITE_PRIVATE void on_request_state_update(node *node, void *msg, int size) {
   plugin *plugin = node->plugin;
   aergolite *this_node = node->this_node;
-
-  //void *state, *payload, *signatures;
   void *header, *body, *signatures;
-  //int state_size, payload_size, sig_size;
-  //int header_size, body_size, sig_size;
-  //struct block *block = NULL;
-
   int64 height, current_height;
   binn *map=NULL, *list=NULL;
   binn_iter iter;
@@ -1303,30 +1263,18 @@ SQLITE_PRIVATE void on_request_state_update(node *node, void *msg, int size) {
   }
 
 
-  /*  */
+  /* start reading the current state of the database */
   rc = aergolite_begin_state_read(this_node);
   if( rc ) goto loc_failed;
 
-  /*  */
+  /* get the list of modified pages since the informed height */
   rc = aergolite_get_modified_pages(this_node, height + 1, current_height, &list);
   if( rc ) goto loc_failed;
-
-#if 0
-  /* send the list of modified pages to the peer */
-  SYNCTRACE("on_request_state_update - sending list of modified pages\n")
-  map = binn_map();
-  if( !map ) goto loc_failed;
-  if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_MODIFIED_PAGES)==FALSE ) goto loc_failed;
-  if( binn_map_set_list(map, PLUGIN_CONTENT, list)==FALSE ) goto loc_failed;
-  if( send_peer_message(node, map, NULL)==FALSE ) goto loc_failed;
-  binn_free(map); map = NULL;
-#endif
 
   /* build an array with the distinct modified pages */
   array = new_array(16, sizeof(Pgno));
   if( !array ){ rc = SQLITE_NOMEM; goto loc_failed; }
   binn_list_foreach(list, item) {
-    //Pgno pgno = item.vuint32;
     Pgno pgno = binn_list_uint32(item.ptr, 1);
     int pos = array_insert_sorted(&array, &pgno, compare_pgno, TRUE);
     if( pos<0 ){ rc = SQLITE_NOMEM; goto loc_failed; }
@@ -1336,7 +1284,7 @@ SQLITE_PRIVATE void on_request_state_update(node *node, void *msg, int size) {
   {
   int i;
   int count = array_count(array);
-  Pgno *pages = (Pgno*) array_ptr(array); // or  Pgno pages[];
+  Pgno *pages = (Pgno*) array_ptr(array);
   for( i=0; i<count; i++ ){
     Pgno pgno = pages[i];
     char data[4096];  //! should it support bigger page sizes?
@@ -2208,7 +2156,6 @@ SQLITE_PRIVATE void update_known_nodes(plugin *plugin) {
 
 SQLITE_PRIVATE void on_new_accepted_node(node *node) {
   plugin *plugin = node->plugin;
-  //aergolite *this_node = node->this_node;
 
   SYNCTRACE("on_new_accepted_node\n");
 
@@ -2513,7 +2460,6 @@ loc_failed:
 SQLITE_PRIVATE void on_new_node_identified(node *node, void *msg, int size) {
   plugin *plugin = node->plugin;
   aergolite *this_node = node->this_node;
-  //struct node *tnode;
 
   node->id = binn_map_int32(msg, PLUGIN_NODE_ID);
 
@@ -2527,11 +2473,6 @@ SQLITE_PRIVATE void on_new_node_identified(node *node, void *msg, int size) {
     /* xxx */
     check_new_node_id(node);
   }
-
-//  return;
-
-//loc_invalid_peer:
-//  disconnect_peer(node);
 
 }
 
@@ -3487,8 +3428,8 @@ SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle) {
 
     //check_peer_connection(ip_address, port);
 
-    // maybe this is no required, as it is checking the connection to each
-    // node tha answers the broadcast request.
+    // maybe this is not required, as it is checking the connection to each
+    // node that answers the broadcast request.
 
     send_broadcast_message(plugin, "whr?");
 
@@ -3528,6 +3469,10 @@ SQLITE_PRIVATE void check_current_leader(plugin *plugin) {
 
 /****************************************************************************/
 
+/*
+** calculation: last_block_height xor node->id => biggest
+** not including the current leader
+*/
 SQLITE_PRIVATE int calculate_new_leader(plugin *plugin){
   aergolite *this_node = plugin->this_node;
   node *node;
@@ -3546,14 +3491,6 @@ SQLITE_PRIVATE int calculate_new_leader(plugin *plugin){
   for( node=plugin->peers; node; node=node->next ){
     if( node->num_blocks>max_blocks ) max_blocks = node->num_blocks;
   }
-
-  // calc: last_remote_tid xor node->id => biggest
-  // not including the current leader
-
-//  last_remote_id = this_node->last_remote_tid & 0xffffffff;
-//
-//  SYNCTRACE("calculate_new_leader last_remote_tid=%" INT64_FORMAT " int32=%d\n",
-//            this_node->last_remote_tid, last_remote_id);
 
   SYNCTRACE("calculate_new_leader max_blocks=%d\n", max_blocks);
 
@@ -4336,16 +4273,16 @@ void * plugin_init(aergolite *this_node, char *uri) {
 #if TARGET_OS_IPHONE
   /* it is done in the node_thread */
 #elif defined(_WIN32)
-  sprintf(plugin->worker_address, "\\\\?\\pipe\\litesync%" UINT64_FORMAT, random_no);
+  sprintf(plugin->worker_address, "\\\\?\\pipe\\aergolite%" UINT64_FORMAT, random_no);
 #elif defined(__ANDROID__)
-  //sprintf(plugin->worker_address, "/data/local/tmp/litesync%" UINT64_FORMAT, random_no);
-  sprintf(&plugin->worker_address[2], "litesync%" UINT64_FORMAT, random_no);
+  //sprintf(plugin->worker_address, "/data/local/tmp/aergolite%" UINT64_FORMAT, random_no);
+  sprintf(&plugin->worker_address[2], "aergolite%" UINT64_FORMAT, random_no);
   plugin->worker_address[0] = 0;
   plugin->worker_address[1] = strlen(&plugin->worker_address[2]);
-  //sprintf(buf, "litesync%" UINT64_FORMAT, random_no);
+  //sprintf(buf, "aergolite%" UINT64_FORMAT, random_no);
   //if (uv_build_abstract_socket_name(buf, strlen(buf), plugin->worker_address) == NULL) ...
 #else
-  sprintf(plugin->worker_address, "/tmp/litesync%" UINT64_FORMAT, random_no);
+  sprintf(plugin->worker_address, "/tmp/aergolite%" UINT64_FORMAT, random_no);
   /* remove the file if it already exists */
   unlink(plugin->worker_address);
 #endif
