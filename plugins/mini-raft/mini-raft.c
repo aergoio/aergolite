@@ -447,7 +447,7 @@ SQLITE_PRIVATE BOOL send_peer_message(node *node, binn *map, send_message_cb cal
   size = binn_size(map);
   //data = binn_release(map);
 
-  data2 = (char*) aergolite_encrypt(node->this_node, (uchar*)data, &size, 0x217E592C);
+  data2 = (char*) aergolite_encrypt(node->this_node, (uchar*)data, &size, 0x4329017E);
 
 #if 0
   /* if we sent the encrypted message ... */
@@ -2701,7 +2701,7 @@ SQLITE_PRIVATE void worker_thread_on_peer_message(uv_msg_t *stream, void *msg, i
 
   node = node_from_socket(stream);
 
-  msg = aergolite_decrypt(node->this_node, (uchar*)msg, &size, 0x217E592C);
+  msg = aergolite_decrypt(node->this_node, (uchar*)msg, &size, 0x4329017E);
 
   SYNCTRACE("msg size: %d bytes\n", size);
 
