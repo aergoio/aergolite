@@ -193,6 +193,74 @@ SQLITE_API char * get_protocol_status(void *arg, BOOL extended) {
   return sqlite3_str_finish(str);
 }
 
+/****************************************************************************/
+
+/* a broadcast message requesting blockchain status info */
+void on_blockchain_status_request(
+  plugin *plugin,
+  uv_udp_t *socket,
+  const struct sockaddr *addr,
+  char *sender,
+  char *arg
+){
+  aergolite *this_node = plugin->this_node;
+
+  char *status = aergolite_get_blockchain_status(this_node);
+  if( status ){
+    send_udp_message(plugin, sender, status);
+    sqlite3_free(status);
+  }
+
+}
+
+/****************************************************************************/
+
+/* a broadcast message requesting protocol status info */
+void on_protocol_status_request(
+  plugin *plugin,
+  uv_udp_t *socket,
+  const struct sockaddr *addr,
+  char *sender,
+  char *arg
+){
+  char *status;
+  BOOL extended = 0;
+
+  if( arg && strcmp(arg,"1")==0 ){  /* extended status info */
+    extended = 1;
+  }
+
+  status = get_protocol_status(plugin, extended);
+  if( status ){
+    send_udp_message(plugin, sender, status);
+    sqlite3_free(status);
+  }
+
+}
+
+/****************************************************************************/
+
+/* a broadcast message requesting node info */
+void on_node_info_request(
+  plugin *plugin,
+  uv_udp_t *socket,
+  const struct sockaddr *addr,
+  char *sender,
+  char *arg
+){
+  aergolite *this_node = plugin->this_node;
+
+  char *info = aergolite_get_node_info(this_node);
+
+  if( info ){
+    send_udp_message(plugin, sender, info);
+    sqlite3_free(info);
+  }else{
+    send_udp_message(plugin, sender, "");
+  }
+
+}
+
 /***************************************************************************/
 /****************************************************************************/
 
@@ -1128,11 +1196,6 @@ loc_failed:
 /****************************************************************************/
 /****************************************************************************/
 
-#include "leader_election.c"
-
-/****************************************************************************/
-/****************************************************************************/
-
 SQLITE_PRIVATE void on_udp_send(uv_udp_send_t *req, int status) {
   if (status) {
     fprintf(stderr, "Send error %s\n", uv_strerror(status));
@@ -1142,11 +1205,45 @@ SQLITE_PRIVATE void on_udp_send(uv_udp_send_t *req, int status) {
 
 /****************************************************************************/
 
-SQLITE_PRIVATE void on_udp_message(uv_udp_t *socket, ssize_t nread, const uv_buf_t *buf, const struct sockaddr *addr, unsigned flags) {
+void *udp_messages = NULL;
+
+/****************************************************************************/
+
+void register_udp_message(char *name, udp_message_callback callback){
+  struct udp_message *udp_message, new_item = {0};
+  int count, pos, i;
+
+  if( udp_messages==NULL ){
+    udp_messages = new_array(12, sizeof(struct udp_message));
+    if( udp_messages==NULL ) return;
+  }
+
+  /* check if already on the array */
+  count = array_count(udp_messages);
+  for( i=0; i<count; i++ ){
+    udp_message = array_get(udp_messages, i);
+    if( strcmp(name,udp_message->name)==0 ){
+      return;
+    }
+  }
+
+  /* add it to the array */
+  strcpy(new_item.name, name);
+  new_item.callback = callback;
+  pos = array_append(&udp_messages, &new_item);
+  if( pos<0 ){
+    SYNCTRACE("register_udp_message FAILED %s\n", name);
+  }
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void on_udp_message(uv_udp_t *socket, ssize_t nread, const uv_buf_t *buf, const struct sockaddr *addr, unsigned flags){
   uv_loop_t *loop = socket->loop;
   plugin *plugin = (struct plugin *) loop->data;
-  aergolite *this_node = plugin->this_node;
-  char sender[17] = { 0 };
+  char sender[17] = { 0 }, *command, *arg;
+  int i, count;
 
   if( nread<0 ){
     sqlite3_log(SQLITE_ERROR, "Read error %s\n", uv_err_name(nread));
@@ -1159,207 +1256,16 @@ SQLITE_PRIVATE void on_udp_message(uv_udp_t *socket, ssize_t nread, const uv_buf
   uv_ip4_name((const struct sockaddr_in*) addr, sender, 16);
   SYNCTRACE("on_udp_message from %s: %.*s len=%u\n", sender, (int)nread, buf->base, nread);
 
-  if( strcmp(buf->base,"whr?")==0 ){  /* a broadcast message to find peers */
-    uv_udp_send_t *send_req;
-    uv_buf_t response = { .base="here", .len=5 };
+  command = buf->base;
+  arg = stripchr(command, ':');
 
-    if( is_local_ip_address(sender) ){
-      goto loc_exit;
+  count = array_count(udp_messages);
+  for( i=0; i<count; i++ ){
+    struct udp_message *udp_message = array_get(udp_messages, i);
+    if( strcmp(command,udp_message->name)==0 ){
+      udp_message->callback(plugin, socket, addr, sender, arg);
+      break;
     }
-
-    /* send a response message */
-
-    SYNCTRACE("on_udp_message: send a response message to %s\n", sender);
-
-    send_req = sqlite3_malloc(sizeof(uv_udp_send_t));
-    if (!send_req) goto loc_exit;
-
-    uv_udp_send(send_req, socket, &response, 1, addr, on_udp_send);
-
-
-  }else if( strcmp(buf->base,"here")==0 ){  /* a response message informing a peer location */
-
-    check_peer_connection(plugin, sender, get_sockaddr_port(addr));
-
-    if( plugin->reconnect_timer_enabled ){
-      /* disable the reconnection timer */
-      uv_timer_stop(&plugin->reconnect_timer);
-      plugin->reconnect_timer_enabled = 0;
-      /* enable the after connections timer */
-      uv_timer_start(&plugin->after_connections_timer, after_connections_timer_cb, 500, 0);
-    }
-
-
-  }else if( strcmp(buf->base,"leader?")==0 ){  /* a broadcast message requesting the current leader */
-    uv_udp_send_t *send_req;
-    uv_buf_t response;
-    int leader_id;
-
-    if( is_local_ip_address(sender) ){
-      goto loc_exit;
-    }
-
-    /* send a response message */
-
-    SYNCTRACE("on_udp_message: send a response message to %s\n", sender);
-
-    if( plugin->is_leader ){
-      leader_id = plugin->node_id;
-    }else if( plugin->leader_node ){
-      leader_id = plugin->leader_node->id;
-    }else{
-      leader_id = 0;
-    }
-
-    //sprintf(leader_buf, "leader:%d", leader_id);
-    //response.base = leader_buf;
-    //response.len = strlen(leader_buf) + 1;
-
-    send_req = sqlite3_malloc(sizeof(uv_udp_send_t) + 32);  /* allocates additional space for the response string */
-    if (!send_req) goto loc_exit;
-    response.base = (char*)send_req + sizeof(uv_udp_send_t);
-
-    sprintf(response.base, "leader:%d", leader_id);
-    response.len = strlen(response.base) + 1;
-
-    uv_udp_send(send_req, socket, &response, 1, addr, on_udp_send);
-
-
-  }else if( strcmp(buf->base,"election")==0 ){  /* a broadcast message requesting a leader election */
-
-    if( !plugin->in_election ){
-
-      if( plugin->leader_node ){
-        /* check if the current leader is still alive */
-        send_udp_message(plugin, plugin->leader_node->host, "ping");
-        /* we cannot send new txns to the current leader until the election is done */
-        plugin->last_leader = plugin->leader_node;
-        plugin->leader_node = NULL;
-      }else{
-        plugin->last_leader = NULL;
-      }
-
-      new_leader_election(plugin);
-      uv_timer_start(&plugin->election_info_timer, election_info_timeout, 1000, 0);
-
-      {
-        //send_broadcast_messagef(plugin, "num_blocks:%d:%d", num_blocks, plugin->node_id);
-        char message[64];
-        int num_blocks = plugin->current_block ? plugin->current_block->height : 0;
-        SYNCTRACE("this node's last block height: %d\n", num_blocks);
-        sprintf(message, "num_blocks:%d:%d", num_blocks, plugin->node_id);
-        send_broadcast_message(plugin, message);
-      }
-
-    }
-
-
-  }else if( strcmp(buf->base,"pong")==0 ){  /* a response message from the current leader */
-
-    /* xxx */
-
-    if( plugin->leader_node==NULL && plugin->last_leader ){   //! what if the leader is not connected via TCP?
-      char message[32];
-      SYNCTRACE("the current leader answered\n");
-      sprintf(message, "leader:%d", plugin->last_leader->id);
-      send_broadcast_message(plugin, message);
-      uv_timer_stop(&plugin->election_info_timer);
-    }
-
-
-  }else if( strncmp(buf->base,"num_blocks:",11)==0 ){  /* a response message informing how many txns on the node's blockchain */
-
-    node *node;
-    int node_id=0;
-    int num_blocks=0;
-    char *pid, *pnum;
-
-    check_peer_connection(plugin, sender, get_sockaddr_port(addr));
-
-    pnum = buf->base + 11;
-    pid = stripchr(pnum, ':');
-    num_blocks = atoi(pnum);
-    node_id = atoi(pid);
-
-    SYNCTRACE("node %d last block height: %d\n", node_id, num_blocks);
-
-    for( node=plugin->peers; node; node=node->next ){
-      if( node->id==node_id ){
-        node->num_blocks = num_blocks;
-      }
-    }
-
-
-  }else if( strncmp(buf->base,"leader:",7)==0 ){  /* a response message informing the peer leader */
-
-    struct leader_votes *votes;
-    int node_id=0;
-
-    check_peer_connection(plugin, sender, get_sockaddr_port(addr));
-
-    node_id = atoi(buf->base+7);
-
-    for( votes=plugin->leader_votes; votes; votes=votes->next ){
-      if( votes->id==node_id ){
-        votes->count++;
-        break;
-      }
-    }
-
-    if( !votes ){  /* no item allocated for the given node id */
-      votes = sqlite3_malloc(sizeof(struct leader_votes));
-      if( !votes ) goto loc_exit;
-      votes->id = node_id;
-      votes->count = 1;
-      /* add it to the list */
-      votes->next = plugin->leader_votes;
-      plugin->leader_votes = votes;
-    }
-
-    /* stop the election timer if the number of votes for a single node reaches the majority */
-    if( plugin->total_known_nodes>1 && votes->count >= majority(plugin->total_known_nodes) ){
-      uv_timer_stop(&plugin->leader_check_timer);
-      on_leader_check_timeout(&plugin->leader_check_timer);
-    }
-
-
-  }else if( nread==17 && strncmp(buf->base,"blockchain_status",17)==0 ){  /* a broadcast message requesting status info */
-
-    char *status = aergolite_get_blockchain_status(this_node);
-    if( status ){
-      send_udp_message(plugin, sender, status);
-      sqlite3_free(status);
-    }
-
-
-  }else if( nread>=15 && strncmp(buf->base,"protocol_status",15)==0 ){  /* a broadcast message requesting status info */
-
-    char *remaining = buf->base + 15;
-    char *status;
-    BOOL extended = 0;
-
-    if( strncmp(remaining,"(1)",3)==0 ){  /* extended status info */
-      extended = 1;
-    }
-
-    status = get_protocol_status(plugin, extended);
-    if( status ){
-      send_udp_message(plugin, sender, status);
-      sqlite3_free(status);
-    }
-
-
-  }else if( nread==9 && strncmp(buf->base,"node_info",9)==0 ){  /* a broadcast message requesting node info */
-
-    char *info = aergolite_get_node_info(this_node);
-
-    if( info ){
-      send_udp_message(plugin, sender, info);
-      sqlite3_free(info);
-    }else{
-      send_udp_message(plugin, sender, "");
-    }
-
   }
 
 loc_exit:
@@ -1442,6 +1348,11 @@ SQLITE_PRIVATE int send_udp_message(plugin *plugin, char *address, char *message
 
 /****************************************************************************/
 /****************************************************************************/
+
+#include "node_discovery.c"
+#include "leader_election.c"
+
+/****************************************************************************/
 /****************************************************************************/
 
 SQLITE_PRIVATE void node_thread(void *arg) {
@@ -1465,6 +1376,19 @@ SQLITE_PRIVATE void node_thread(void *arg) {
   loop.data = plugin;
   /* save the address to the event loop in the plugin struct */
   plugin->loop = &loop;
+
+  /* initialize sub-modules */
+  node_discovery_init();
+  leader_election_init();
+
+  /* register UDP message handlers */
+  /* a broadcast message requesting blockchain status info */
+  register_udp_message("blockchain_status", on_blockchain_status_request);
+  /* a broadcast message requesting consensus protocol status info */
+  register_udp_message("protocol_status", on_protocol_status_request);
+  /* a broadcast message requesting node info */
+  register_udp_message("node_info", on_node_info_request);
+
 
 #if TARGET_OS_IPHONE
   /* initialize a callback to receive notifications from the main thread */

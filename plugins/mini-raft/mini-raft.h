@@ -298,3 +298,14 @@ SQLITE_PRIVATE void enable_reconnect_timer(plugin *plugin);
 SQLITE_PRIVATE void worker_thread_on_close(uv_handle_t *handle);
 
 SQLITE_PRIVATE int  send_notification_to_worker(plugin *plugin, void *data, int size);
+
+/* UDP messages */
+
+typedef void (*udp_message_callback)(plugin *plugin, uv_udp_t *socket, const struct sockaddr *addr, char *sender, char *arg);
+
+struct udp_message {
+  char name[32];
+  udp_message_callback callback;
+};
+
+void register_udp_message(char *name, udp_message_callback callback);

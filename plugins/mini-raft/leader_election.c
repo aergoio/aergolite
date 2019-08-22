@@ -248,3 +248,199 @@ SQLITE_PRIVATE void election_info_timeout(uv_timer_t* handle) {
   broadcast_new_leader(plugin);
 
 }
+
+/****************************************************************************/
+/*** UDP MESSAGES ***********************************************************/
+/****************************************************************************/
+
+/* "leader?": a broadcast message requesting the current leader */
+void on_get_current_leader(
+  plugin *plugin,
+  uv_udp_t *socket,
+  const struct sockaddr *addr,
+  char *sender,
+  char *arg
+){
+  uv_udp_send_t *send_req;
+  uv_buf_t response;
+  int leader_id;
+
+  if( is_local_ip_address(sender) ) return;
+
+  /* send a response message */
+
+  SYNCTRACE("on_udp_message: send a response message to %s\n", sender);
+
+  if( plugin->is_leader ){
+    leader_id = plugin->node_id;
+  }else if( plugin->leader_node ){
+    leader_id = plugin->leader_node->id;
+  }else{
+    leader_id = 0;
+  }
+
+  //sprintf(leader_buf, "leader:%d", leader_id);
+  //response.base = leader_buf;
+  //response.len = strlen(leader_buf) + 1;
+
+  send_req = sqlite3_malloc(sizeof(uv_udp_send_t) + 32);  /* allocates additional space for the response string */
+  if (!send_req) return;
+  response.base = (char*)send_req + sizeof(uv_udp_send_t);
+
+  sprintf(response.base, "leader:%d", leader_id);
+  response.len = strlen(response.base) + 1;
+
+  uv_udp_send(send_req, socket, &response, 1, addr, on_udp_send);
+
+}
+
+/****************************************************************************/
+
+/* "election": a broadcast message requesting a leader election */
+void on_new_election_request(
+  plugin *plugin,
+  uv_udp_t *socket,
+  const struct sockaddr *addr,
+  char *sender,
+  char *arg
+){
+
+  if( plugin->in_election ) return;
+
+  if( plugin->leader_node ){
+    /* check if the current leader is still alive */
+    send_udp_message(plugin, plugin->leader_node->host, "ping");
+    /* we cannot send new txns to the current leader until the election is done */
+    plugin->last_leader = plugin->leader_node;
+    plugin->leader_node = NULL;
+  }else{
+    plugin->last_leader = NULL;
+  }
+
+  new_leader_election(plugin);
+  uv_timer_start(&plugin->election_info_timer, election_info_timeout, 1000, 0);
+
+  {
+    //send_broadcast_messagef(plugin, "num_blocks:%d:%d", num_blocks, plugin->node_id);
+    char message[64];
+    int num_blocks = plugin->current_block ? plugin->current_block->height : 0;
+    SYNCTRACE("this node's last block height: %d\n", num_blocks);
+    sprintf(message, "num_blocks:%d:%d", num_blocks, plugin->node_id);
+    send_broadcast_message(plugin, message);
+  }
+
+}
+
+/****************************************************************************/
+
+/* "pong": a response message from the current leader */
+void on_leader_ping_response(
+  plugin *plugin,
+  uv_udp_t *socket,
+  const struct sockaddr *addr,
+  char *sender,
+  char *arg
+){
+
+  /* xxx */
+
+  if( plugin->leader_node==NULL && plugin->last_leader ){   //! what if the leader is not connected via TCP?
+    char message[32];
+    SYNCTRACE("the current leader answered\n");
+    sprintf(message, "leader:%d", plugin->last_leader->id);
+    send_broadcast_message(plugin, message);
+    uv_timer_stop(&plugin->election_info_timer);
+  }
+
+}
+
+/****************************************************************************/
+
+/* "num_blocks": a response message informing the height of the last block on the peer's blockchain */
+void on_requested_num_blocks(
+  plugin *plugin,
+  uv_udp_t *socket,
+  const struct sockaddr *addr,
+  char *sender,
+  char *arg
+){
+  node *node;
+  int node_id=0;
+  int num_blocks=0;
+  char *pid, *pnum;
+
+  check_peer_connection(plugin, sender, get_sockaddr_port(addr));
+
+  pnum = arg;
+  pid = stripchr(pnum, ':');
+  num_blocks = atoi(pnum);
+  node_id = atoi(pid);
+
+  SYNCTRACE("node %d last block height: %d\n", node_id, num_blocks);
+
+  for( node=plugin->peers; node; node=node->next ){
+    if( node->id==node_id ){
+      node->num_blocks = num_blocks;
+    }
+  }
+
+}
+
+/****************************************************************************/
+
+/* "leader": a response message informing the peer leader */
+void on_requested_peer_leader(
+  plugin *plugin,
+  uv_udp_t *socket,
+  const struct sockaddr *addr,
+  char *sender,
+  char *arg
+){
+  struct leader_votes *votes;
+  int node_id=0;
+
+  check_peer_connection(plugin, sender, get_sockaddr_port(addr));
+
+  node_id = atoi(arg);
+
+  for( votes=plugin->leader_votes; votes; votes=votes->next ){
+    if( votes->id==node_id ){
+      votes->count++;
+      break;
+    }
+  }
+
+  if( !votes ){  /* no item allocated for the given node id */
+    votes = sqlite3_malloc(sizeof(struct leader_votes));
+    if( !votes ) return;
+    votes->id = node_id;
+    votes->count = 1;
+    /* add it to the list */
+    votes->next = plugin->leader_votes;
+    plugin->leader_votes = votes;
+  }
+
+  /* stop the election timer if the number of votes for a single node reaches the majority */
+  if( plugin->total_known_nodes>1 && votes->count >= majority(plugin->total_known_nodes) ){
+    uv_timer_stop(&plugin->leader_check_timer);
+    on_leader_check_timeout(&plugin->leader_check_timer);
+  }
+
+}
+
+/****************************************************************************/
+
+void leader_election_init(){
+
+  /* a broadcast message requesting the current leader */
+  register_udp_message("leader?", on_get_current_leader);
+  /* a response message informing the peer leader */
+  register_udp_message("leader", on_requested_peer_leader);
+  /* a broadcast message requesting a leader election */
+  register_udp_message("election", on_new_election_request);
+  /* a response message informing the height of the last block on the peer's blockchain */
+  register_udp_message("num_blocks", on_requested_num_blocks);
+  /* a response message from the current leader */
+  register_udp_message("pong", on_leader_ping_response);
+
+}
