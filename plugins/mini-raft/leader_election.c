@@ -179,40 +179,40 @@ SQLITE_PRIVATE void check_current_leader(plugin *plugin) {
 SQLITE_PRIVATE int calculate_new_leader(plugin *plugin){
   aergolite *this_node = plugin->this_node;
   node *node;
-  uint64 number, biggest=0, num_blocks, max_blocks=0;
+  uint64 number, biggest=0, last_block, max_blocks=0;
 
   SYNCTRACE("calculate_new_leader\n");
 
   if( plugin->current_block ){
-    num_blocks = plugin->current_block->height;
+    last_block = plugin->current_block->height;
   }else{
-    num_blocks = 0;
+    last_block = 0;
   }
 
   /* check the highest number of transactions */
-  max_blocks = num_blocks;
+  max_blocks = last_block;
   for( node=plugin->peers; node; node=node->next ){
-    if( node->num_blocks>max_blocks ) max_blocks = node->num_blocks;
+    if( node->last_block>max_blocks ) max_blocks = node->last_block;
   }
 
-  SYNCTRACE("calculate_new_leader max_blocks=%d\n", max_blocks);
+  SYNCTRACE("calculate_new_leader max_blocks=%" INT64_FORMAT "\n", max_blocks);
 
   SYNCTRACE("calculate_new_leader node_id=%d\n", plugin->node_id);
-  if( num_blocks==max_blocks ){
+  if( last_block==max_blocks ){
     number = max_blocks ^ (uint64)plugin->node_id;
     if( number>biggest ) biggest = number;
   }
 
   for( node=plugin->peers; node; node=node->next ){
-    SYNCTRACE("calculate_new_leader node_id=%d num_blocks=%" INT64_FORMAT "\n", node->id, node->num_blocks);
-    if( node->num_blocks==max_blocks && node!=plugin->last_leader ){
+    SYNCTRACE("calculate_new_leader node_id=%d last_block=%" INT64_FORMAT "\n", node->id, node->last_block);
+    if( node->last_block==max_blocks && node!=plugin->last_leader ){
       number = max_blocks ^ (uint64)node->id;
       if( number>biggest ) biggest = number;
     }
   }
 
   for( node=plugin->peers; node; node=node->next ){
-    if( node->num_blocks==max_blocks && node!=plugin->last_leader ){
+    if( node->last_block==max_blocks && node!=plugin->last_leader ){
       number = max_blocks ^ (uint64)node->id;
       if( number==biggest ) return node->id;
     }
@@ -321,11 +321,11 @@ void on_new_election_request(
   uv_timer_start(&plugin->election_info_timer, election_info_timeout, 1000, 0);
 
   {
-    //send_broadcast_messagef(plugin, "num_blocks:%d:%d", num_blocks, plugin->node_id);
+    //send_broadcast_messagef(plugin, "last_block:%lld:%d", last_block, plugin->node_id);
     char message[64];
-    int num_blocks = plugin->current_block ? plugin->current_block->height : 0;
-    SYNCTRACE("this node's last block height: %d\n", num_blocks);
-    sprintf(message, "num_blocks:%d:%d", num_blocks, plugin->node_id);
+    int64 last_block = plugin->current_block ? plugin->current_block->height : 0;
+    SYNCTRACE("this node's last block height: %" INT64_FORMAT "\n", last_block);
+    sprintf(message, "last_block:%lld:%d", last_block, plugin->node_id);
     send_broadcast_message(plugin, message);
   }
 
@@ -356,8 +356,8 @@ void on_leader_ping_response(
 
 /****************************************************************************/
 
-/* "num_blocks": a response message informing the height of the last block on the peer's blockchain */
-void on_requested_num_blocks(
+/* "last_block": a response message informing the height of the last block on the peer's blockchain */
+void on_requested_last_block(
   plugin *plugin,
   uv_udp_t *socket,
   const struct sockaddr *addr,
@@ -366,21 +366,21 @@ void on_requested_num_blocks(
 ){
   node *node;
   int node_id=0;
-  int num_blocks=0;
+  int last_block=0;
   char *pid, *pnum;
 
   check_peer_connection(plugin, sender, get_sockaddr_port(addr));
 
   pnum = arg;
   pid = stripchr(pnum, ':');
-  num_blocks = atoi(pnum);
+  last_block = atoi(pnum);
   node_id = atoi(pid);
 
-  SYNCTRACE("node %d last block height: %d\n", node_id, num_blocks);
+  SYNCTRACE("node %d last block height: %d\n", node_id, last_block);
 
   for( node=plugin->peers; node; node=node->next ){
     if( node->id==node_id ){
-      node->num_blocks = num_blocks;
+      node->last_block = last_block;
     }
   }
 
@@ -439,7 +439,7 @@ void leader_election_init(){
   /* a broadcast message requesting a leader election */
   register_udp_message("election", on_new_election_request);
   /* a response message informing the height of the last block on the peer's blockchain */
-  register_udp_message("num_blocks", on_requested_num_blocks);
+  register_udp_message("last_block", on_requested_last_block);
   /* a response message from the current leader */
   register_udp_message("pong", on_leader_ping_response);
 
