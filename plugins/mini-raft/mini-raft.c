@@ -393,6 +393,26 @@ SQLITE_PRIVATE void process_transactions_timer_cb(uv_timer_t* handle) {
 
 #include "allowed_nodes.c"
 
+SQLITE_PRIVATE node * node_from_socket(uv_msg_t *socket) {
+  uv_loop_t *loop = ((uv_handle_t*)socket)->loop;
+  plugin *plugin = (struct plugin *) loop->data;
+  aergolite *this_node = plugin->this_node;
+  node *node;
+
+  SYNCTRACE("node_from_socket - this_node=%p socket=%p\n", this_node, socket);
+
+  if (!this_node) return NULL;
+
+  for(node=plugin->peers; node; node=node->next){
+    if( &node->socket==socket ) return node;
+  }
+
+  SYNCTRACE("node_from_socket - NOT FOUND\n");
+  return NULL;
+}
+
+/****************************************************************************/
+
 SQLITE_PRIVATE void on_new_node_connected(node *node) {
   plugin *plugin = node->plugin;
   aergolite *this_node = node->this_node;
@@ -464,24 +484,325 @@ SQLITE_PRIVATE void on_node_disconnected(node *node) {
 
 /****************************************************************************/
 
-SQLITE_PRIVATE node * node_from_socket(uv_msg_t *socket) {
-  uv_loop_t *loop = ((uv_handle_t*)socket)->loop;
+SQLITE_PRIVATE node * new_node(uv_loop_t *loop) {
   plugin *plugin = (struct plugin *) loop->data;
   aergolite *this_node = plugin->this_node;
   node *node;
+  int rc;
 
-  SYNCTRACE("node_from_socket - this_node=%p socket=%p\n", this_node, socket);
+  /* allocate a new node/peer struct */
+  node = sqlite3_malloc_zero(sizeof(struct node));
+  if (!node) { sqlite3_log(SQLITE_ERROR, "worker thread: could not allocate new node"); return NULL; }
 
-  if (!this_node) return NULL;
-
-  for(node=plugin->peers; node; node=node->next){
-    if( &node->socket==socket ) return node;
+  /* initialize the socket */
+  if ((rc = uv_msg_init(loop, &node->socket, UV_TCP))) {
+    sqlite3_log(SQLITE_ERROR, "worker thread: could not initialize TCP socket: (%d) %s", rc, uv_strerror(rc));
+    sqlite3_free(node);
+    return NULL;
   }
 
-  SYNCTRACE("node_from_socket - NOT FOUND\n");
-  return NULL;
+  /* add this node to the list of peers for this db */
+  node->plugin = plugin;
+  node->this_node = this_node;
+  llist_add(&plugin->peers, node);
+
+  return node;
+
 }
 
+/****************************************************************************/
+
+SQLITE_PRIVATE void worker_thread_on_peer_message(uv_msg_t *stream, void *msg, int size);
+
+/* process either incoming or outgoing connections */
+SQLITE_PRIVATE int worker_thread_on_tcp_connection(node *node) {
+  int rc;
+
+  /* start reading messages on the connection */
+  rc = uv_msg_read_start(&node->socket, alloc_buffer, worker_thread_on_peer_message, free_buffer);
+  if (rc < 0) { sqlite3_log(SQLITE_ERROR, "worker thread: could not start read: (%d) %s", rc, uv_strerror(rc)); return rc; }
+
+  rc = uv_tcp_nodelay( (uv_tcp_t*) &node->socket, 1);
+  if (rc < 0) { sqlite3_log(SQLITE_ERROR, "worker thread: could not set TCP no delay: (%d) %s", rc, uv_strerror(rc)); return rc; }
+
+  rc = uv_tcp_keepalive( (uv_tcp_t*) &node->socket, 1, 180);  /* 180 seconds = 3 minutes */
+  if (rc < 0) { sqlite3_log(SQLITE_ERROR, "worker thread: could not set TCP keep alive: (%d) %s", rc, uv_strerror(rc)); return rc; }
+
+  /* set the state as connected */
+  node->conn_state = CONN_STATE_CONNECTED;
+
+  return SQLITE_OK;
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void worker_thread_on_outgoing_tcp_connection(uv_connect_t *connect, int status) {
+  uv_msg_t *socket = (uv_msg_t *) connect->handle;
+  node *node = node_from_socket(socket);
+  int rc;
+
+  sqlite3_free(connect);
+
+  if (status < 0) {
+    sqlite3_log(SQLITE_ERROR, "worker_thread_on_outgoing_tcp_connection failed: (%d) %s", status, uv_strerror(status));
+loc_failed:
+    /* closing the socket will start the reconnection timer */
+    uv_close2((uv_handle_t *) socket, worker_thread_on_close);
+    return;
+  }
+
+  if (!node) {
+    SYNCTRACE("worker_thread_on_outgoing_tcp_connection: node=NULL\n");
+    return;  //goto loc_failed;
+  }
+
+  /* prepare the connection */
+  rc = worker_thread_on_tcp_connection(node);
+  if (rc < 0) goto loc_failed;
+
+  on_new_node_connected(node);
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void worker_thread_on_incoming_tcp_connection(uv_stream_t *server, int status) {
+//  aergolite *this_node;
+  node *node;
+  int rc;
+
+  if (status < 0) {
+    sqlite3_log(SQLITE_ERROR, "worker_thread_on_incoming_tcp_connection failed: (%d) %s", status, uv_strerror(status));
+    return;
+  }
+
+  SYNCTRACE("worker_thread_on_incoming_tcp_connection - new connection\n");
+
+  /* allocate a new node/peer struct */
+  node = new_node(server->loop);
+  if (!node) { sqlite3_log(SQLITE_ERROR, "worker thread: could not allocate new node"); return; }
+
+//  this_node = (aergolite *) server->data;
+
+  /* accept the connection */
+  if ((rc = uv_accept(server, (uv_stream_t*) &node->socket)) == 0) {
+    struct sockaddr_storage peeraddr;
+    int namelen = sizeof(peeraddr);
+
+    if (uv_tcp_getpeername((uv_tcp_t *) &node->socket, (struct sockaddr *) &peeraddr, &namelen) == 0) {
+      if( peeraddr.ss_family == AF_INET6 ){
+        struct sockaddr_in6 *addr = (struct sockaddr_in6 *) &peeraddr;
+        uv_ip6_name(addr, node->host, sizeof(node->host));
+        node->port = ntohs(addr->sin6_port);
+      } else {
+        struct sockaddr_in *addr = (struct sockaddr_in *) &peeraddr;
+        uv_ip4_name(addr, node->host, sizeof(node->host));
+        node->port = ntohs(addr->sin_port);
+      }
+    }
+
+    SYNCTRACE("new connection from %s:%d\n", node->host, node->port);
+
+    node->conn_type = CONN_INCOMING;
+
+    /* prepare the connection */
+    rc = worker_thread_on_tcp_connection(node);
+    if (rc < 0) goto loc_failed;
+
+    on_new_node_connected(node);
+
+  } else {
+    sqlite3_log(SQLITE_ERROR, "worker thread: could not accept TCP connection: (%d) %s", rc, uv_strerror(rc));
+loc_failed:
+    uv_close2((uv_handle_t*) &node->socket, worker_thread_on_close);
+  }
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE int connect_to_peer_address(node *node, struct sockaddr *dest) {
+  uv_connect_t* connect;
+  int rc;
+
+  connect = sqlite3_malloc(sizeof(uv_connect_t));
+  if (!connect) {
+    sqlite3_log(SQLITE_NOMEM, "worker thread: no memory");
+    node->conn_state = CONN_STATE_FAILED;
+    return SQLITE_NOMEM;
+  }
+
+  if ((rc = uv_tcp_connect(connect, (uv_tcp_t*) &node->socket, dest, worker_thread_on_outgoing_tcp_connection))) {
+    sqlite3_log(SQLITE_ERROR, "worker thread: connect to TCP address [%s:%d] failed: (%d) %s", node->host, node->port, rc, uv_strerror(rc));
+    node->conn_state = CONN_STATE_FAILED;
+    return SQLITE_ERROR;
+  }
+
+  return SQLITE_OK;
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void on_resolved(uv_getaddrinfo_t *resolver, int status, struct addrinfo *res) {
+  node *node;
+#ifdef DEBUGSYNC
+  char buf[32];
+#endif
+
+  if (status < 0) {
+    sqlite3_log(SQLITE_ERROR, "getaddrinfo callback error: %s\n", uv_err_name(status));
+    goto loc_exit;
+  }
+
+  node = (struct node*) resolver->data;
+
+#ifdef DEBUGSYNC
+  if( res->ai_addr->sa_family == AF_INET6 ){
+    uv_ip6_name((struct sockaddr_in6*) res->ai_addr, buf, 32);
+  } else {
+    uv_ip4_name((struct sockaddr_in*) res->ai_addr, buf, 32);
+  }
+  SYNCTRACE("address resolved to %s\n", buf);
+#endif
+
+  connect_to_peer_address(node, res->ai_addr);
+
+  uv_freeaddrinfo(res);
+loc_exit:
+  sqlite3_free(resolver);
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE int connect_to_peer(node *node) {
+  struct sockaddr_storage dest;
+  int rc;
+
+  if( !node ){
+    sqlite3_log(SQLITE_ERROR, "connect_to_peer: node==null");
+    return SQLITE_ERROR;
+  }
+
+  if( ((uv_handle_t*)&node->socket)->loop == 0 ){
+    /* initialize the socket */
+    SYNCTRACE("connect_to_peer - initializing socket\n");
+    if ((rc = uv_msg_init(node->plugin->loop, &node->socket, UV_TCP))) {
+      sqlite3_log(SQLITE_ERROR, "worker thread: could not initialize TCP socket: (%d) %s", rc, uv_strerror(rc));
+      return SQLITE_ERROR;
+    }
+  }
+
+  node->conn_state = CONN_STATE_CONNECTING;
+
+  if( uv_ip4_addr(node->host, node->port, (struct sockaddr_in *) &dest)==0 ){
+    return connect_to_peer_address(node, (struct sockaddr *) &dest);
+  } else if( uv_ip6_addr(node->host, node->port, (struct sockaddr_in6 *) &dest)==0 ){
+    return connect_to_peer_address(node, (struct sockaddr *) &dest);
+  } else {  /* try to resolve the address */
+    uv_getaddrinfo_t *resolver;
+    struct addrinfo hints;
+    char port[8];
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+    hints.ai_flags = 0;
+
+    SYNCTRACE("resolving address %s ...\n", node->host);
+
+    resolver = sqlite3_malloc(sizeof(uv_getaddrinfo_t));
+    if( !resolver ) return SQLITE_ERROR;
+    resolver->data = node;
+
+    sprintf(port, "%d", node->port);  /* itoa does not exist on Linux */
+    rc = uv_getaddrinfo(node->plugin->loop, resolver, on_resolved, node->host, port, &hints);
+    if( rc ) return SQLITE_ERROR;
+  }
+
+  return SQLITE_OK;
+}
+
+/****************************************************************************/
+/*
+SQLITE_PRIVATE void reconnect_timer_cb(uv_timer_t* handle) {
+  struct node *node = (struct node *) handle->data;
+
+  SYNCTRACE("reconnect_timer_cb\n");
+
+  connect_to_peer(node);
+
+  // it must stop the timer:
+  // -on successful connection
+  // -when the event loop is closing
+
+}
+*/
+
+/*
+** The connection to the leader node dropped.
+** This node can be off-line. This is detected when this node executes
+** a new transaction and tries it to send it to the leader node.
+*/
+SQLITE_PRIVATE void reconnect_timer_cb(uv_timer_t* handle) {
+  plugin *plugin = (struct plugin *) handle->loop->data;
+  aergolite *this_node = plugin->this_node;
+
+  SYNCTRACE("reconnect_timer_cb\n");
+
+  /*
+  ** Send periodic broadcast messages to the peers.
+  ** This will also enable the after connections timer on the first response.
+  */
+
+  send_broadcast_message(plugin, "whr?");
+
+  // it must stop the timer:
+  // -on successful connection
+  // -when the event loop is closing
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void check_peer_connection(plugin *plugin, char *ip_address, int port) {
+  node *node;
+
+  if( is_local_ip_address(ip_address) ) return;
+
+  /* check if already connected to this peer */
+
+  for( node=plugin->peers; node; node=node->next ){
+    if( strcmp(node->host,ip_address)==0 ){  //! what if there are more than 1 node on the same device? check this later
+      if( node->conn_state==CONN_STATE_CONNECTING || node->conn_state==CONN_STATE_CONNECTED ){
+        SYNCTRACE("check_peer_connection: %s already connected\n", ip_address);
+        return;
+      }else{
+        SYNCTRACE("check_peer_connection: reconnecting to %s\n", ip_address);
+        goto loc_reconnect;
+      }
+    }
+  }
+
+  /* connect to this peer */
+
+  SYNCTRACE("check_peer_connection: connecting to %s\n", ip_address);
+
+  node = new_node(plugin->loop);
+  if( !node ) return;
+
+  strcpy(node->host, ip_address);
+  node->port = port;
+
+loc_reconnect:
+
+  node->conn_type = CONN_OUTGOING;
+  connect_to_peer(node);
+
+}
+
+/****************************************************************************/
 /****************************************************************************/
 
 SQLITE_PRIVATE void worker_thread_cmd_exit(uv_loop_t *loop) {
@@ -763,141 +1084,6 @@ SQLITE_PRIVATE void worker_thread_on_thread_message(uv_msg_t *stream, void *msg,
 
 /****************************************************************************/
 
-SQLITE_PRIVATE node * new_node(uv_loop_t *loop) {
-  plugin *plugin = (struct plugin *) loop->data;
-  aergolite *this_node = plugin->this_node;
-  node *node;
-  int rc;
-
-  /* allocate a new node/peer struct */
-  node = sqlite3_malloc_zero(sizeof(struct node));
-  if (!node) { sqlite3_log(SQLITE_ERROR, "worker thread: could not allocate new node"); return NULL; }
-
-  /* initialize the socket */
-  if ((rc = uv_msg_init(loop, &node->socket, UV_TCP))) {
-    sqlite3_log(SQLITE_ERROR, "worker thread: could not initialize TCP socket: (%d) %s", rc, uv_strerror(rc));
-    sqlite3_free(node);
-    return NULL;
-  }
-
-  /* add this node to the list of peers for this db */
-  node->plugin = plugin;
-  node->this_node = this_node;
-  llist_add(&plugin->peers, node);
-
-  return node;
-
-}
-
-/****************************************************************************/
-/* process either incoming or outgoing connections */
-SQLITE_PRIVATE int worker_thread_on_tcp_connection(node *node) {
-  int rc;
-
-  /* start reading messages on the connection */
-  rc = uv_msg_read_start(&node->socket, alloc_buffer, worker_thread_on_peer_message, free_buffer);
-  if (rc < 0) { sqlite3_log(SQLITE_ERROR, "worker thread: could not start read: (%d) %s", rc, uv_strerror(rc)); return rc; }
-
-  rc = uv_tcp_nodelay( (uv_tcp_t*) &node->socket, 1);
-  if (rc < 0) { sqlite3_log(SQLITE_ERROR, "worker thread: could not set TCP no delay: (%d) %s", rc, uv_strerror(rc)); return rc; }
-
-  rc = uv_tcp_keepalive( (uv_tcp_t*) &node->socket, 1, 180);  /* 180 seconds = 3 minutes */
-  if (rc < 0) { sqlite3_log(SQLITE_ERROR, "worker thread: could not set TCP keep alive: (%d) %s", rc, uv_strerror(rc)); return rc; }
-
-  /* set the state as connected */
-  node->conn_state = CONN_STATE_CONNECTED;
-
-  return SQLITE_OK;
-
-}
-
-/****************************************************************************/
-
-SQLITE_PRIVATE void worker_thread_on_outgoing_tcp_connection(uv_connect_t *connect, int status) {
-  uv_msg_t *socket = (uv_msg_t *) connect->handle;
-  node *node = node_from_socket(socket);
-  int rc;
-
-  sqlite3_free(connect);
-
-  if (status < 0) {
-    sqlite3_log(SQLITE_ERROR, "worker_thread_on_outgoing_tcp_connection failed: (%d) %s", status, uv_strerror(status));
-loc_failed:
-    /* closing the socket will start the reconnection timer */
-    uv_close2((uv_handle_t *) socket, worker_thread_on_close);
-    return;
-  }
-
-  if (!node) {
-    SYNCTRACE("worker_thread_on_outgoing_tcp_connection: node=NULL\n");
-    return;  //goto loc_failed;
-  }
-
-  /* prepare the connection */
-  rc = worker_thread_on_tcp_connection(node);
-  if (rc < 0) goto loc_failed;
-
-  on_new_node_connected(node);
-
-}
-
-/****************************************************************************/
-
-SQLITE_PRIVATE void worker_thread_on_incoming_tcp_connection(uv_stream_t *server, int status) {
-//  aergolite *this_node;
-  node *node;
-  int rc;
-
-  if (status < 0) {
-    sqlite3_log(SQLITE_ERROR, "worker_thread_on_incoming_tcp_connection failed: (%d) %s", status, uv_strerror(status));
-    return;
-  }
-
-  SYNCTRACE("worker_thread_on_incoming_tcp_connection - new connection\n");
-
-  /* allocate a new node/peer struct */
-  node = new_node(server->loop);
-  if (!node) { sqlite3_log(SQLITE_ERROR, "worker thread: could not allocate new node"); return; }
-
-//  this_node = (aergolite *) server->data;
-
-  /* accept the connection */
-  if ((rc = uv_accept(server, (uv_stream_t*) &node->socket)) == 0) {
-    struct sockaddr_storage peeraddr;
-    int namelen = sizeof(peeraddr);
-
-    if (uv_tcp_getpeername((uv_tcp_t *) &node->socket, (struct sockaddr *) &peeraddr, &namelen) == 0) {
-      if( peeraddr.ss_family == AF_INET6 ){
-        struct sockaddr_in6 *addr = (struct sockaddr_in6 *) &peeraddr;
-        uv_ip6_name(addr, node->host, sizeof(node->host));
-        node->port = ntohs(addr->sin6_port);
-      } else {
-        struct sockaddr_in *addr = (struct sockaddr_in *) &peeraddr;
-        uv_ip4_name(addr, node->host, sizeof(node->host));
-        node->port = ntohs(addr->sin_port);
-      }
-    }
-
-    SYNCTRACE("new connection from %s:%d\n", node->host, node->port);
-
-    node->conn_type = CONN_INCOMING;
-
-    /* prepare the connection */
-    rc = worker_thread_on_tcp_connection(node);
-    if (rc < 0) goto loc_failed;
-
-    on_new_node_connected(node);
-
-  } else {
-    sqlite3_log(SQLITE_ERROR, "worker thread: could not accept TCP connection: (%d) %s", rc, uv_strerror(rc));
-loc_failed:
-    uv_close2((uv_handle_t*) &node->socket, worker_thread_on_close);
-  }
-
-}
-
-/****************************************************************************/
-
 #if !defined(TARGET_OS_IPHONE) || TARGET_OS_IPHONE==0
 
 SQLITE_PRIVATE void worker_thread_on_pipe_connection(uv_stream_t *server, int status) {
@@ -940,265 +1126,7 @@ loc_failed:
 #endif
 
 /****************************************************************************/
-
-SQLITE_PRIVATE int connect_to_peer_address(node *node, struct sockaddr *dest) {
-  uv_connect_t* connect;
-  int rc;
-
-  connect = sqlite3_malloc(sizeof(uv_connect_t));
-  if (!connect) {
-    sqlite3_log(SQLITE_NOMEM, "worker thread: no memory");
-    node->conn_state = CONN_STATE_FAILED;
-    return SQLITE_NOMEM;
-  }
-
-  if ((rc = uv_tcp_connect(connect, (uv_tcp_t*) &node->socket, dest, worker_thread_on_outgoing_tcp_connection))) {
-    sqlite3_log(SQLITE_ERROR, "worker thread: connect to TCP address [%s:%d] failed: (%d) %s", node->host, node->port, rc, uv_strerror(rc));
-    node->conn_state = CONN_STATE_FAILED;
-    return SQLITE_ERROR;
-  }
-
-  return SQLITE_OK;
-
-}
-
-/****************************************************************************/
-
-SQLITE_PRIVATE void on_resolved(uv_getaddrinfo_t *resolver, int status, struct addrinfo *res) {
-  node *node;
-#ifdef DEBUGSYNC
-  char buf[32];
-#endif
-
-  if (status < 0) {
-    sqlite3_log(SQLITE_ERROR, "getaddrinfo callback error: %s\n", uv_err_name(status));
-    goto loc_exit;
-  }
-
-  node = (struct node*) resolver->data;
-
-#ifdef DEBUGSYNC
-  if( res->ai_addr->sa_family == AF_INET6 ){
-    uv_ip6_name((struct sockaddr_in6*) res->ai_addr, buf, 32);
-  } else {
-    uv_ip4_name((struct sockaddr_in*) res->ai_addr, buf, 32);
-  }
-  SYNCTRACE("address resolved to %s\n", buf);
-#endif
-
-  connect_to_peer_address(node, res->ai_addr);
-
-  uv_freeaddrinfo(res);
-loc_exit:
-  sqlite3_free(resolver);
-
-}
-
-/****************************************************************************/
-
-SQLITE_PRIVATE int connect_to_peer(node *node) {
-  struct sockaddr_storage dest;
-  int rc;
-
-  if( !node ){
-    sqlite3_log(SQLITE_ERROR, "connect_to_peer: node==null");
-    return SQLITE_ERROR;
-  }
-
-  if( ((uv_handle_t*)&node->socket)->loop == 0 ){
-    /* initialize the socket */
-    SYNCTRACE("connect_to_peer - initializing socket\n");
-    if ((rc = uv_msg_init(node->plugin->loop, &node->socket, UV_TCP))) {
-      sqlite3_log(SQLITE_ERROR, "worker thread: could not initialize TCP socket: (%d) %s", rc, uv_strerror(rc));
-      return SQLITE_ERROR;
-    }
-  }
-
-  node->conn_state = CONN_STATE_CONNECTING;
-
-  if( uv_ip4_addr(node->host, node->port, (struct sockaddr_in *) &dest)==0 ){
-    return connect_to_peer_address(node, (struct sockaddr *) &dest);
-  } else if( uv_ip6_addr(node->host, node->port, (struct sockaddr_in6 *) &dest)==0 ){
-    return connect_to_peer_address(node, (struct sockaddr *) &dest);
-  } else {  /* try to resolve the address */
-    uv_getaddrinfo_t *resolver;
-    struct addrinfo hints;
-    char port[8];
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_protocol = IPPROTO_TCP;
-    hints.ai_flags = 0;
-
-    SYNCTRACE("resolving address %s ...\n", node->host);
-
-    resolver = sqlite3_malloc(sizeof(uv_getaddrinfo_t));
-    if( !resolver ) return SQLITE_ERROR;
-    resolver->data = node;
-
-    sprintf(port, "%d", node->port);  /* itoa does not exist on Linux */
-    rc = uv_getaddrinfo(node->plugin->loop, resolver, on_resolved, node->host, port, &hints);
-    if( rc ) return SQLITE_ERROR;
-  }
-
-  return SQLITE_OK;
-}
-
-/****************************************************************************/
-/*
-SQLITE_PRIVATE void reconnect_timer_cb(uv_timer_t* handle) {
-  struct node *node = (struct node *) handle->data;
-
-  SYNCTRACE("reconnect_timer_cb\n");
-
-  connect_to_peer(node);
-
-  // it must stop the timer:
-  // -on successful connection
-  // -when the event loop is closing
-
-}
-*/
-
-/*
-** The connection to the leader node dropped.
-** This node can be off-line. This is detected when this node executes
-** a new transaction and tries it to send it to the leader node.
-*/
-SQLITE_PRIVATE void reconnect_timer_cb(uv_timer_t* handle) {
-  plugin *plugin = (struct plugin *) handle->loop->data;
-  aergolite *this_node = plugin->this_node;
-
-  SYNCTRACE("reconnect_timer_cb\n");
-
-  /*
-  ** Send periodic broadcast messages to the peers.
-  ** This will also enable the after connections timer on the first response.
-  */
-
-  send_broadcast_message(plugin, "whr?");
-
-  // it must stop the timer:
-  // -on successful connection
-  // -when the event loop is closing
-
-}
-
-/****************************************************************************/
-
-SQLITE_PRIVATE void check_peer_connection(plugin *plugin, char *ip_address, int port) {
-  node *node;
-
-  if( is_local_ip_address(ip_address) ) return;
-
-  /* check if already connected to this peer */
-
-  for( node=plugin->peers; node; node=node->next ){
-    if( strcmp(node->host,ip_address)==0 ){  //! what if there are more than 1 node on the same device? check this later
-      if( node->conn_state==CONN_STATE_CONNECTING || node->conn_state==CONN_STATE_CONNECTED ){
-        SYNCTRACE("check_peer_connection: %s already connected\n", ip_address);
-        return;
-      }else{
-        SYNCTRACE("check_peer_connection: reconnecting to %s\n", ip_address);
-        goto loc_reconnect;
-      }
-    }
-  }
-
-  /* connect to this peer */
-
-  SYNCTRACE("check_peer_connection: connecting to %s\n", ip_address);
-
-  node = new_node(plugin->loop);
-  if( !node ) return;
-
-  strcpy(node->host, ip_address);
-  node->port = port;
-
-loc_reconnect:
-
-  node->conn_type = CONN_OUTGOING;
-  connect_to_peer(node);
-
-}
-
-/****************************************************************************/
-
-SQLITE_PRIVATE int is_local_ip_address(char *address){
-  int count=0, i, ret=0;
-  uv_interface_address_t *net_interface=NULL;  /* we cannot use the variable name 'interface' on MinGW */
-
-  uv_interface_addresses(&net_interface, &count);
-  for(i=0; i<count; i++){
-    char local[17] = { 0 };
-    int rc = uv_ip4_name(&net_interface[i].address.address4, local, 16);
-    if( rc ){
-      rc = uv_ip6_name(&net_interface[i].address.address6, local, 16);
-    }
-    SYNCTRACE("Local net_interface %d: %s\n", i, local);
-    if( strcmp(address,local)==0 ){
-      ret = 1;
-    }
-  }
-  uv_free_interface_addresses(net_interface, count);
-  return ret;
-
-}
-
-/****************************************************************************/
-
-// option 1: send to the one that starts with 192 -- will not work on some networks
-// option 2: send to 255.255.255.255 - it works
-// option 3: send to all the interfaces, always
-// option 4: send to all the interfaces the first time, the next ones use the address that returned responses.
-
-SQLITE_PRIVATE int get_local_broadcast_address(char *address){
-
-  //strcpy(address, "192.168.0.255");
-  strcpy(address, "255.255.255.255");
-
-  return SQLITE_OK;
-
-#if 0
-  int count=0, i, ret=0;
-  uv_interface_address_t *net_interface=NULL;  /* we cannot use the variable name 'interface' on MinGW */
-
-  uv_interface_addresses(&net_interface, &count);
-  for(i=0; i<count; i++){
-    char local[17] = { 0 };
-    int rc = uv_ip4_name(&net_interface[i].address.address4, local, 16);
-    if( rc ){
-      rc = uv_ip6_name(&net_interface[i].address.address6, local, 16);
-    }
-    printf("Local net_interface %d: %s\n", i, local);
-    if( strcmp(address,local)==0 ){
-      ret = 1;
-    }
-  }
-  uv_free_interface_addresses(net_interface, count);
-  return ret;
-#endif
-}
-
-/****************************************************************************/
-
-SQLITE_PRIVATE int get_sockaddr_port(const struct sockaddr *sa) {
-  if( sa->sa_family==AF_INET ){
-    return ntohs(((struct sockaddr_in*)sa)->sin_port);
-  }
-  return ntohs(((struct sockaddr_in6*)sa)->sin6_port);
-}
-
-/****************************************************************************/
-
-SQLITE_PRIVATE void on_udp_send(uv_udp_send_t *req, int status) {
-  if (status) {
-    fprintf(stderr, "Send error %s\n", uv_strerror(status));
-  }
-  sqlite3_free(req);
-}
-
-/****************************************************************************/
-/****************************************************************************/
+/*** LEADER ELECTION ********************************************************/
 /****************************************************************************/
 
 SQLITE_PRIVATE void clear_leader_votes(plugin *plugin) {
@@ -1450,6 +1378,15 @@ SQLITE_PRIVATE void election_info_timeout(uv_timer_t* handle) {
 
 /****************************************************************************/
 /****************************************************************************/
+/****************************************************************************/
+
+SQLITE_PRIVATE void on_udp_send(uv_udp_send_t *req, int status) {
+  if (status) {
+    fprintf(stderr, "Send error %s\n", uv_strerror(status));
+  }
+  sqlite3_free(req);
+}
+
 /****************************************************************************/
 
 SQLITE_PRIVATE void on_udp_message(uv_udp_t *socket, ssize_t nread, const uv_buf_t *buf, const struct sockaddr *addr, unsigned flags) {

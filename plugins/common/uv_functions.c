@@ -357,3 +357,71 @@ SQLITE_PRIVATE BOOL send_request(node *node, int cmd, unsigned int arg) {
   return send_msg(node, cmd, arg);
 
 }
+
+/****************************************************************************/
+/****************************************************************************/
+
+SQLITE_PRIVATE int is_local_ip_address(char *address){
+  int count=0, i, ret=0;
+  uv_interface_address_t *net_interface=NULL;  /* we cannot use the variable name 'interface' on MinGW */
+
+  uv_interface_addresses(&net_interface, &count);
+  for(i=0; i<count; i++){
+    char local[17] = { 0 };
+    int rc = uv_ip4_name(&net_interface[i].address.address4, local, 16);
+    if( rc ){
+      rc = uv_ip6_name(&net_interface[i].address.address6, local, 16);
+    }
+    SYNCTRACE("Local net_interface %d: %s\n", i, local);
+    if( strcmp(address,local)==0 ){
+      ret = 1;
+    }
+  }
+  uv_free_interface_addresses(net_interface, count);
+  return ret;
+
+}
+
+/****************************************************************************/
+
+// option 1: send to the one that starts with 192 -- will not work on some networks
+// option 2: send to 255.255.255.255 - it works
+// option 3: send to all the interfaces, always
+// option 4: send to all the interfaces the first time, the next ones use the address that returned responses.
+
+SQLITE_PRIVATE int get_local_broadcast_address(char *address){
+
+  //strcpy(address, "192.168.0.255");
+  strcpy(address, "255.255.255.255");
+
+  return SQLITE_OK;
+
+#if 0
+  int count=0, i, ret=0;
+  uv_interface_address_t *net_interface=NULL;  /* we cannot use the variable name 'interface' on MinGW */
+
+  uv_interface_addresses(&net_interface, &count);
+  for(i=0; i<count; i++){
+    char local[17] = { 0 };
+    int rc = uv_ip4_name(&net_interface[i].address.address4, local, 16);
+    if( rc ){
+      rc = uv_ip6_name(&net_interface[i].address.address6, local, 16);
+    }
+    printf("Local net_interface %d: %s\n", i, local);
+    if( strcmp(address,local)==0 ){
+      ret = 1;
+    }
+  }
+  uv_free_interface_addresses(net_interface, count);
+  return ret;
+#endif
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE int get_sockaddr_port(const struct sockaddr *sa) {
+  if( sa->sa_family==AF_INET ){
+    return ntohs(((struct sockaddr_in*)sa)->sin_port);
+  }
+  return ntohs(((struct sockaddr_in6*)sa)->sin6_port);
+}
