@@ -259,7 +259,6 @@ SQLITE_PRIVATE void on_commit_block(node *node, void *msg, int size) {
 //!      it must check this
 
 
-//SQLITE_PRIVATE int create_new_block(plugin *plugin, binn **pblock, binn **ppayload) {
 SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
   aergolite *this_node = plugin->this_node;
   struct transaction *txn;
@@ -274,31 +273,19 @@ SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
   if( !block ) return NULL;
 
   /* start a db transaction */
-  rc = aergolite_begin_block(this_node);  // begin_new_state
+  rc = aergolite_begin_block(this_node);
   if( rc ) goto loc_failed;
 
   /* execute the transactions from the local mempool */
   for( txn=plugin->mempool; txn; txn=txn->next ){
     /* include this transaction on the block */
-    rc = aergolite_execute_transaction(this_node, txn->node_id, txn->nonce, txn->log);
-    if( rc!=SQLITE_OK ){
-  // not included in the block. inform the source node -> it must mark the txn as failed! even after having sent it.
-  // for now: each node can send at most 1 txn per block
-      //sqlite3_log(1, "new_block - failed transaction");
-      //break;
-    }
+    aergolite_execute_transaction(this_node, txn->node_id, txn->nonce, txn->log);
+    /* no need to check the return result. if the execution failed or was rejected
+    ** the nonce will be included in the block as a failed transaction */
   }
 
-  //rc = aergolite_commit_block(this_node);
-  //rc = aergolite_rollback_block(this_node); -- not needed. it can rollback it auto in the fn bellow
-
-  //rc = aergolite_create_new_state(this_node, &state->state, &state->payload);
   rc = aergolite_create_block(this_node, &block->height, &block->header, &block->body);
   if( rc ) goto loc_failed;
-
-// if using PITR then it would not need to rollback now and reapply later. it would
-// save in the db now and then undo in case of failure (incl. restart)
-// this info could be in the second/metadata db.
 
   return block;
 
@@ -309,7 +296,7 @@ loc_failed:
 
 #if 0
 
---- or:  having the mempool on the core
+  // --- or if having the mempool implemented on the core:
 
   binn *block = NULL;
   binn *payload = NULL;
@@ -340,7 +327,6 @@ SQLITE_PRIVATE void new_block_timer_cb(uv_timer_t* handle) {
   plugin *plugin = (struct plugin *) handle->loop->data;
   aergolite *this_node = plugin->this_node;
   struct block *block;
-  //int rc;
 
   SYNCTRACE("new_block_timer_cb\n");
 
@@ -358,10 +344,9 @@ SQLITE_PRIVATE void new_block_timer_cb(uv_timer_t* handle) {
   /* broadcast the block to the peers */
   block->ack_count = 1;  /* ack by this node */
   broadcast_new_block(plugin, block);
+
 // if it fails, it can use a timer to try later
 // but if the connection is down probably it will have to discard the block
-
-// apply the block when the nodes acknowledge it (and accept/sign it)
 
 }
 
@@ -479,4 +464,3 @@ SQLITE_PRIVATE void on_node_acknowledged_block(node *source_node, void *msg, int
   }
 
 }
-

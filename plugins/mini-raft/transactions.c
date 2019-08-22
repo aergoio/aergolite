@@ -205,6 +205,7 @@ SQLITE_PRIVATE struct transaction * store_transaction_on_mempool(
   //! it could create a copy here using only the SQL commands and removing not needed data. or maybe use netstring...
   //txn->data = xxx(log);    //! or maybe let the consensus protocol decide what to store here...
   //! or the core could supply the txn already without the metadata
+  // but: probably the txn will already be signed in the WAL file. in this case it cannot be changed here
 
   return txn;
 }
@@ -289,7 +290,7 @@ SQLITE_PRIVATE void on_insert_transaction(node *source_node, void *msg, int size
 
 #if 0
 
-  //! instead, it must call a fn to check the nonce for this node
+  //! it must call a fn to check the nonce for this node
 
 
   if( aergolite_check_transaction_in_blockchain(this_node,tid,&tr_exists)!=SQLITE_OK ){
@@ -434,11 +435,6 @@ SQLITE_PRIVATE void leader_node_on_local_transaction(plugin *plugin) {
 
   SYNCTRACE("leader_node_on_local_transaction\n");
 
-  // if this is a primary node, it must:
-  // -save the command on the -wal-remote, using the log table
-  // -send the 'new command' notification to the connected [follower] nodes
-  // -start a log rotation
-
   plugin->sync_up_state = DB_STATE_LOCAL_CHANGES;
 
   leader_node_process_local_transactions(plugin);
@@ -491,4 +487,3 @@ SQLITE_API void on_new_local_transaction(void *arg) {
   }
 
 }
-
