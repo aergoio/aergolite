@@ -210,6 +210,7 @@ struct plugin {
   aergolite *this_node;       /* Reference to the aergolite instance */
 
   struct tcp_address *bind;   /* Address(es) to bind */
+  struct tcp_address *discovery;  /* Node discovery address(es) */
   uv_udp_t *udp_sock;         /* Socket used for UDP communication */
 
   node *peers;                /* Remote nodes connected to this one */

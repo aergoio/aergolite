@@ -1595,33 +1595,37 @@ SQLITE_API void plugin_end(void *arg){
 
 SQLITE_PRIVATE struct tcp_address * parse_tcp_address(char *address, int common_reconnect_interval) {
   struct tcp_address *first=0, *prev=0, *addr=0;
+  char *base;
 
   if( !address ) return NULL;
 
-  address = sqlite3_strdup(address);
+  base = address = sqlite3_strdup(address);
 
-  while (address) {
+  while( address ){
     char *host, *zport, *next;
 
     next = stripchr(address, ',');
 
-    if (strncmp(address, "tcp://", 6) != 0) {
+    if( strncmp(address, "tcp://", 6)==0 ){
+      host = address + 6;
+    }else{
+      host = address;
+#if 0
       sqlite3_log(SQLITE_ERROR, "the protocol is not supported: %s", address);
       goto loc_failed;
+#endif
     }
 
     addr = sqlite3_malloc(sizeof(struct tcp_address));
-    if (!addr) {
+    if( !addr ){
       sqlite3_log(SQLITE_NOMEM, "out of memory");
       goto loc_failed;
     }
     memset(addr, 0, sizeof(struct tcp_address));
 
-    if (!first) first = addr;
-    if (prev) prev->next = addr;
+    if( !first ) first = addr;
+    if( prev ) prev->next = addr;
     prev = addr;
-
-    host = address + 6;  /* strlen("tcp://"); */
 
     if( *host=='[' ){
       zport = stripchr(host, ']');
@@ -1634,7 +1638,7 @@ SQLITE_PRIVATE struct tcp_address * parse_tcp_address(char *address, int common_
     } else {
       zport = stripchr(host, ':');
     }
-    if (!zport) {
+    if( !zport ){
       sqlite3_log(SQLITE_ERROR, "the port must be informed: %s", address);
       goto loc_failed;
     }
@@ -1655,7 +1659,7 @@ SQLITE_PRIVATE struct tcp_address * parse_tcp_address(char *address, int common_
     address = next;
   }
 
-  sqlite3_free(address);
+  sqlite3_free(base);
   return first;
 loc_failed:
   addr = first;
@@ -1664,7 +1668,7 @@ loc_failed:
     sqlite3_free(addr);
     addr = next;
   }
-  sqlite3_free(address);
+  sqlite3_free(base);
   return (struct tcp_address *)-1;
 }
 
@@ -1672,10 +1676,11 @@ loc_failed:
 
 SQLITE_PRIVATE struct tcp_address * parse_discovery_address(char *address, int common_reconnect_interval) {
   struct tcp_address *first=0, *prev=0, *addr=0;
+  char *base;
 
   if( !address ) return NULL;
 
-  address = sqlite3_strdup(address);
+  base = address = sqlite3_strdup(address);
 
   while( address ){
     char *host, *zport, *next;
@@ -1730,7 +1735,7 @@ SQLITE_PRIVATE struct tcp_address * parse_discovery_address(char *address, int c
     address = next;
   }
 
-  sqlite3_free(address);  //! it will fail with 2 addresses
+  sqlite3_free(base);
   return first;
 loc_failed:
   addr = first;
@@ -1739,7 +1744,7 @@ loc_failed:
     sqlite3_free(addr);
     addr = next;
   }
-  sqlite3_free(address);
+  sqlite3_free(base);
   return (struct tcp_address *)-1;
 }
 
@@ -1748,7 +1753,7 @@ loc_failed:
 void * plugin_init(aergolite *this_node, char *uri) {
   struct tcp_address *addr;
   plugin *plugin;
-  char *discovery;
+  char *discovery, *bind;
   int64 random_no;
 
   SYNCTRACE("initializing a new instance of mini-raft plugin\n");
@@ -1774,11 +1779,30 @@ void * plugin_init(aergolite *this_node, char *uri) {
   ** without connections to other nodes.
   */
   if( discovery ){
-    plugin->bind = parse_discovery_address(discovery, 0);
+    plugin->discovery = parse_discovery_address(discovery, 0);
+    if( plugin->discovery==(struct tcp_address *)-1 ) goto loc_failed;
+    for (addr = plugin->discovery; addr; addr = addr->next) {
+      SYNCTRACE("  discovery address: %s:%d \n", addr->host, addr->port);
+    }
+  }
+
+  /* parse the bind parameter */
+
+  bind = (char*) sqlite3_uri_parameter(uri, "bind");
+  /*
+  ** if no bind address is supplied, it:
+  ** -use the same address of node discovery (if using local UDP broadcast)
+  ** -binds to a random port  -- must be the same as the TCP port?
+  */
+  if( bind ){
+    plugin->bind = parse_tcp_address(bind, 0);
     if( plugin->bind==(struct tcp_address *)-1 ) goto loc_failed;
     for (addr = plugin->bind; addr; addr = addr->next) {
       SYNCTRACE("  bind address: 0.0.0.0:%d \n", addr->port);
-      SYNCTRACE("  discovery address: %s:%d \n", addr->host, addr->port);
+    }
+  }else{
+    if( discovery && strncmp(discovery,"local:",6)==0 ){
+      plugin->bind = parse_discovery_address(discovery, 0);
     }
   }
 
