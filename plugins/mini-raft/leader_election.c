@@ -309,7 +309,7 @@ void on_new_election_request(
 
   if( plugin->leader_node ){
     /* check if the current leader is still alive */
-    send_udp_message(plugin, plugin->leader_node->host, "ping");
+    send_udp_message_ex(plugin, plugin->leader_node->host, plugin->leader_node->port, "ping");
     /* we cannot send new txns to the current leader until the election is done */
     plugin->last_leader = plugin->leader_node;
     plugin->leader_node = NULL;

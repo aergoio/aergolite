@@ -425,3 +425,13 @@ SQLITE_PRIVATE int get_sockaddr_port(const struct sockaddr *sa) {
   }
   return ntohs(((struct sockaddr_in6*)sa)->sin6_port);
 }
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void get_ip_address(const struct sockaddr *sa, char *name, int size) {
+  if( sa->sa_family==AF_INET ){
+    uv_ip4_name((struct sockaddr_in*)sa, name, size);
+  }else{
+    uv_ip6_name((struct sockaddr_in6*)sa, name, size);
+  }
+}

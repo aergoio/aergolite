@@ -199,8 +199,8 @@ SQLITE_API char * get_protocol_status(void *arg, BOOL extended) {
 void on_blockchain_status_request(
   plugin *plugin,
   uv_udp_t *socket,
-  const struct sockaddr *addr,
-  char *sender,
+  const struct sockaddr *sender,
+  char *sender_ip,
   char *arg
 ){
   aergolite *this_node = plugin->this_node;
@@ -219,8 +219,8 @@ void on_blockchain_status_request(
 void on_protocol_status_request(
   plugin *plugin,
   uv_udp_t *socket,
-  const struct sockaddr *addr,
-  char *sender,
+  const struct sockaddr *sender,
+  char *sender_ip,
   char *arg
 ){
   char *status;
@@ -244,8 +244,8 @@ void on_protocol_status_request(
 void on_node_info_request(
   plugin *plugin,
   uv_udp_t *socket,
-  const struct sockaddr *addr,
-  char *sender,
+  const struct sockaddr *sender,
+  char *sender_ip,
   char *arg
 ){
   aergolite *this_node = plugin->this_node;
@@ -824,7 +824,7 @@ SQLITE_PRIVATE void reconnect_timer_cb(uv_timer_t* handle) {
   ** This will also enable the after connections timer on the first response.
   */
 
-  send_broadcast_message(plugin, "whr?");
+  start_node_discovery(plugin);
 
   // it must stop the timer:
   // -on successful connection
@@ -1239,7 +1239,13 @@ void register_udp_message(char *name, udp_message_callback callback){
 
 /****************************************************************************/
 
-SQLITE_PRIVATE void on_udp_message(uv_udp_t *socket, ssize_t nread, const uv_buf_t *buf, const struct sockaddr *addr, unsigned flags){
+SQLITE_PRIVATE void on_udp_message(
+  uv_udp_t *socket,
+  ssize_t nread,
+  const uv_buf_t *buf,
+  const struct sockaddr *addr,
+  unsigned flags
+){
   uv_loop_t *loop = socket->loop;
   plugin *plugin = (struct plugin *) loop->data;
   char sender[17] = { 0 }, *command, *arg;
@@ -1276,7 +1282,7 @@ loc_exit:
 
 /****************************************************************************/
 
-SQLITE_PRIVATE int send_broadcast_message(plugin *plugin, char *message) {
+SQLITE_PRIVATE int send_udp_broadcast(plugin *plugin, char *message) {
   struct sockaddr_in dest_addr;
   uv_udp_send_t *send_req;
   char *address;
@@ -1286,12 +1292,12 @@ SQLITE_PRIVATE int send_broadcast_message(plugin *plugin, char *message) {
   //buffer.base = message;
   //buffer.len = strlen(message) + 1;
 
-  if( !plugin->bind ) return SQLITE_OK;
+  if( !plugin->broadcast ) return SQLITE_INTERNAL;
 
-  address = plugin->bind->host;  // ->broadcast_address
-  port = plugin->bind->port;     // ->broadcast_port
+  address = plugin->broadcast->host;
+  port = plugin->broadcast->port;
 
-  SYNCTRACE("send_broadcast_message [%s:%d]: %s\n", address, port, message);
+  SYNCTRACE("send_udp_broadcast [%s:%d]: %s\n", address, port, message);
 
   if( uv_ip4_addr(address, port, (struct sockaddr_in *) &dest_addr)!=0 ){
     if( uv_ip6_addr(address, port, (struct sockaddr_in6 *) &dest_addr)!=0 ){
@@ -1301,7 +1307,7 @@ SQLITE_PRIVATE int send_broadcast_message(plugin *plugin, char *message) {
   }
 
   buffer.len = strlen(message) + 1;
-  send_req = sqlite3_malloc(sizeof(uv_udp_send_t) + buffer.len);  /* allocates additional space for the response string */
+  send_req = sqlite3_malloc(sizeof(uv_udp_send_t) + buffer.len);  /* allocates additional space for the message */
   if (!send_req) return SQLITE_NOMEM;
   buffer.base = (char*)send_req + sizeof(uv_udp_send_t);
   strcpy(buffer.base, message);
@@ -1315,35 +1321,94 @@ SQLITE_PRIVATE int send_broadcast_message(plugin *plugin, char *message) {
 
 /****************************************************************************/
 
-SQLITE_PRIVATE int send_udp_message(plugin *plugin, char *address, char *message) {
+SQLITE_PRIVATE int send_broadcast_message(plugin *plugin, char *message) {
   struct sockaddr_in dest_addr;
   uv_udp_send_t *send_req;
+  char *address;
+  struct node *node;
   int port, rc = SQLITE_OK;
   uv_buf_t buffer;
 
-  if( !plugin->bind ) return SQLITE_OK;
+  //buffer.base = message;
+  //buffer.len = strlen(message) + 1;
 
-  port = plugin->bind->port;     // ->broadcast_port
-
-  SYNCTRACE("send_udp_message [%s:%d]: %s\n", address, port, message);
-
-  if( uv_ip4_addr(address, port, (struct sockaddr_in *) &dest_addr)!=0 ){
-    if( uv_ip6_addr(address, port, (struct sockaddr_in6 *) &dest_addr)!=0 ){
-      sqlite3_log(SQLITE_ERROR, "send_udp_message: invalid address [%s:%d]", address, port);
-      return SQLITE_ERROR;
-    }
+  if( plugin->broadcast ){
+    return send_udp_broadcast(plugin, message);
   }
 
+  /* send the message to all the connected peers */
+
+  for (node = plugin->peers; node; node = node->next) {
+
+    SYNCTRACE("send_broadcast_message [%s:%d]: %s\n", node->host, node->port, message);
+
+    if( uv_ip4_addr(node->host, node->port, (struct sockaddr_in *) &dest_addr)!=0 ){
+      if( uv_ip6_addr(node->host, node->port, (struct sockaddr_in6 *) &dest_addr)!=0 ){
+        sqlite3_log(SQLITE_ERROR, "send_broadcast_message: invalid address [%s:%d]", node->host, node->port);
+        //return SQLITE_ERROR;
+      }
+    }
+
+    buffer.len = strlen(message) + 1;
+    send_req = sqlite3_malloc(sizeof(uv_udp_send_t) + buffer.len);  /* allocates additional space for the message */
+    if (!send_req) return SQLITE_NOMEM;
+    buffer.base = (char*)send_req + sizeof(uv_udp_send_t);
+    strcpy(buffer.base, message);
+
+    rc = uv_udp_send(send_req, plugin->udp_sock, &buffer, 1, (const struct sockaddr *)&dest_addr, on_udp_send);
+    if( rc ){  // rc = SQLITE_ERROR;
+      sqlite3_log(SQLITE_ERROR, "send_broadcast_message: failed sending to [%s:%d]", node->host, node->port);
+      //return SQLITE_ERROR;
+    }
+
+  }
+
+  return rc;
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE int send_udp_message(plugin *plugin, const struct sockaddr *address, char *message) {
+  uv_udp_send_t *send_req;
+  uv_buf_t buffer;
+  int rc = SQLITE_OK;
+
+  if( !address ) return SQLITE_INTERNAL;
+
+#ifdef DEBUGPRINT
+  {
+  char sender[20];
+  int port = get_sockaddr_port(address);
+  get_ip_address(address, sender, 16);
+  SYNCTRACE("send_udp_message [%s:%d]: %s\n", sender, port, message);
+  }
+#endif
+
   buffer.len = strlen(message) + 1;
-  send_req = sqlite3_malloc(sizeof(uv_udp_send_t) + buffer.len);  /* allocates additional space for the response string */
+  send_req = sqlite3_malloc(sizeof(uv_udp_send_t) + buffer.len);  /* allocates additional space for the message */
   if (!send_req) return SQLITE_NOMEM;
   buffer.base = (char*)send_req + sizeof(uv_udp_send_t);
   strcpy(buffer.base, message);
 
-  rc = uv_udp_send(send_req, plugin->udp_sock, &buffer, 1, (const struct sockaddr *)&dest_addr, on_udp_send);
+  rc = uv_udp_send(send_req, plugin->udp_sock, &buffer, 1, address, on_udp_send);
   if( rc ) rc = SQLITE_ERROR;
   return rc;
 
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE int send_udp_message_ex(plugin *plugin, char *ip_addr, int port, char *message) {
+  const struct sockaddr_in6 *address;
+
+  if( uv_ip4_addr(ip_addr, port, (struct sockaddr_in *) &address)!=0 ){
+    if( uv_ip6_addr(ip_addr, port, (struct sockaddr_in6 *) &address)!=0 ){
+      sqlite3_log(SQLITE_ERROR, "send_udp_message: invalid address [%s:%d]", ip_addr, port);
+      return SQLITE_ERROR;
+    }
+  }
+
+  return send_udp_message(plugin, (const struct sockaddr*) address, message);
 }
 
 /****************************************************************************/
@@ -1447,26 +1512,7 @@ SQLITE_PRIVATE void node_thread(void *arg) {
     uv_udp_init(&loop, plugin->udp_sock);
     uv_udp_bind(plugin->udp_sock, (const struct sockaddr*) &addr, UV_UDP_REUSEADDR);
     uv_udp_recv_start(plugin->udp_sock, alloc_buffer, on_udp_message);
-
-    break;  //! by now only one address is supported
   }
-
-
-  /* send broadcast message to find the peers */
-  /* on a separate loop because on the future it can hold broadcast addresses, that can
-  ** differ from the bind addresses. eg:
-  **  "discovery=192.168.1.255:1234,10.0.34.255:1234"
-  **  the same bind address (0.0.0.0:1234) but 2 broadcast addresses.
-  */
-  for (address = plugin->bind; address; address = address->next) {
-
-    SYNCTRACE("peer connections - sending discovery packets to address: %s:%d\n", address->host, address->port);
-
-    send_broadcast_message(plugin, "whr?");
-
-    break;  //! by now only one address is supported
-  }
-
 
 
   /* initialize the timers */
@@ -1481,6 +1527,8 @@ SQLITE_PRIVATE void node_thread(void *arg) {
 
   uv_timer_init(&loop, &plugin->aergolite_core_timer);
 
+
+  start_node_discovery(plugin);
 
   if( plugin->udp_sock ){
     /* start the after connections timer */
@@ -1721,6 +1769,7 @@ SQLITE_PRIVATE struct tcp_address * parse_discovery_address(char *address, int c
       goto loc_failed;
     }
     if( strncmp(host, "local", 5)==0 ){
+      addr->is_broadcast = 1;
       get_local_broadcast_address(addr->host);
     }else{
       strcpy(addr->host, host);
@@ -1783,6 +1832,7 @@ void * plugin_init(aergolite *this_node, char *uri) {
     if( plugin->discovery==(struct tcp_address *)-1 ) goto loc_failed;
     for (addr = plugin->discovery; addr; addr = addr->next) {
       SYNCTRACE("  discovery address: %s:%d \n", addr->host, addr->port);
+      if( addr->is_broadcast ) plugin->broadcast = addr;
     }
   }
 
@@ -1797,13 +1847,12 @@ void * plugin_init(aergolite *this_node, char *uri) {
   if( bind ){
     plugin->bind = parse_tcp_address(bind, 0);
     if( plugin->bind==(struct tcp_address *)-1 ) goto loc_failed;
-    for (addr = plugin->bind; addr; addr = addr->next) {
-      SYNCTRACE("  bind address: 0.0.0.0:%d \n", addr->port);
-    }
-  }else{
-    if( discovery && strncmp(discovery,"local:",6)==0 ){
-      plugin->bind = parse_discovery_address(discovery, 0);
-    }
+  }else if( plugin->broadcast ){
+    plugin->bind = sqlite3_memdup(plugin->broadcast, sizeof(struct tcp_address));
+    if( plugin->bind ) plugin->bind->next = NULL;
+  }
+  for (addr = plugin->bind; addr; addr = addr->next) {
+    SYNCTRACE("  bind address: 0.0.0.0:%d \n", addr->port);
   }
 
 

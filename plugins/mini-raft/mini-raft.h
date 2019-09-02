@@ -98,6 +98,7 @@ struct tcp_address {
   struct tcp_address *next;
   char host[64];
   int port;
+  int is_broadcast;
   int reconnect_interval;
 };
 
@@ -211,6 +212,7 @@ struct plugin {
 
   struct tcp_address *bind;   /* Address(es) to bind */
   struct tcp_address *discovery;  /* Node discovery address(es) */
+  struct tcp_address *broadcast;  /* Broadcast address(es) */
   uv_udp_t *udp_sock;         /* Socket used for UDP communication */
 
   node *peers;                /* Remote nodes connected to this one */
@@ -262,7 +264,7 @@ struct plugin {
 SQLITE_PRIVATE int is_local_ip_address(char *address);
 
 SQLITE_PRIVATE int send_broadcast_message(plugin *plugin, char *message);
-SQLITE_PRIVATE int send_udp_message(plugin *plugin, char *address, char *message);
+SQLITE_PRIVATE int send_udp_message(plugin *plugin, const struct sockaddr *address, char *message);
 
 SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle);
 
@@ -310,3 +312,7 @@ struct udp_message {
 };
 
 void register_udp_message(char *name, udp_message_callback callback);
+
+/* node discovery */
+
+void start_node_discovery(plugin *plugin);

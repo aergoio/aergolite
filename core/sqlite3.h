@@ -11889,7 +11889,7 @@ SQLITE_API int aergolite_consensus_db_query_blob(aergolite *this_node, char **pv
 */
 
 SQLITE_API void *sqlite3_malloc_zero(int64 n);
-SQLITE_API char *sqlite3_memdup(char *source, int size);
+SQLITE_API void *sqlite3_memdup(void *source, int size);
 SQLITE_API char *sqlite3_strdup(char *text);
 SQLITE_API char *stripchr(char *mainstr, int separator);
 
