@@ -1,12 +1,14 @@
 /*
 
-discovery=local:4329
+node discovery URI parameters:
 
-discovery=peer1:port1
+discovery=local:4329  (local UDP broadcast - all nodes use the same port)
 
-discovery=local:4329,peer1:port1
+discovery=ip1:port1  (known node)
 
-discovery=local:4329,server:port:type
+discovery=server:port:type  (server with list of peers - not implemented)
+
+discovery=local:4329,ip1:port1,ip2:port2  (mixed)
 
 */
 
