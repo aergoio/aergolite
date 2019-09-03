@@ -311,8 +311,8 @@ struct udp_message {
   udp_message_callback callback;
 };
 
-void register_udp_message(char *name, udp_message_callback callback);
+SQLITE_PRIVATE void register_udp_message(char *name, udp_message_callback callback);
 
 /* node discovery */
 
-void start_node_discovery(plugin *plugin);
+SQLITE_PRIVATE void start_node_discovery(plugin *plugin);

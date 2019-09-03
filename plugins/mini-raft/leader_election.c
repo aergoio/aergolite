@@ -254,7 +254,7 @@ SQLITE_PRIVATE void election_info_timeout(uv_timer_t* handle) {
 /****************************************************************************/
 
 /* "leader?": a broadcast message requesting the current leader */
-void on_get_current_leader(
+SQLITE_PRIVATE void on_get_current_leader(
   plugin *plugin,
   uv_udp_t *socket,
   const struct sockaddr *addr,
@@ -297,7 +297,7 @@ void on_get_current_leader(
 /****************************************************************************/
 
 /* "election": a broadcast message requesting a leader election */
-void on_new_election_request(
+SQLITE_PRIVATE void on_new_election_request(
   plugin *plugin,
   uv_udp_t *socket,
   const struct sockaddr *addr,
@@ -334,7 +334,7 @@ void on_new_election_request(
 /****************************************************************************/
 
 /* "pong": a response message from the current leader */
-void on_leader_ping_response(
+SQLITE_PRIVATE void on_leader_ping_response(
   plugin *plugin,
   uv_udp_t *socket,
   const struct sockaddr *addr,
@@ -357,7 +357,7 @@ void on_leader_ping_response(
 /****************************************************************************/
 
 /* "last_block": a response message informing the height of the last block on the peer's blockchain */
-void on_requested_last_block(
+SQLITE_PRIVATE void on_requested_last_block(
   plugin *plugin,
   uv_udp_t *socket,
   const struct sockaddr *addr,
@@ -389,7 +389,7 @@ void on_requested_last_block(
 /****************************************************************************/
 
 /* "leader": a response message informing the peer leader */
-void on_requested_peer_leader(
+SQLITE_PRIVATE void on_requested_peer_leader(
   plugin *plugin,
   uv_udp_t *socket,
   const struct sockaddr *addr,
@@ -430,7 +430,7 @@ void on_requested_peer_leader(
 
 /****************************************************************************/
 
-void leader_election_init(){
+SQLITE_PRIVATE void leader_election_init(){
 
   /* a broadcast message requesting the current leader */
   register_udp_message("leader?", on_get_current_leader);

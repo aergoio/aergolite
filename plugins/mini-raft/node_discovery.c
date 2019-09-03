@@ -13,7 +13,7 @@ discovery=local:4329,server:port:type
 /****************************************************************************/
 
 /* "whr?": a broadcast message to find peers */
-void on_find_node_request(
+SQLITE_PRIVATE void on_find_node_request(
   plugin *plugin,
   uv_udp_t *socket,
   const struct sockaddr *sender,
@@ -39,7 +39,7 @@ void on_find_node_request(
 /****************************************************************************/
 
 /* "here": a response message informing a peer location */
-void on_find_node_response(
+SQLITE_PRIVATE void on_find_node_response(
   plugin *plugin,
   uv_udp_t *socket,
   const struct sockaddr *sender,
@@ -61,7 +61,7 @@ void on_find_node_response(
 
 /****************************************************************************/
 
-void start_node_discovery(plugin *plugin) {
+SQLITE_PRIVATE void start_node_discovery(plugin *plugin) {
   struct tcp_address *address;
 
   /* send broadcast message to find the peers.
@@ -70,19 +70,27 @@ void start_node_discovery(plugin *plugin) {
   **  "discovery=192.168.1.255:1234,10.0.34.255:1234"
   **  the same bind address (0.0.0.0:1234) but 2 broadcast addresses.
   */
-  for (address = plugin->discovery; address; address = address->next) {
 
-    SYNCTRACE("peer connections - sending discovery packets to address: %s:%d\n", address->host, address->port);
-
-    send_broadcast_message(plugin, "whr?");
-
+  if( plugin->broadcast ){
+    SYNCTRACE("start_node_discovery - broadcasting node discovery packets\n");
+    //send_broadcast_message(plugin, "whr?");
+    send_udp_broadcast(plugin, "whr?");
   }
+
+  for(address = plugin->discovery; address; address = address->next){
+    if( !address->is_broadcast ){
+      SYNCTRACE("start_node_discovery - connecting to known node at %s:%d\n", address->host, address->port);
+      check_peer_connection(plugin, address->host, address->port);
+    }
+  }
+
+  /* after each connection: the nodes must share their peers list */
 
 }
 
 /****************************************************************************/
 
-void node_discovery_init(){
+SQLITE_PRIVATE void node_discovery_init(){
 
   /* a broadcast message to find peers */
   register_udp_message("whr?", on_find_node_request);

@@ -196,7 +196,7 @@ SQLITE_API char * get_protocol_status(void *arg, BOOL extended) {
 /****************************************************************************/
 
 /* a broadcast message requesting blockchain status info */
-void on_blockchain_status_request(
+SQLITE_PRIVATE void on_blockchain_status_request(
   plugin *plugin,
   uv_udp_t *socket,
   const struct sockaddr *sender,
@@ -216,7 +216,7 @@ void on_blockchain_status_request(
 /****************************************************************************/
 
 /* a broadcast message requesting protocol status info */
-void on_protocol_status_request(
+SQLITE_PRIVATE void on_protocol_status_request(
   plugin *plugin,
   uv_udp_t *socket,
   const struct sockaddr *sender,
@@ -241,7 +241,7 @@ void on_protocol_status_request(
 /****************************************************************************/
 
 /* a broadcast message requesting node info */
-void on_node_info_request(
+SQLITE_PRIVATE void on_node_info_request(
   plugin *plugin,
   uv_udp_t *socket,
   const struct sockaddr *sender,
@@ -1335,6 +1335,11 @@ SQLITE_PRIVATE int send_broadcast_message(plugin *plugin, char *message) {
   if( plugin->broadcast ){
     return send_udp_broadcast(plugin, message);
   }
+
+
+  //! it should send for the udp broadcast + connected nodes if some of them are outside of the LAN.
+  //  it should avoid sending twice for the same node
+
 
   /* send the message to all the connected peers */
 
