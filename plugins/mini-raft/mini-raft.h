@@ -24,8 +24,10 @@
 //#define PLUGIN_NEW_NODE_ID         0xcd03     /* send the new node id */
 #define PLUGIN_ID_CONFLICT         0xcd04     /* there is another node with the same id */
 
-#define PLUGIN_CMD_PING            0xcd05     /* check if alive */
-#define PLUGIN_CMD_PONG            0xcd06     /* I am alive */
+#define PLUGIN_PEERS               0xcd05     /* list of peers */
+
+#define PLUGIN_CMD_PING            0xcd06     /* check if alive */
+#define PLUGIN_CMD_PONG            0xcd07     /* I am alive */
 
 
 #define PLUGIN_REQUEST_STATE_DIFF  0xdb01
@@ -316,3 +318,6 @@ SQLITE_PRIVATE void register_udp_message(char *name, udp_message_callback callba
 /* node discovery */
 
 SQLITE_PRIVATE void start_node_discovery(plugin *plugin);
+
+SQLITE_PRIVATE void send_peer_list(plugin *plugin, node *to_node);
+SQLITE_PRIVATE void on_peer_list_received(node *node, void *msg, int size);

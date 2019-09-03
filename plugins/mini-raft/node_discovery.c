@@ -61,6 +61,81 @@ SQLITE_PRIVATE void on_find_node_response(
 
 /****************************************************************************/
 
+SQLITE_PRIVATE void on_peer_list_received(node *node, void *msg, int size) {
+  plugin *plugin = node->plugin;
+  binn_iter iter;
+  binn *list, item;
+
+  list = binn_map_list(msg, PLUGIN_PEERS);
+
+  SYNCTRACE("peer list received - count=%d\n", binn_count(list) / 2);
+
+  binn_list_foreach(list, item){
+    char *host = binn_list_str(&item, 1);
+    int   port = binn_list_int32(&item, 2);
+    SYNCTRACE("\t node at %s:%d\n", host, port);
+    check_peer_connection(plugin, host, port);
+  }
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void send_peer_list(plugin *plugin, node *to_node){
+  binn *list = binn_list();
+  node *node;
+
+  SYNCTRACE("send_peer_list\n");
+
+  if( !list ) return;
+
+  for(node = plugin->peers; node; node = node->next){
+    if( node!=to_node ){
+      binn *item = binn_list();
+      binn_list_add_str(item, node->host);
+      binn_list_add_int32(item, node->port);
+      binn_list_add_list(list, item);
+      binn_free(item);
+    }
+  }
+
+  if( binn_count(list)>0 ){
+    /* create and send the packet */
+    binn *map = binn_map();
+    binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_PEERS);
+    binn_map_set_list (map, PLUGIN_PEERS, list);
+    send_peer_message(to_node, map, NULL);
+    binn_free(map);
+  }
+
+  binn_free(list);
+}
+
+/****************************************************************************/
+
+#if 0
+
+SQLITE_PRIVATE void on_peer_list_request(node *node, void *msg, int size) {
+  plugin *plugin = node->plugin;
+
+  SYNCTRACE("on_peer_list_request\n");
+
+  send_peer_list(plugin, node);
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void request_connected_nodes(plugin *plugin, node *node){
+
+  //TODO if required
+
+}
+
+#endif
+
+/****************************************************************************/
+
 SQLITE_PRIVATE void start_node_discovery(plugin *plugin) {
   struct tcp_address *address;
 

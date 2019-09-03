@@ -68,6 +68,8 @@ SQLITE_PRIVATE void on_new_accepted_node(node *node) {
 
   SYNCTRACE("on_new_accepted_node\n");
 
+  send_peer_list(plugin, node);
+
   if( plugin->is_leader ){
     update_known_nodes(plugin);
   }
