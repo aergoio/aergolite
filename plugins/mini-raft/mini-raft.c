@@ -1654,6 +1654,8 @@ SQLITE_PRIVATE struct tcp_address * parse_tcp_address(char *address, int common_
   struct tcp_address *first=0, *prev=0, *addr=0;
   char *base;
 
+  SYNCTRACE("parse_tcp_address %s\n", address);
+
   if( !address ) return NULL;
 
   base = address = sqlite3_strdup(address);
@@ -1696,8 +1698,15 @@ SQLITE_PRIVATE struct tcp_address * parse_tcp_address(char *address, int common_
       zport = stripchr(host, ':');
     }
     if( !zport ){
-      sqlite3_log(SQLITE_ERROR, "the port must be informed: %s", address);
-      goto loc_failed;
+      char *p;
+      for(p=host; *p; p++){
+        if( !isdigit(*p) ){
+          sqlite3_log(SQLITE_ERROR, "the port must be informed: %s", address);
+          goto loc_failed;
+        }
+      }
+      zport = host;
+      host = "";
     }
     addr->port = atoi(zport);
 
@@ -1734,6 +1743,8 @@ loc_failed:
 SQLITE_PRIVATE struct tcp_address * parse_discovery_address(char *address, int common_reconnect_interval) {
   struct tcp_address *first=0, *prev=0, *addr=0;
   char *base;
+
+  SYNCTRACE("parse_discovery_address %s\n", address);
 
   if( !address ) return NULL;
 
