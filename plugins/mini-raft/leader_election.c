@@ -55,7 +55,7 @@ SQLITE_PRIVATE void new_leader_election(plugin *plugin) {
 
 SQLITE_PRIVATE void start_leader_election(plugin *plugin) {
 
-  send_broadcast_message(plugin, "election");
+  send_tcp_broadcast(plugin, "election");
 
 }
 
@@ -113,8 +113,9 @@ SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle) {
   }
 
   if( plugin->leader_node ){
-    SYNCTRACE("on_leader_check_timeout: the current leader is at %s with id %d\n",
-              plugin->leader_node->host, plugin->leader_node->id);
+    SYNCTRACE("on_leader_check_timeout: the current leader is at %s:%d with id %d\n",
+              plugin->leader_node->host, plugin->leader_node->bind_port,
+              plugin->leader_node->id);
 
     start_downstream_db_sync(plugin);
 
@@ -134,7 +135,7 @@ SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle) {
     // maybe this is not required, as it is checking the connection to each
     // node that answers the broadcast request.
 
-    send_broadcast_message(plugin, "whr?");
+    start_node_discovery(plugin);
 
     if( plugin->sync_down_state==DB_STATE_SYNCHRONIZING || plugin->sync_down_state==DB_STATE_IN_SYNC ){
       plugin->sync_down_state = DB_STATE_UNKNOWN;
@@ -164,7 +165,7 @@ SQLITE_PRIVATE void check_current_leader(plugin *plugin) {
 
   clear_leader_votes(plugin);
 
-  send_broadcast_message(plugin, "leader?");
+  send_tcp_broadcast(plugin, "leader?");
 
   uv_timer_start(&plugin->leader_check_timer, on_leader_check_timeout, 2000, 0);
 
@@ -235,7 +236,7 @@ SQLITE_PRIVATE void broadcast_new_leader(plugin *plugin){
 
   sprintf(message, "leader:%d", leader_id);
 
-  send_broadcast_message(plugin, message);
+  send_tcp_broadcast(plugin, message);
 
 }
 
@@ -250,26 +251,19 @@ SQLITE_PRIVATE void election_info_timeout(uv_timer_t* handle) {
 }
 
 /****************************************************************************/
-/*** UDP MESSAGES ***********************************************************/
+/*** TCP MESSAGES ***********************************************************/
 /****************************************************************************/
 
 /* "leader?": a broadcast message requesting the current leader */
 SQLITE_PRIVATE void on_get_current_leader(
   plugin *plugin,
-  uv_udp_t *socket,
-  const struct sockaddr *addr,
-  char *sender,
+  node *node,
   char *arg
 ){
-  uv_udp_send_t *send_req;
-  uv_buf_t response;
+  char response[32];
   int leader_id;
 
-  if( is_local_ip_address(sender) ) return;
-
   /* send a response message */
-
-  SYNCTRACE("on_udp_message: send a response message to %s\n", sender);
 
   if( plugin->is_leader ){
     leader_id = plugin->node_id;
@@ -279,18 +273,10 @@ SQLITE_PRIVATE void on_get_current_leader(
     leader_id = 0;
   }
 
-  //sprintf(leader_buf, "leader:%d", leader_id);
-  //response.base = leader_buf;
-  //response.len = strlen(leader_buf) + 1;
+  SYNCTRACE("on_get_current_leader - leader=%d\n", leader_id);
 
-  send_req = sqlite3_malloc(sizeof(uv_udp_send_t) + 32);  /* allocates additional space for the response string */
-  if (!send_req) return;
-  response.base = (char*)send_req + sizeof(uv_udp_send_t);
-
-  sprintf(response.base, "leader:%d", leader_id);
-  response.len = strlen(response.base) + 1;
-
-  uv_udp_send(send_req, socket, &response, 1, addr, on_udp_send);
+  sprintf(response, "leader:%d", leader_id);
+  send_text_message(node, response);
 
 }
 
@@ -299,9 +285,7 @@ SQLITE_PRIVATE void on_get_current_leader(
 /* "election": a broadcast message requesting a leader election */
 SQLITE_PRIVATE void on_new_election_request(
   plugin *plugin,
-  uv_udp_t *socket,
-  const struct sockaddr *addr,
-  char *sender,
+  node *node,
   char *arg
 ){
 
@@ -309,7 +293,7 @@ SQLITE_PRIVATE void on_new_election_request(
 
   if( plugin->leader_node ){
     /* check if the current leader is still alive */
-    send_udp_message_ex(plugin, plugin->leader_node->host, plugin->leader_node->port, "ping");
+    send_text_message(plugin->leader_node, "ping");
     /* we cannot send new txns to the current leader until the election is done */
     plugin->last_leader = plugin->leader_node;
     plugin->leader_node = NULL;
@@ -326,7 +310,7 @@ SQLITE_PRIVATE void on_new_election_request(
     int64 last_block = plugin->current_block ? plugin->current_block->height : 0;
     SYNCTRACE("this node's last block height: %" INT64_FORMAT "\n", last_block);
     sprintf(message, "last_block:%lld:%d", last_block, plugin->node_id);
-    send_broadcast_message(plugin, message);
+    send_tcp_broadcast(plugin, message);
   }
 
 }
@@ -336,9 +320,7 @@ SQLITE_PRIVATE void on_new_election_request(
 /* "pong": a response message from the current leader */
 SQLITE_PRIVATE void on_leader_ping_response(
   plugin *plugin,
-  uv_udp_t *socket,
-  const struct sockaddr *addr,
-  char *sender,
+  node *node,
   char *arg
 ){
 
@@ -348,7 +330,7 @@ SQLITE_PRIVATE void on_leader_ping_response(
     char message[32];
     SYNCTRACE("the current leader answered\n");
     sprintf(message, "leader:%d", plugin->last_leader->id);
-    send_broadcast_message(plugin, message);
+    send_tcp_broadcast(plugin, message);
     uv_timer_stop(&plugin->election_info_timer);
   }
 
@@ -359,17 +341,14 @@ SQLITE_PRIVATE void on_leader_ping_response(
 /* "last_block": a response message informing the height of the last block on the peer's blockchain */
 SQLITE_PRIVATE void on_requested_last_block(
   plugin *plugin,
-  uv_udp_t *socket,
-  const struct sockaddr *addr,
-  char *sender,
+  node *node,
   char *arg
 ){
-  node *node;
   int node_id=0;
   int last_block=0;
   char *pid, *pnum;
 
-  check_peer_connection(plugin, sender, get_sockaddr_port(addr));
+  //check_peer_connection(plugin, sender, get_sockaddr_port(addr));
 
   pnum = arg;
   pid = stripchr(pnum, ':');
@@ -378,11 +357,7 @@ SQLITE_PRIVATE void on_requested_last_block(
 
   SYNCTRACE("node %d last block height: %d\n", node_id, last_block);
 
-  for( node=plugin->peers; node; node=node->next ){
-    if( node->id==node_id ){
-      node->last_block = last_block;
-    }
-  }
+  node->last_block = last_block;
 
 }
 
@@ -391,15 +366,13 @@ SQLITE_PRIVATE void on_requested_last_block(
 /* "leader": a response message informing the peer leader */
 SQLITE_PRIVATE void on_requested_peer_leader(
   plugin *plugin,
-  uv_udp_t *socket,
-  const struct sockaddr *addr,
-  char *sender,
+  node *node,
   char *arg
 ){
   struct leader_votes *votes;
   int node_id=0;
 
-  check_peer_connection(plugin, sender, get_sockaddr_port(addr));
+  //check_peer_connection(plugin, sender, get_sockaddr_port(addr));
 
   node_id = atoi(arg);
 
@@ -433,14 +406,14 @@ SQLITE_PRIVATE void on_requested_peer_leader(
 SQLITE_PRIVATE void leader_election_init(){
 
   /* a broadcast message requesting the current leader */
-  register_udp_message("leader?", on_get_current_leader);
+  register_tcp_message("leader?", on_get_current_leader);
   /* a response message informing the peer leader */
-  register_udp_message("leader", on_requested_peer_leader);
+  register_tcp_message("leader", on_requested_peer_leader);
   /* a broadcast message requesting a leader election */
-  register_udp_message("election", on_new_election_request);
+  register_tcp_message("election", on_new_election_request);
   /* a response message informing the height of the last block on the peer's blockchain */
-  register_udp_message("last_block", on_requested_last_block);
+  register_tcp_message("last_block", on_requested_last_block);
   /* a response message from the current leader */
-  register_udp_message("pong", on_leader_ping_response);
+  register_tcp_message("pong", on_leader_ping_response);
 
 }

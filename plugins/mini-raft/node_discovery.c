@@ -70,7 +70,7 @@ SQLITE_PRIVATE void on_peer_list_received(node *node, void *msg, int size) {
 
   list = binn_map_list(msg, PLUGIN_PEERS);
 
-  SYNCTRACE("peer list received - count=%d\n", binn_count(list) / 2);
+  SYNCTRACE("peer list received - count=%d\n", binn_count(list));
 
   binn_list_foreach(list, item){
     char *host = binn_list_str(&item, 1);
@@ -92,10 +92,10 @@ SQLITE_PRIVATE void send_peer_list(plugin *plugin, node *to_node){
   if( !list ) return;
 
   for(node = plugin->peers; node; node = node->next){
-    if( node!=to_node ){
+    if( node!=to_node && node->bind_port>0 ){
       binn *item = binn_list();
       binn_list_add_str(item, node->host);
-      binn_list_add_int32(item, node->port);
+      binn_list_add_int32(item, node->bind_port);
       binn_list_add_list(list, item);
       binn_free(item);
     }
@@ -150,8 +150,7 @@ SQLITE_PRIVATE void start_node_discovery(plugin *plugin) {
 
   if( plugin->broadcast ){
     SYNCTRACE("start_node_discovery - broadcasting node discovery packets\n");
-    //send_broadcast_message(plugin, "whr?");
-    send_udp_broadcast(plugin, "whr?");
+    send_local_udp_broadcast(plugin, "whr?");
   }
 
   for(address = plugin->discovery; address; address = address->next){

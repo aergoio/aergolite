@@ -338,8 +338,10 @@ SQLITE_PRIVATE void on_new_node_identified(node *node, void *msg, int size) {
   aergolite *this_node = node->this_node;
 
   node->id = binn_map_int32(msg, PLUGIN_NODE_ID);
+  node->bind_port = binn_map_int32(msg, PLUGIN_PORT);
 
-  SYNCTRACE("remote node identified - node_id=%d\n", node->id);
+  SYNCTRACE("remote node identified - node_id=%d remote_bind_port=%d remote_port=%d\n",
+            node->id, node->bind_port, node->port);
 
   /* if the node id was not supplied */
   if( plugin->node_id==0 ){

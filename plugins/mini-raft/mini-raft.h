@@ -29,6 +29,8 @@
 #define PLUGIN_CMD_PING            0xcd06     /* check if alive */
 #define PLUGIN_CMD_PONG            0xcd07     /* I am alive */
 
+#define PLUGIN_TEXT                0xcd08     /* text message via TCP */
+
 
 #define PLUGIN_REQUEST_STATE_DIFF  0xdb01
 #define PLUGIN_UPTODATE            0xdb02
@@ -71,12 +73,13 @@
 #define PLUGIN_ERROR               0xc0de002  /*  */
 
 #define PLUGIN_NODE_ID             0xc0de003  /*  */
+#define PLUGIN_PORT                0xc0de004  /*  */
 
-#define PLUGIN_SEQ                 0xc0de004  /*  */
-#define PLUGIN_TID                 0xc0de005  /*  */
-#define PLUGIN_NONCE               0xc0de006  /*  */
-#define PLUGIN_SQL_CMDS            0xc0de007  /*  */
-//#define PLUGIN_HASH                0xc0de008  /*  */
+#define PLUGIN_SEQ                 0xc0de005  /*  */
+#define PLUGIN_TID                 0xc0de006  /*  */
+#define PLUGIN_NONCE               0xc0de007  /*  */
+#define PLUGIN_SQL_CMDS            0xc0de008  /*  */
+//#define PLUGIN_HASH                0xc0de009  /*  */
 
 
 //#define BLOCK_HEIGHT    0x34
@@ -174,6 +177,7 @@ struct node {
   int   conn_type;       /* outgoing or incoming connection */
   char  host[64];        /* Remode IP address */
   int   port;            /* Remote port */
+  int   bind_port;       /* Remote bind port. Used on incoming TCP connections */
 
   uv_msg_t socket;       /* Socket used to connect with the other peer */
   int   conn_state;      /* The state of this connection/peer */
@@ -265,8 +269,13 @@ struct plugin {
 
 SQLITE_PRIVATE int is_local_ip_address(char *address);
 
-SQLITE_PRIVATE int send_broadcast_message(plugin *plugin, char *message);
+SQLITE_PRIVATE int send_tcp_broadcast(plugin *plugin, char *message);
+SQLITE_PRIVATE int send_udp_broadcast(plugin *plugin, char *message);
 SQLITE_PRIVATE int send_udp_message(plugin *plugin, const struct sockaddr *address, char *message);
+
+SQLITE_PRIVATE void on_text_command_received(node *node, char *message);
+
+/* leader checking and election */
 
 SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle);
 
@@ -314,6 +323,17 @@ struct udp_message {
 };
 
 SQLITE_PRIVATE void register_udp_message(char *name, udp_message_callback callback);
+
+/* TCP text messages */
+
+typedef void (*tcp_message_callback)(plugin *plugin, node *node, char *arg);
+
+struct tcp_message {
+  char name[32];
+  tcp_message_callback callback;
+};
+
+SQLITE_PRIVATE void register_tcp_message(char *name, tcp_message_callback callback);
 
 /* node discovery */
 

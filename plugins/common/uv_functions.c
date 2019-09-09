@@ -325,6 +325,28 @@ loc_binn_failed:
 
 /****************************************************************************/
 
+SQLITE_PRIVATE BOOL send_text_message(node *node, char *message) {
+  BOOL result=FALSE;
+  binn *map;
+
+  if ((map = binn_map()) == NULL) goto loc_binn_failed;
+  if (binn_map_set_uint32(map, PLUGIN_CMD, PLUGIN_TEXT) == FALSE) goto loc_binn_failed;
+  if (binn_map_set_str(map, PLUGIN_TEXT, message) == FALSE) goto loc_binn_failed;
+
+  result = send_peer_message(node, map, NULL);
+
+loc_exit:
+  if (map) binn_free(map);
+  return result;
+
+loc_binn_failed:
+  sqlite3_log(SQLITE_ERROR, "binn failed: probably out of memory");
+  goto loc_exit;
+
+}
+
+/****************************************************************************/
+
 #ifdef NOT_BEING_USED
 SQLITE_PRIVATE BOOL send_response(node *node, int to_cmd, int cmd, unsigned int arg) {
   BOOL result=FALSE;
