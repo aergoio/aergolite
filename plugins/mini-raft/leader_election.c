@@ -39,8 +39,8 @@ SQLITE_PRIVATE void new_leader_election(plugin *plugin) {
   //! what if a (s)election is already taking place?
   clear_leader_votes(plugin);
 
-  uv_timer_start(&plugin->leader_check_timer, on_leader_check_timeout, 2000, 0);
-  uv_timer_start(&plugin->election_end_timer, on_election_period_timeout, 3000, 0);
+  uv_timer_start(&plugin->leader_check_timer, on_leader_check_timeout, 1000, 0);
+  uv_timer_start(&plugin->election_end_timer, on_election_period_timeout, 1500, 0);
 
   if( plugin->sync_down_state==DB_STATE_SYNCHRONIZING || plugin->sync_down_state==DB_STATE_IN_SYNC ){
     plugin->sync_down_state = DB_STATE_UNKNOWN;
@@ -170,7 +170,7 @@ SQLITE_PRIVATE void check_current_leader(plugin *plugin) {
 
   send_tcp_broadcast(plugin, "leader?");
 
-  uv_timer_start(&plugin->leader_check_timer, on_leader_check_timeout, 2000, 0);
+  uv_timer_start(&plugin->leader_check_timer, on_leader_check_timeout, 500, 0);
 
 }
 
@@ -305,7 +305,7 @@ SQLITE_PRIVATE void on_new_election_request(
   }
 
   new_leader_election(plugin);
-  uv_timer_start(&plugin->election_info_timer, election_info_timeout, 1000, 0);
+  uv_timer_start(&plugin->election_info_timer, election_info_timeout, 500, 0);
 
   {
     //send_broadcast_messagef(plugin, "last_block:%lld:%d", last_block, plugin->node_id);
