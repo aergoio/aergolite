@@ -1112,7 +1112,7 @@ SQLITE_PRIVATE void worker_thread_on_peer_message(uv_msg_t *stream, void *msg, i
     break;
 
   default:
-    SYNCTRACE("   unknown received message!\n");
+    SYNCTRACE("   ---> unknown received message!  cmd=0x%x  <---\n", cmd);
   }
 
 }

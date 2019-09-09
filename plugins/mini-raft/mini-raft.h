@@ -277,6 +277,8 @@ SQLITE_PRIVATE void on_text_command_received(node *node, char *message);
 
 /* leader checking and election */
 
+SQLITE_PRIVATE void on_new_election_request(plugin *plugin, node *node, char *arg);
+
 SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle);
 
 SQLITE_PRIVATE void check_current_leader(plugin *plugin);

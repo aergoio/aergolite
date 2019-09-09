@@ -264,10 +264,12 @@ loc_exit:
   return;
 
 loc_failed:
+  SYNCTRACE("on_apply_state_update - FAILED\n");
   plugin->sync_down_state = DB_STATE_ERROR;
   goto loc_exit;
 
 loc_failed2:
+  SYNCTRACE("on_apply_state_update - FAILED 2\n");
   /* force to reload the current state */
   discard_block(plugin->current_block);
   plugin->current_block = NULL;

@@ -57,6 +57,9 @@ SQLITE_PRIVATE void start_leader_election(plugin *plugin) {
 
   send_tcp_broadcast(plugin, "election");
 
+  /* as the broadcast does not include itself, call the function directly */
+  on_new_election_request(plugin, NULL, NULL);
+
 }
 
 /****************************************************************************/
