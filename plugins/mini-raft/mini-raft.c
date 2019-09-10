@@ -1591,6 +1591,7 @@ SQLITE_PRIVATE void node_thread(void *arg) {
     uv_tcp_t *server;
     //uv_udp_t *udp_sock;
     SYNCTRACE("peer connections - binding to address: %s:%d\n", address->host, address->port);
+
     if( uv_ip4_addr(address->host, address->port, (struct sockaddr_in *) &addr)!=0 ){
       if( uv_ip6_addr(address->host, address->port, (struct sockaddr_in6 *) &addr)!=0 ){
         sqlite3_log(SQLITE_ERROR, "worker thread: invalid address [%s:%d]", address->host, address->port);
@@ -1606,6 +1607,13 @@ SQLITE_PRIVATE void node_thread(void *arg) {
       sqlite3_log(SQLITE_ERROR, "worker thread: listen on TCP socket [%s:%d] failed: (%d) %s", address->host, address->port, rc, uv_strerror(rc));
       //sqlite3_free(server);
       goto loc_failed;
+    }
+
+    if( address->port==0 ){
+      int addrlen = sizeof(struct sockaddr_storage);
+      uv_tcp_getsockname(server, (struct sockaddr*) &addr, &addrlen);
+      address->port = get_sockaddr_port((struct sockaddr*) &addr);
+      SYNCTRACE("bound to port %d\n", address->port);
     }
 
     plugin->udp_sock = sqlite3_malloc_zero(sizeof(uv_udp_t));
@@ -1962,11 +1970,14 @@ void * plugin_init(aergolite *this_node, char *uri) {
   }else if( plugin->broadcast ){
     plugin->bind = sqlite3_memdup(plugin->broadcast, sizeof(struct tcp_address));
     if( plugin->bind ) plugin->bind->next = NULL;
-//  }else{
-//    ... bind to random port? does it need to update the number later? yes to check if local port... ?
+  }else{
+    /* bind to random port */
+    plugin->bind = sqlite3_malloc_zero(sizeof(struct tcp_address));
+    if( !plugin->bind ) goto loc_failed;
+    strcpy(plugin->bind->host, "0.0.0.0");
   }
   for (addr = plugin->bind; addr; addr = addr->next) {
-    SYNCTRACE("  bind address: 0.0.0.0:%d \n", addr->port);
+    SYNCTRACE("  bind address: %s:%d \n", addr->host, addr->port);
   }
 
 
