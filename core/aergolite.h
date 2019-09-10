@@ -199,6 +199,9 @@ SQLITE_PRIVATE int save_block(
 );
 
 
+SQLITE_PRIVATE int get_last_nonce_db(sqlite3 *db, int iDb, int64 *pnonce);
+SQLITE_PRIVATE char * get_transaction_status_db(sqlite3 *db, int iDb, int64 nonce);
+
 SQLITE_PRIVATE char * blockchain_status_json_db(sqlite3 *db, const char *name);
 SQLITE_PRIVATE char * blockchain_status_json(Pager *pPager);
 SQLITE_PRIVATE char * protocol_status_json_db(sqlite3 *db, const char *name, BOOL extended);
