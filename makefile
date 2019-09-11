@@ -66,7 +66,7 @@ endif
 LIBFLAGS := $(LIBFLAGS) $(CFLAGS) -DSQLITE_HAS_CODEC -DSQLITE_USE_URI=1 -DSQLITE_ENABLE_JSON1 -DSQLITE_THREADSAFE=1 -DHAVE_USLEEP -DHAVE_STDINT_H -DHAVE_INTTYPES_H -DSQLITE_ENABLE_COLUMN_METADATA
 
 
-.PHONY:  install debug test tests clean
+.PHONY:  install debug test test2 tests clean
 
 
 all:     $(LIBRARY) $(SSHELL)
@@ -153,7 +153,15 @@ endif
 clean:
 	rm -f *.o liblitesync.a liblitesync.dylib $(LIBRARY) $(LIBNICK1) $(LIBNICK2) $(LIBNICK3) $(LIBNICK4) $(SSHELL) tests
 
-test: test/test.py
+test: test/test.c
+	$(CC) $< -o test/$@ -L. -lsqlite3
+ifeq ($(OS),OSX)
+	cd test && DYLD_LIBRARY_PATH=..:/usr/local/lib ./$@
+else
+	cd test && LD_LIBRARY_PATH=..:/usr/local/lib ./$@
+endif
+
+test2: test/test.py
 ifeq ($(OS),Windows_NT)
 ifeq ($(PY_HOME),)
 	@echo "PY_HOME is not set"
