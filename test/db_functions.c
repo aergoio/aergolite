@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
-#include "sqlite3.h"
+#include "../core/sqlite3.h"
 #include "assert.h"
 
 #include <unistd.h>  /* for STDERR_FILENO */
@@ -276,7 +276,6 @@ int db_query(
   int rc;
 
   if( !sql ) sql = "";
-  SYNCTRACE("db_query - SQL: %s\n", sql);
 
   rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
   if( rc!=SQLITE_OK ) goto loc_exit;
@@ -319,8 +318,6 @@ int db_query_value(void **pvalue, int type, sqlite3 *db, const char *sql) {
   int rc, ncols, nrows=0;
 
   if( !sql ) sql = "";
-
-  SYNCTRACE("db_query_value - SQL: %s\n", sql);
 
   rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
   if( rc!=SQLITE_OK ) goto loc_exit;
