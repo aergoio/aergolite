@@ -4,8 +4,6 @@ The easiest way to deploy a blockchain for data storage on your app
 
 ---
 
-> This repository holds a proof-of-concept for testing purposes.
-
 AergoLite allow us to have a replicated SQLite database enforced by a private and lightweight blockchain.
 
 Each app has a local replica of the database.
@@ -122,6 +120,14 @@ make
 cd -
 ```
 
+## Automated Tests
+
+After compiling, you can run the automated tests with:
+
+```
+make test
+```
+
 ## Using
 
 The compiled library has support for both native SQLite database files and for SQLite databases with blockchain support, so the application can open native SQLite databases and ones with blockchain at the same time.
@@ -141,7 +147,7 @@ Here is an example using discovery via UDP on the local network. You can choose 
 All nodes from the same network must use the same node discovery method and the same UDP port.
 
 
-## Testing
+## Manual Testing
 
 You can test it using the SQLite shell.
 
