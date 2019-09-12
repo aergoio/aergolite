@@ -505,9 +505,9 @@ void unlinkf(char *base, ...){
 
 /****************************************************************************/
 
-int in_array(int item, int len, int list[]){
+bool in_array(int item, int len, int list[]){
   for(int i=0; i<len; i++){
-    if( list[i]==item ) return 1;
+    if( list[i]==item ) return true;
   }
-  return 0;
+  return false;
 }

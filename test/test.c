@@ -586,7 +586,6 @@ void test_reconnection(int n, bool bind_to_random_ports, int len, int list[]){
   /* reconnect the nodes */
 
   for(int i=0; i<len; i++){
-    char uri[256];
     int node = list[i];
     printf("reconnecting node %d\n", node);
     if( node==1 ){
@@ -594,6 +593,7 @@ void test_reconnection(int n, bool bind_to_random_ports, int len, int list[]){
     }else if( node==2 ){
       assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
     }else{
+      char uri[256];
       if( bind_to_random_ports ){
         sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302", node);
       }else{
