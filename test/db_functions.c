@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include "sqlite3.h"
 #include "assert.h"
@@ -500,4 +501,13 @@ void unlinkf(char *base, ...){
   vsnprintf(name, 128, base, ap);
   va_end(ap);
   unlink(name);
+}
+
+/****************************************************************************/
+
+int in_array(int item, int len, int list[]){
+  for(int i=0; i<len; i++){
+    if( list[i]==item ) return 1;
+  }
+  return 0;
 }

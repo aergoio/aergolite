@@ -228,11 +228,11 @@ void test_5_nodes(int bind_to_random_ports){
 
 /****************************************************************************/
 
-void test_n_nodes(int n, int bind_to_random_ports){
+void test_n_nodes(int n, bool bind_to_random_ports){
   sqlite3 *db[512];
   int rc, i, count, done;
 
-  printf("test_n_nodes(n=%d, random_ports=%d)...\n", n, bind_to_random_ports); fflush(stdout);
+  printf("test_n_nodes(nodes=%d, random_ports=%d)...", n, bind_to_random_ports); fflush(stdout);
 
   assert(n>2 && n<512);
 
@@ -412,11 +412,11 @@ void test_n_nodes(int n, int bind_to_random_ports){
 
 /****************************************************************************/
 
-void test_reconnection(int n, int bind_to_random_ports){
+void test_reconnection(int n, bool bind_to_random_ports, int len, int list[]){
   sqlite3 *db[512];
   int rc, i, count, done;
 
-  printf("test_reconnection(n=%d, random_ports=%d)...\n", n, bind_to_random_ports); fflush(stdout);
+  printf("test_reconnection(nodes=%d, disconnect=%d, random_ports=%d)...", n, len, bind_to_random_ports); fflush(stdout);
 
   assert(n>=5 && n<512);
 
@@ -513,15 +513,16 @@ void test_reconnection(int n, int bind_to_random_ports){
 
   /* disconnect some nodes */
 
-  puts("disconnecting...");
-
-  sqlite3_close(db[2]);
-  sqlite3_close(db[4]);
+  for(i=0; i<len; i++){
+    int node = list[i];
+    printf("disconnecting node %d\n", node);
+    sqlite3_close(db[node]);
+  }
 
 
   /* insert some data */
 
-  puts("inserting more data...");
+  puts("executing new transaction...");
 
   db_execute(db[3], "insert into t1 values ('aa3')");
   db_check_int(db[3], "PRAGMA last_nonce", 2);
@@ -529,7 +530,7 @@ void test_reconnection(int n, int bind_to_random_ports){
 
   /* wait until the transactions are processed in a new block */
 
-  printf("waiting new block"); fflush(stdout);
+  printf("waiting for new block"); fflush(stdout);
 
   done = 0;
   for(count=0; !done && count<200; count++){
@@ -548,7 +549,9 @@ void test_reconnection(int n, int bind_to_random_ports){
 
   /* check if the data was replicated to the other nodes */
 
-  for(i=5; i<=n; i++){
+  for(i=1; i<=n; i++){
+
+    if( in_array(i,len,list) ) continue;
 
     printf("checking node %d\n", i); fflush(stdout);
 
@@ -579,32 +582,32 @@ void test_reconnection(int n, int bind_to_random_ports){
 
   }
 
-  db_check_int(db[1], "select count(*) from t1", 3);
-  db_check_int(db[1], "select count(*) from t1 where name='aa1'", 1);
-  db_check_int(db[1], "select count(*) from t1 where name='aa2'", 1);
-  db_check_int(db[1], "select count(*) from t1 where name='aa3'", 1);
-
 
   /* reconnect the nodes */
 
-  puts("reconnecting...");
-
-  assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
-  {
+  for(int i=0; i<len; i++){
     char uri[256];
-    i = 4;
-    if( bind_to_random_ports ){
-      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302", i);
+    int node = list[i];
+    printf("reconnecting node %d\n", node);
+    if( node==1 ){
+      assert( sqlite3_open("file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302", &db[1])==SQLITE_OK );
+    }else if( node==2 ){
+      assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
     }else{
-      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302", i, 4300 + i);
+      if( bind_to_random_ports ){
+        sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302", node);
+      }else{
+        sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302", node, 4300 + node);
+      }
+      assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
     }
-    assert( sqlite3_open(uri, &db[i])==SQLITE_OK );
   }
 
 
   /* check if they are up-to-date */
 
-  for(i=2; i<=4; i+=2){
+  for(int j=0; j<len; j++){
+    int i = list[j];
 
     printf("checking node %d\n", i); fflush(stdout);
 
@@ -654,14 +657,16 @@ int main(){
   test_5_nodes(0);
 //  test_5_nodes(1);
 
-  test_n_nodes(10, 1);
+  test_n_nodes(10, true);
 
-//  test_n_nodes(25, 0);
-  test_n_nodes(25, 1);
-//  test_n_nodes(50, 1);  -- not working. failing at node 26-28 - it can be related to majority... either election or commit
-//  test_n_nodes(100, 1);
+//  test_n_nodes(25, false);
+  test_n_nodes(25, true);
+//  test_n_nodes(50, true);  -- not working. failing at node 26-28 - it can be related to majority... either election or commit
+//  test_n_nodes(100, true);
 
-  test_reconnection(10, 0);  // sometimes fail on block generation after the nodes were disconnected
+  // sometimes fail on block generation after the nodes were disconnected
+  test_reconnection(10, false, 3, (int[]){2,4,10});
+  test_reconnection(25, false, 7, (int[]){2,4,10,15,18,21,24});
 
   puts("OK. All tests pass!"); return 0;
 }
