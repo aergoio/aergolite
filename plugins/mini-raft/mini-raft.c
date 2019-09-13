@@ -334,7 +334,7 @@ SQLITE_PRIVATE void check_base_db(plugin *plugin) {
   /* start the db synchronization */
 //  start_downstream_db_sync(plugin);
 
-  check_current_leader(plugin);
+//  check_current_leader(plugin);
 
 }
 
@@ -1628,7 +1628,6 @@ SQLITE_PRIVATE void node_thread(void *arg) {
   uv_timer_init(&loop, &plugin->after_connections_timer);
   uv_timer_init(&loop, &plugin->leader_check_timer);
   uv_timer_init(&loop, &plugin->election_info_timer);
-  uv_timer_init(&loop, &plugin->election_end_timer);
   uv_timer_init(&loop, &plugin->reconnect_timer);
 
   uv_timer_init(&loop, &plugin->process_transactions_timer);

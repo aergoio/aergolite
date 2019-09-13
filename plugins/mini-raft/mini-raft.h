@@ -228,6 +228,7 @@ struct plugin {
   node *leader_node;          /* Points to the leader node if it is connected */
   node *last_leader;          /* Points to the previous leader node */
   struct leader_votes *leader_votes;
+  BOOL in_leader_query;       /* True if in a leader query */
   BOOL in_election;           /* True if in a leader election */
 
   struct transaction *mempool;
@@ -251,7 +252,6 @@ struct plugin {
 
   uv_timer_t leader_check_timer;
   uv_timer_t election_info_timer;
-  uv_timer_t election_end_timer;
 
   uv_timer_t process_transactions_timer;
   uv_timer_t new_block_timer;

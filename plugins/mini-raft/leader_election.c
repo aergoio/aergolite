@@ -14,8 +14,7 @@ SQLITE_PRIVATE void clear_leader_votes(plugin *plugin) {
 
 /****************************************************************************/
 
-SQLITE_PRIVATE void on_election_period_timeout(uv_timer_t* handle) {
-  plugin *plugin = (struct plugin *) handle->loop->data;
+SQLITE_PRIVATE void exit_election(plugin *plugin) {
 
   plugin->in_election = FALSE;
   clear_leader_votes(plugin);
@@ -32,15 +31,17 @@ SQLITE_PRIVATE void new_leader_election(plugin *plugin) {
 
   if( plugin->in_election ) return;
   plugin->in_election = TRUE;
+  plugin->in_leader_query = FALSE;
 
   plugin->leader_node = NULL;
   plugin->is_leader = FALSE;
 
+  update_known_nodes(plugin);
+
   //! what if a (s)election is already taking place?
   clear_leader_votes(plugin);
 
-  uv_timer_start(&plugin->leader_check_timer, on_leader_check_timeout, 1000, 0);
-  uv_timer_start(&plugin->election_end_timer, on_election_period_timeout, 1500, 0);
+  uv_timer_start(&plugin->leader_check_timer, on_leader_check_timeout, 3000, 0);
 
   if( plugin->sync_down_state==DB_STATE_SYNCHRONIZING || plugin->sync_down_state==DB_STATE_IN_SYNC ){
     plugin->sync_down_state = DB_STATE_UNKNOWN;
@@ -72,10 +73,6 @@ SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle) {
 
   SYNCTRACE("on_leader_check_timeout\n");
 
-  //if( plugin->total_known_nodes==0 ){  //! maybe this can be reactivated later when using the nodes table
-    update_known_nodes(plugin);
-  //}
-
   for( votes=plugin->leader_votes; votes; votes=votes->next ){
     if( votes->count >= majority(plugin->total_known_nodes) ){
       leader_id = votes->id;
@@ -87,7 +84,7 @@ SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle) {
     if( leader_id==0 ){
       SYNCTRACE("on_leader_check_timeout: no current leader\n");
       start_leader_election(plugin);
-      goto loc_exit;
+      return;
     }else{
       /* check if some node has a different leader */
       for( votes=plugin->leader_votes; votes; votes=votes->next ){
@@ -95,7 +92,7 @@ SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle) {
           SYNCTRACE("on_leader_check_timeout: some node(s) with a different leader\n");
           /* start a leader election to make all nodes have the same leader */
           start_leader_election(plugin);
-          goto loc_exit;
+          return;
         }
       }
     }
@@ -115,7 +112,16 @@ SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle) {
     }
 #endif
     //start_leader_election(plugin);  -- it can start a new election within a timeout
-    goto loc_exit;
+    exit_election(plugin);
+    check_current_leader(plugin);
+    return;
+  }
+
+
+  if( plugin->in_election ){
+    exit_election(plugin);
+  }else{
+    plugin->in_leader_query = FALSE;
   }
 
 
@@ -141,8 +147,6 @@ SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle) {
 
   }else if( plugin->is_leader ){
     SYNCTRACE("on_leader_check_timeout: this node is the current leader\n");
-
-    //update_known_nodes(plugin);
 
     //leader_node_process_local_transactions(plugin);
 
@@ -171,22 +175,33 @@ SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle) {
   SYNCTRACE("starting the process local transactions timer\n");
   uv_timer_start(&plugin->process_transactions_timer, process_transactions_timer_cb, 500, 500);
 
-loc_exit:
-  clear_leader_votes(plugin);
-
 }
 
 /****************************************************************************/
 
 SQLITE_PRIVATE void check_current_leader(plugin *plugin) {
+  node *node;
+  int count;
 
+  update_known_nodes(plugin);
+
+  count = 1;  /* this node */
+  for( node=plugin->peers; node; node=node->next ){
+    if( node->id!=0 ) count++;
+  }
+  if( count<majority(plugin->total_known_nodes) ) return;
+
+  /* start a leader query */
+
+  plugin->in_leader_query = TRUE;
   plugin->leader_node = NULL;
+  plugin->is_leader = FALSE;
 
   clear_leader_votes(plugin);
 
   send_tcp_broadcast(plugin, "leader?");
 
-  uv_timer_start(&plugin->leader_check_timer, on_leader_check_timeout, 500, 0);
+  uv_timer_start(&plugin->leader_check_timer, on_leader_check_timeout, 5000, 0);
 
 }
 
@@ -286,6 +301,8 @@ SQLITE_PRIVATE void on_get_current_leader(
     leader_id = plugin->node_id;
   }else if( plugin->leader_node ){
     leader_id = plugin->leader_node->id;
+  }else if( plugin->in_election ){
+    leader_id = -1;
   }else{
     leader_id = 0;
   }
@@ -319,7 +336,7 @@ SQLITE_PRIVATE void on_new_election_request(
   }
 
   new_leader_election(plugin);
-  uv_timer_start(&plugin->election_info_timer, election_info_timeout, 500, 0);
+  uv_timer_start(&plugin->election_info_timer, election_info_timeout, 1000, 0);
 
   {
     //send_broadcast_messagef(plugin, "last_block:%lld:%d", last_block, plugin->node_id);
@@ -389,10 +406,17 @@ SQLITE_PRIVATE void on_requested_peer_leader(
   struct leader_votes *votes;
   int node_id=0;
 
+  if( !plugin->in_leader_query ) return;
   /* if an election was started in the middle of the inquiry, ignore the message */
   if( plugin->in_election ) return;
 
   node_id = atoi(arg);
+
+  /* if an election is taking place on other nodes, try to participate */
+  if( node_id==-1 ){
+    on_new_election_request(plugin, NULL, NULL);
+    return;
+  }
 
   for( votes=plugin->leader_votes; votes; votes=votes->next ){
     if( votes->id==node_id ){

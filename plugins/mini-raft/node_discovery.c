@@ -79,6 +79,10 @@ SQLITE_PRIVATE void on_peer_list_received(node *node, void *msg, int size) {
     check_peer_connection(plugin, host, port);
   }
 
+  if( !plugin->is_leader && !plugin->leader_node && !plugin->in_leader_query && !plugin->in_election ){
+    check_current_leader(plugin);
+  }
+
 }
 
 /****************************************************************************/

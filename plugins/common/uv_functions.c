@@ -394,7 +394,7 @@ SQLITE_PRIVATE int is_local_ip_address(char *address){
     if( rc ){
       rc = uv_ip6_name(&net_interface[i].address.address6, local, 16);
     }
-    SYNCTRACE("Local net_interface %d: %s\n", i, local);
+    //SYNCTRACE("Local net_interface %d: %s\n", i, local);
     if( strcmp(address,local)==0 ){
       ret = 1;
     }
