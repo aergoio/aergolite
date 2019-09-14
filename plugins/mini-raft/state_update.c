@@ -103,6 +103,8 @@ SQLITE_PRIVATE int load_current_state(plugin *plugin) {
             &block->header, &block->body, &block->signatures);
   if( rc ){
     sqlite3_free(block);
+    plugin->current_block = NULL;
+    plugin->sync_down_state = DB_STATE_ERROR;
     return rc;
   }
 
@@ -139,6 +141,8 @@ SQLITE_PRIVATE void request_state_update(plugin *plugin) {
     plugin->sync_down_state = DB_STATE_UNKNOWN;
     return;
   }
+
+  plugin->sync_down_state = DB_STATE_SYNCHRONIZING;
 
   map = binn_map();
   if( !map ) goto loc_failed;

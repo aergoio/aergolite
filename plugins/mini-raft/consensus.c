@@ -80,6 +80,54 @@ SQLITE_PRIVATE void on_requested_transaction_not_found(node *node, void *msg, in
 }
 
 /****************************************************************************/
+#if 0
+SQLITE_PRIVATE void request_block(plugin *plugin, int64 height){
+  binn *map;
+
+  SYNCTRACE("request_block - height=%" INT64_FORMAT "\n", height);
+  assert(height>0);
+
+  if( !plugin->leader_node ) return;
+
+  /* create request packet */
+  map = binn_map();
+  if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_GET_BLOCK)==FALSE ) goto loc_failed;
+  if( binn_map_set_int64(map, PLUGIN_HEIGHT, height)==FALSE ) goto loc_failed;
+
+  /* send the packet */
+  if( send_peer_message(plugin->leader_node, map, on_transaction_request_sent)==FALSE ) goto loc_failed;
+
+  binn_free(map);
+
+  return;
+loc_failed:
+  if( map ) binn_free(map);
+//  plugin->sync_down_state = DB_STATE_ERROR;
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void on_requested_block(node *node, void *msg, int size){
+  plugin *plugin = node->plugin;
+  int rc;
+
+  SYNCTRACE("on_requested_block\n");
+
+  if( plugin->sync_down_state!=DB_STATE_SYNCHRONIZING && plugin->sync_down_state!=DB_STATE_IN_SYNC ){
+    SYNCTRACE("--- FAILED: 'requested' block arrived while this node is not synchronizing\n");
+    return;
+  }
+
+  rc = store_new_block(node, msg, size);
+
+  if( rc==SQLITE_OK ){
+    apply_last_block(plugin);
+  }
+
+}
+#endif
+/****************************************************************************/
 
 // iterate the payload to check the transactions
 // download those that are not in the local mempool
@@ -225,12 +273,11 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
   SYNCTRACE("on_new_block - height=%" INT64_FORMAT "\n", height);
 
   /* if this node is not prepared to apply this block, do not acknowledge its receival */
-  if( plugin->current_block && height!=plugin->current_block->height+1 ){
-    if( plugin->current_block ){
-      SYNCTRACE("on_new_block FAILED plugin->current_block->height=%" INT64_FORMAT "\n", plugin->current_block->height);
-    }else{
-      SYNCTRACE("on_new_block FAILED plugin->current_block==NULL\n");
-    }
+  if( !plugin->current_block ){
+    SYNCTRACE("on_new_block plugin->current_block==NULL\n");
+  }else if( height!=plugin->current_block->height+1 ){
+    SYNCTRACE("on_new_block FAILED plugin->current_block->height=%" INT64_FORMAT "\n",
+              plugin->current_block->height);
     return;
   }
 
@@ -281,11 +328,17 @@ SQLITE_PRIVATE void on_commit_block(node *node, void *msg, int size) {
 
   /* check if we have some block to be committed */
   block = plugin->new_block;
-  if( !block ) return;
+  if( !block ){
+    /* the block is not on memory. request it */
+    //request_block(plugin, block->height);  //! if it fails, start a state update
+    request_state_update(plugin);
+    return;
+  }
 
   /* check if the local block is the expected one */
   if( block->height!=height ){
-    SYNCTRACE("on_commit_block - NOT FOUND\n");
+    SYNCTRACE("on_commit_block - unexpected block height - cached block height: %d\n", block->height);
+    request_state_update(plugin);
     return;
   }
 
@@ -312,6 +365,7 @@ SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
 
   if( plugin->mempool==NULL ) return NULL;
 
+  /* get the next block height */
   if( plugin->current_block ){
     block_height = plugin->current_block->height + 1;
   }else{
@@ -319,10 +373,11 @@ SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
     block_height = 1;
   }
 
+  /* allocate a new block object */
   block = sqlite3_malloc_zero(sizeof(struct block));
   if( !block ) return NULL;
 
-  /* start a db transaction */
+  /* start the block creation */
   rc = aergolite_begin_block(this_node);
   if( rc ) goto loc_failed;
 
@@ -337,6 +392,7 @@ SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
     }
   }
 
+  /* finalize the block creation */
   rc = aergolite_create_block(this_node, &block->height, &block->header, &block->body);
   if( rc ) goto loc_failed;
 
@@ -345,7 +401,7 @@ SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
 loc_failed:
 
   if( block ) sqlite3_free(block);
-  /* update the transactions on mempool */
+  /* reset the used transactions on mempool */
   for( txn=plugin->mempool; txn; txn=txn->next ){
     if( txn->block_height==block_height ) txn->block_height = 0;
   }
