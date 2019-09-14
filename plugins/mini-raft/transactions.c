@@ -312,7 +312,7 @@ SQLITE_PRIVATE int process_new_transaction(plugin *plugin, int node_id, int64 no
   for( txn=plugin->mempool; txn; txn=txn->next ){
     if( txn->id==tid ){
       SYNCTRACE("process_new_transaction - transaction already on mempool\n");
-      return SQLITE_EXISTS;
+      return SQLITE_OK;
     }
   }
   if( !txn ){
