@@ -148,6 +148,8 @@ SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle) {
   }else if( plugin->is_leader ){
     SYNCTRACE("on_leader_check_timeout: this node is the current leader\n");
 
+    plugin->sync_down_state = DB_STATE_IN_SYNC;
+
     //leader_node_process_local_transactions(plugin);
 
   }else{
