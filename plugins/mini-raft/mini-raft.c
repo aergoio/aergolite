@@ -265,6 +265,23 @@ SQLITE_PRIVATE void on_node_info_request(
 /***************************************************************************/
 /****************************************************************************/
 
+SQLITE_PRIVATE void reset_node_state(plugin *plugin){
+
+  if( plugin->sync_down_state==DB_STATE_SYNCHRONIZING || plugin->sync_down_state==DB_STATE_IN_SYNC ){
+    plugin->sync_down_state = DB_STATE_UNKNOWN;
+  }
+
+  //if( plugin->sync_up_state==DB_STATE_SYNCHRONIZING || plugin->sync_up_state==DB_STATE_IN_SYNC ){
+  //  plugin->sync_up_state = DB_STATE_UNKNOWN;
+  //}
+  if( plugin->sync_up_state==DB_STATE_SYNCHRONIZING ){
+    plugin->sync_up_state = DB_STATE_LOCAL_CHANGES;
+  }
+
+}
+
+/****************************************************************************/
+
 SQLITE_PRIVATE void discard_block(struct block *block) {
 
   SYNCTRACE("discard_block\n");

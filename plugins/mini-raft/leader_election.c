@@ -36,19 +36,14 @@ SQLITE_PRIVATE void new_leader_election(plugin *plugin) {
   plugin->leader_node = NULL;
   plugin->is_leader = FALSE;
 
+  reset_node_state(plugin);
+
   update_known_nodes(plugin);
 
   //! what if a (s)election is already taking place?
   clear_leader_votes(plugin);
 
   uv_timer_start(&plugin->leader_check_timer, on_leader_check_timeout, 3000, 0);
-
-  if( plugin->sync_down_state==DB_STATE_SYNCHRONIZING || plugin->sync_down_state==DB_STATE_IN_SYNC ){
-    plugin->sync_down_state = DB_STATE_UNKNOWN;
-  }
-  if( plugin->sync_up_state==DB_STATE_SYNCHRONIZING || plugin->sync_up_state==DB_STATE_IN_SYNC ){
-    plugin->sync_up_state = DB_STATE_UNKNOWN;
-  }
 
 }
 
@@ -162,12 +157,7 @@ SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle) {
 
     start_node_discovery(plugin);
 
-    if( plugin->sync_down_state==DB_STATE_SYNCHRONIZING || plugin->sync_down_state==DB_STATE_IN_SYNC ){
-      plugin->sync_down_state = DB_STATE_UNKNOWN;
-    }
-    if( plugin->sync_up_state==DB_STATE_SYNCHRONIZING || plugin->sync_up_state==DB_STATE_IN_SYNC ){
-      plugin->sync_up_state = DB_STATE_UNKNOWN;
-    }
+    reset_node_state(plugin);
 
     //plugin->leader_node = ...;  //! how to define it later?
 
@@ -184,6 +174,8 @@ SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle) {
 SQLITE_PRIVATE void check_current_leader(plugin *plugin) {
   node *node;
   int count;
+
+  reset_node_state(plugin);
 
   update_known_nodes(plugin);
 
