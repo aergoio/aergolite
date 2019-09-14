@@ -47,8 +47,8 @@ SQLITE_PRIVATE void on_requested_remote_transaction(node *node, void *msg, int s
 
   SYNCTRACE("on_requested_remote_transaction\n");
 
-  if( plugin->sync_down_state!=DB_STATE_SYNCHRONIZING ){
-    SYNCTRACE("--- FAILED: 'requested' remote transaction while this node is not synchronizing\n");
+  if( plugin->sync_down_state!=DB_STATE_SYNCHRONIZING && plugin->sync_down_state!=DB_STATE_IN_SYNC ){
+    SYNCTRACE("--- FAILED: 'requested' remote transaction arrived while this node is not synchronizing\n");
     return;
   }
 
@@ -97,6 +97,9 @@ SQLITE_PRIVATE int apply_last_block(plugin *plugin) {
   int rc;
 
   SYNCTRACE("apply_last_block\n");
+
+  /* if this node is in a state update, return */
+  if( plugin->sync_down_state!=DB_STATE_IN_SYNC ) return SQLITE_ERROR;
 
   block = plugin->new_block;
   if( !block ) return SQLITE_EMPTY;
@@ -174,6 +177,7 @@ SQLITE_PRIVATE int apply_last_block(plugin *plugin) {
   return SQLITE_OK;
 
 loc_failed:
+  SYNCTRACE("apply_last_block FAILED\n");
 // close connection?
 // or try again? use a timer?
   if( rc!=SQLITE_BUSY ){
@@ -220,9 +224,11 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
     return;
   }
 
+  /* allocate a new block structure */
   block = sqlite3_malloc_zero(sizeof(struct block));
   if( !block ) return;  // SQLITE_NOMEM;
 
+  /* store the new block data */
   block->height = height;
   block->header = sqlite3_memdup(header, binn_size(header));
   block->body   = sqlite3_memdup(body,   binn_size(body));
@@ -233,9 +239,11 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
     return;
   }
 
+  /* store the new block data */
   if( plugin->new_block ) discard_block(plugin->new_block);
   plugin->new_block = block;
 
+  /* inform the sender that this node acknowledged the block */
   map = binn_map();
   binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_NEW_BLOCK_ACK);
   binn_map_set_int64(map, PLUGIN_HEIGHT, block->height);
@@ -258,9 +266,14 @@ SQLITE_PRIVATE void on_commit_block(node *node, void *msg, int size) {
 
   SYNCTRACE("on_commit_block - height=%" INT64_FORMAT "\n", height);
 
+  /* if this node is in a state update, ignore the block commit command */
+  if( plugin->sync_down_state!=DB_STATE_IN_SYNC ) return;
+
+  /* check if we have some block to be committed */
   block = plugin->new_block;
   if( !block ) return;
 
+  /* check if the local block is the expected one */
   if( block->height!=height ){
     SYNCTRACE("on_commit_block - NOT FOUND\n");
     return;
