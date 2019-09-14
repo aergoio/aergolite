@@ -198,6 +198,7 @@ struct transaction {
   int64 nonce;
   int64 id;
   void *log;
+  int64 block_height;
 };
 
 struct block {

@@ -103,6 +103,7 @@ SQLITE_PRIVATE int apply_last_block(plugin *plugin) {
 
   block = plugin->new_block;
   if( !block ) return SQLITE_EMPTY;
+  assert(block->height>0);
 
   /* get the list of transactions ids */
   list = binn_map_list(block->body, BODY_TXN_IDS);  //  BLOCK_TRANSACTIONS);
@@ -159,10 +160,19 @@ SQLITE_PRIVATE int apply_last_block(plugin *plugin) {
   //rc = aergolite_apply_new_state(this_node, state->header, state->payload);
   if( rc ) goto loc_failed;
 
-  /* remove the used transactions from the mempool */
+  /* mark the used transactions on the mempool */
   binn_list_foreach(list, value) {
     for( txn=plugin->mempool; txn; txn=txn->next ){
       if( txn->id==value.vint64 ){
+        txn->block_height = block->height;
+      }
+    }
+  }
+
+  /* remove the old transactions from the mempool */
+  binn_list_foreach(list, value) {
+    for( txn=plugin->mempool; txn; txn=txn->next ){
+      if( txn->block_height <= block->height - 2 ){
         discard_mempool_transaction(plugin, txn);
         break;
       }
@@ -295,11 +305,19 @@ SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
   aergolite *this_node = plugin->this_node;
   struct transaction *txn;
   struct block *block;
+  int64 block_height;
   int rc;
 
   SYNCTRACE("create_new_block\n");
 
   if( plugin->mempool==NULL ) return NULL;
+
+  if( plugin->current_block ){
+    block_height = plugin->current_block->height + 1;
+  }else{
+    SYNCTRACE("create_new_block plugin->current_block==NULL\n");
+    block_height = 1;
+  }
 
   block = sqlite3_malloc_zero(sizeof(struct block));
   if( !block ) return NULL;
@@ -310,10 +328,13 @@ SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
 
   /* execute the transactions from the local mempool */
   for( txn=plugin->mempool; txn; txn=txn->next ){
-    /* include this transaction on the block */
-    aergolite_execute_transaction(this_node, txn->node_id, txn->nonce, txn->log);
-    /* no need to check the return result. if the execution failed or was rejected
-    ** the nonce will be included in the block as a failed transaction */
+    if( txn->block_height==0 ){
+      /* include this transaction on the block */
+      aergolite_execute_transaction(this_node, txn->node_id, txn->nonce, txn->log);
+      /* no need to check the return result. if the execution failed or was rejected
+      ** the nonce will be included in the block as a failed transaction */
+      txn->block_height = block_height;
+    }
   }
 
   rc = aergolite_create_block(this_node, &block->height, &block->header, &block->body);
@@ -324,6 +345,10 @@ SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
 loc_failed:
 
   if( block ) sqlite3_free(block);
+  /* update the transactions on mempool */
+  for( txn=plugin->mempool; txn; txn=txn->next ){
+    if( txn->block_height==block_height ) txn->block_height = 0;
+  }
   return NULL;
 
 #if 0
