@@ -457,6 +457,9 @@ SQLITE_PRIVATE void on_acknowledged_block(plugin *plugin, struct block *block) {
     return;
   }
 
+  /* mark that the commit command for this block was already sent */
+  block->commit_sent = TRUE;
+
   /* apply the new block on this node */
   apply_block(plugin, block);
 
@@ -483,6 +486,9 @@ SQLITE_PRIVATE void on_node_acknowledged_block(node *source_node, void *msg, int
     SYNCTRACE("on_node_acknowledged_block - NOT FOUND\n");
     return;
   }
+
+  /* if the commit command for this block was already sent */
+  if( block->commit_sent ) return;
 
   /* increment the number of nodes that acknowledged the block */
   block->ack_count++;

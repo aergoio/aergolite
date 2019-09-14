@@ -207,6 +207,7 @@ struct block {
   void *body;
   void *signatures;
   int  ack_count;
+  BOOL commit_sent;
   int  downloading_txns;
 };
 
