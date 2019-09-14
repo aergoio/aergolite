@@ -62,6 +62,25 @@ SQLITE_PRIVATE void on_requested_remote_transaction(node *node, void *msg, int s
 
 /****************************************************************************/
 
+SQLITE_PRIVATE void on_requested_transaction_not_found(node *node, void *msg, int size){
+  plugin *plugin = node->plugin;
+  int rc;
+
+  SYNCTRACE("on_requested_transaction_not_found\n");
+
+  if( plugin->sync_down_state!=DB_STATE_SYNCHRONIZING && plugin->sync_down_state!=DB_STATE_IN_SYNC ){
+    SYNCTRACE("--- FAILED: 'requested' remote transaction arrived while this node is not synchronizing\n");
+    return;
+  }
+
+  plugin->sync_down_state = DB_STATE_OUTDATED;
+
+  request_state_update(plugin);
+
+}
+
+/****************************************************************************/
+
 // iterate the payload to check the transactions
 // download those that are not in the local mempool
 // when they arrive, call fn to check if it can apply

@@ -369,65 +369,6 @@ SQLITE_PRIVATE void after_connections_timer_cb(uv_timer_t* handle){
 
 /****************************************************************************/
 /****************************************************************************/
-/****************************************************************************/
-
-#if 0
-
-// retrieve it from the mempool or, if not found, from the db (if full node)
-
-SQLITE_PRIVATE void on_get_transaction(node *node, void *msg, int size) {
-  plugin *plugin = node->plugin;
-  aergolite *this_node = node->this_node;
-  int64 tid, nonce;
-  binn *map;
-  void *log=0;
-  int rc, node_id;
-
-  tid = binn_map_int64(msg, PLUGIN_TID);
-
-  SYNCTRACE("on_get_transaction - request from node %d - tid=%" INT64_FORMAT "\n", node->id, tid);
-
-  map = binn_map();
-  if (!map) goto loc_failed;
-
-  /* check if it is in the mempool */
-  ...
-
-
-  /* load it from the database */
-  rc = aergolite_get_transaction(this_node, tid, &node_id, &nonce, &log);
-
-  switch( rc ){
-  case SQLITE_NOTFOUND: /* there is no record with the given prev_tid */
-    binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_LOG_NOTFOUND);
-    break;
-  case SQLITE_OK:
-    binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_REQUESTED_TRANSACTION);
-    binn_map_set_int64(map, PLUGIN_TID, tid);
-    binn_map_set_int32(map, PLUGIN_NODE_ID, node_id);
-    binn_map_set_int64(map, PLUGIN_NONCE, nonce);
-    binn_map_set_list (map, PLUGIN_SQL_CMDS, log);
-    sqlite3_free(log);
-    break;
-  default:
-    sqlite3_log(rc, "on_get_transaction: get_next_blockchain_txn failed");
-    goto loc_failed;
-  }
-
-  send_peer_message(node, map, on_data_sent);
-
-  return;
-
-loc_failed:
-
-  if (map) binn_free(map);
-
-}
-
-#endif
-
-/****************************************************************************/
-/****************************************************************************/
 
 /*
 ** On follower nodes this function exists for continuing the synchronization
@@ -1046,11 +987,11 @@ SQLITE_PRIVATE void worker_thread_on_peer_message(uv_msg_t *stream, void *msg, i
     on_in_sync_message(node, msg, size);
     break;
 
-/*
   case PLUGIN_TXN_NOTFOUND:
     SYNCTRACE("   received message: PLUGIN_TXN_NOTFOUND\n");
     on_requested_transaction_not_found(node, msg, size);
     break;
+/*
   case PLUGIN_BLOCK_NOTFOUND:
     SYNCTRACE("   received message: PLUGIN_BLOCK_NOTFOUND\n");
     on_requested_block_not_found(node, msg, size);
@@ -1092,11 +1033,11 @@ SQLITE_PRIVATE void worker_thread_on_peer_message(uv_msg_t *stream, void *msg, i
     SYNCTRACE("   received message: PLUGIN_REQUEST_STATE_DIFF\n");
     on_request_state_update(node, msg, size);
     break;
-/*
   case PLUGIN_GET_TRANSACTION:
     SYNCTRACE("   received message: PLUGIN_GET_TRANSACTION\n");
     on_get_transaction(node, msg, size);
     break;
+/*
   case PLUGIN_GET_BLOCK:
     SYNCTRACE("   received message: PLUGIN_GET_BLOCK\n");
     on_get_block(node, msg, size);

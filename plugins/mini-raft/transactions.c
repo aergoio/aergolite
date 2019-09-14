@@ -154,6 +154,70 @@ SQLITE_PRIVATE void on_transaction_failed_msg(node *node, void *msg, int size) {
 /*
 ** Used by the leader.
 */
+
+// retrieve it from the mempool or, if not found, from the db (if full node)
+
+SQLITE_PRIVATE void on_get_transaction(node *node, void *msg, int size) {
+  plugin *plugin = node->plugin;
+  aergolite *this_node = node->this_node;
+  struct transaction *txn, tx1={0};
+  int64 tid;
+  binn *map;
+  int rc;
+
+  tid = binn_map_int64(msg, PLUGIN_TID);
+
+  SYNCTRACE("on_get_transaction - request from node %d - tid=%" INT64_FORMAT "\n", node->id, tid);
+
+  map = binn_map();
+  if( !map ) goto loc_failed;
+
+  /* check if the transaction is in the mempool */
+  for( txn=plugin->mempool; txn; txn=txn->next ){
+    if( txn->id==tid ) break;
+  }
+
+  if( txn ){
+    rc = SQLITE_OK;
+  }else{
+    /* load it from the database */
+    //txn = &tx1;
+    //rc = aergolite_get_transaction(this_node, tid, &txn->node_id, &txn->nonce, &txn->log);
+    rc = SQLITE_NOTFOUND;
+  }
+
+  switch( rc ){
+  case SQLITE_NOTFOUND:
+    binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_TXN_NOTFOUND);
+    break;
+  case SQLITE_OK:
+    binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_REQUESTED_TRANSACTION);
+    //binn_map_set_int64(map, PLUGIN_TID, tid);
+    binn_map_set_int32(map, PLUGIN_NODE_ID, txn->node_id);
+    binn_map_set_int64(map, PLUGIN_NONCE, txn->nonce);
+    binn_map_set_list (map, PLUGIN_SQL_CMDS, txn->log);
+    if( txn==&tx1 ) sqlite3_free(txn->log);
+    break;
+  default:
+    sqlite3_log(rc, "on_get_transaction: aergolite_get_transaction failed");
+    goto loc_failed;
+  }
+
+  send_peer_message(node, map, NULL);  // on_local_transaction_sent);
+
+  return;
+
+loc_failed:
+
+  if (map) binn_free(map);
+
+}
+
+/****************************************************************************/
+
+/*
+** Used by the leader.
+*/
 SQLITE_PRIVATE int broadcast_transaction(plugin *plugin, struct transaction *txn) {
   struct node *node;
   binn *map;
