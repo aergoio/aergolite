@@ -12,17 +12,6 @@ typedef struct aergolite aergolite;
 typedef struct aergolite_plugin aergolite_plugin;
 
 
-struct transaction {
-  struct transaction *next;
-  int64 seq;
-  int node_id;
-  int64 tid;
-  void *log;
-  int64 prev_tid;
-  u8    hash[32];
-  int ack_count;              /* Number of nodes that acknowledged the sent transaction */
-};
-
 /*
 typedef struct blob blob;
 
@@ -95,8 +84,9 @@ struct aergolite {
   void *pages_hashes;         /* The list of pages hashes */
 
   int64 current_local_nonce;  /* the current transaction being logged in the wal-local */
-  int64 last_local_nonce;     /* last transaction in the wal-local file */
-  int64 last_processed_nonce; /* last transaction in the blockchain */
+  int64 last_local_nonce;     /* last transaction from this node, processed or not */
+  int64 max_active_nonce;     /* last transaction currently present in the wal-local file */
+  int64 last_processed_nonce; /* last processed transaction from this node */
   u32   last_sent_frame;      /* the WAL frame of the last sent transaction */
   int64 last_sent_nonce;      /* last transaction sent to the primary node */
 
