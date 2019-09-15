@@ -134,7 +134,7 @@ SQLITE_PRIVATE void on_requested_block(node *node, void *msg, int size){
 // when they arrive, call fn to check if it can apply
 // execute txns from the payload
 
-SQLITE_PRIVATE int apply_last_block(plugin *plugin) {
+SQLITE_PRIVATE int apply_block(plugin *plugin, struct block *block){
   aergolite *this_node = plugin->this_node;
   struct block *block;
   struct transaction *txn;
@@ -144,14 +144,15 @@ SQLITE_PRIVATE int apply_last_block(plugin *plugin) {
   void *list;
   int rc;
 
-  SYNCTRACE("apply_last_block\n");
+  SYNCTRACE("apply_block\n");
 
   /* if this node is in a state update, return */
   if( plugin->sync_down_state!=DB_STATE_IN_SYNC ) return SQLITE_ERROR;
 
-  block = plugin->new_block;
+  //block = plugin->new_block;
   if( !block ) return SQLITE_EMPTY;
   assert(block->height>0);
+  plugin->new_block = block;
 
   /* get the list of transactions ids */
   list = binn_map_list(block->body, BODY_TXN_IDS);  //  BLOCK_TRANSACTIONS);
@@ -248,11 +249,9 @@ loc_failed:
 
 /****************************************************************************/
 
-SQLITE_PRIVATE int apply_block(plugin *plugin, struct block *block){
+SQLITE_PRIVATE int apply_last_block(plugin *plugin) {
 
-  plugin->new_block = block;
-
-  return apply_last_block(plugin);
+  return apply_block(plugin, plugin->new_block);
 
 }
 
@@ -275,6 +274,7 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
   /* if this node is not prepared to apply this block, do not acknowledge its receival */
   if( !plugin->current_block ){
     SYNCTRACE("on_new_block plugin->current_block==NULL\n");
+    if( height!=1 ) return;
   }else if( height!=plugin->current_block->height+1 ){
     SYNCTRACE("on_new_block FAILED plugin->current_block->height=%" INT64_FORMAT "\n",
               plugin->current_block->height);

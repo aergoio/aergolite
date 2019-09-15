@@ -261,6 +261,10 @@ SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
   discard_block(plugin->current_block);
   plugin->current_block = block;
 
+  /* discard any new incoming block */
+  discard_block(plugin->new_block);
+  plugin->new_block = NULL;
+
   plugin->sync_down_state = DB_STATE_IN_SYNC;
 
 loc_exit:
