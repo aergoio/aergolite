@@ -2,6 +2,10 @@
 /*** LEADER ELECTION ********************************************************/
 /****************************************************************************/
 
+SQLITE_PRIVATE void start_current_leader_query(plugin *plugin);
+
+/****************************************************************************/
+
 SQLITE_PRIVATE void clear_leader_votes(plugin *plugin) {
 
   while( plugin->leader_votes ){
@@ -108,7 +112,7 @@ SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle) {
 #endif
     //start_leader_election(plugin);  -- it can start a new election within a timeout
     exit_election(plugin);
-    check_current_leader(plugin);
+    start_current_leader_query(plugin);
     return;
   }
 
@@ -171,9 +175,11 @@ SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle) {
 
 /****************************************************************************/
 
-SQLITE_PRIVATE void check_current_leader(plugin *plugin) {
+SQLITE_PRIVATE void start_current_leader_query(plugin *plugin) {
   node *node;
   int count;
+
+  SYNCTRACE("start_current_leader_query\n");
 
   reset_node_state(plugin);
 
@@ -196,6 +202,16 @@ SQLITE_PRIVATE void check_current_leader(plugin *plugin) {
   send_tcp_broadcast(plugin, "leader?");
 
   uv_timer_start(&plugin->leader_check_timer, on_leader_check_timeout, 5000, 0);
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void check_current_leader(plugin *plugin) {
+
+  if( !plugin->is_leader && !plugin->leader_node && !plugin->in_leader_query && !plugin->in_election ){
+    start_current_leader_query(plugin);
+  }
 
 }
 

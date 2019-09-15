@@ -80,6 +80,8 @@ SQLITE_PRIVATE void send_local_transactions(plugin *plugin) {
       SYNCTRACE("send_local_transactions - no leader node\n");
       plugin->sync_up_state = DB_STATE_LOCAL_CHANGES;
       aergolite_free_transaction(log);
+      /* if not already searching for a leader node, start it now */
+      check_current_leader(plugin);
       return;
     }
 

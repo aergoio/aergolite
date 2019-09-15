@@ -490,12 +490,8 @@ SQLITE_PRIVATE void on_node_disconnected(node *node) {
 
   if( node==plugin->leader_node ){
     plugin->leader_node = NULL;
-    plugin->sync_down_state = DB_STATE_UNKNOWN;
-    if( plugin->sync_up_state==DB_STATE_SYNCHRONIZING ){
-      plugin->sync_up_state = DB_STATE_LOCAL_CHANGES;
-    }
+    reset_node_state(plugin);
     uv_timer_stop(&plugin->process_transactions_timer);
-    uv_timer_stop(&plugin->new_block_timer);
     if( plugin->thread_active ){
       enable_reconnect_timer(plugin);
       //start_leader_election(plugin);
@@ -862,7 +858,7 @@ SQLITE_PRIVATE void enable_node_reconnect_timer(struct node *node) {
 }
 */
 
-#define leader_reconnect_interval 250
+#define leader_reconnect_interval 2000
 
 SQLITE_PRIVATE void enable_reconnect_timer(plugin *plugin) {
 
