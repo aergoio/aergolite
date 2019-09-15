@@ -89,6 +89,7 @@ struct aergolite {
   int64 last_processed_nonce; /* last processed transaction from this node */
   u32   last_sent_frame;      /* the WAL frame of the last sent transaction */
   int64 last_sent_nonce;      /* last transaction sent to the primary node */
+  int   wal_consensus_empty;  /* the state of the wal-consensus file */
 
   BOOL   useSqliteRowids;     /* do not use node id in the rowids */
 
@@ -126,6 +127,8 @@ SQLITE_PRIVATE void aergoliteDiscardLastCommand(sqlite3 *db);
 SQLITE_PRIVATE int  aergoliteStoreLastCommand(Pager *pPager);
 SQLITE_PRIVATE int  aergoliteStoreLogTransactionNonce(Pager *pPager);
 SQLITE_PRIVATE void aergoliteStoreLogTransactionTime(Pager *pPager);
+
+SQLITE_PRIVATE int  check_for_log_rotation(aergolite *this_node);
 
 SQLITE_PRIVATE sqlite_int64 aergoliteBuildRowId(int node_id, u32 seq_num);
 SQLITE_PRIVATE int  aergoliteNodeIdFromRowId(sqlite_int64 value);

@@ -360,7 +360,7 @@ SQLITE_PRIVATE void check_base_db(plugin *plugin) {
 #ifdef _WIN32
 #define PERIODIC_INTERVAL 1000
 #else
-#define PERIODIC_INTERVAL 3000
+#define PERIODIC_INTERVAL 1000
 #endif
 
 SQLITE_PRIVATE void aergolite_core_timer_cb(uv_timer_t* handle){
