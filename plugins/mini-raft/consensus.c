@@ -136,7 +136,6 @@ SQLITE_PRIVATE void on_requested_block(node *node, void *msg, int size){
 
 SQLITE_PRIVATE int apply_block(plugin *plugin, struct block *block){
   aergolite *this_node = plugin->this_node;
-  struct block *block;
   struct transaction *txn;
   BOOL all_present = TRUE;
   binn_iter iter;
