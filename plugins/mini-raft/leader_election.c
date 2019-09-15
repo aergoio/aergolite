@@ -47,7 +47,7 @@ SQLITE_PRIVATE void new_leader_election(plugin *plugin) {
   //! what if a (s)election is already taking place?
   clear_leader_votes(plugin);
 
-  uv_timer_start(&plugin->leader_check_timer, on_leader_check_timeout, 3000, 0);
+  uv_timer_start(&plugin->leader_check_timer, on_leader_check_timeout, 5000, 0);
 
 }
 
@@ -332,6 +332,7 @@ SQLITE_PRIVATE void on_new_election_request(
   node *node,
   char *arg
 ){
+  int interval;
 
   if( plugin->in_election ) return;
 
@@ -346,7 +347,11 @@ SQLITE_PRIVATE void on_new_election_request(
   }
 
   new_leader_election(plugin);
-  uv_timer_start(&plugin->election_info_timer, election_info_timeout, 1000, 0);
+
+  interval = 20 * plugin->total_known_nodes;
+  if( interval<500 ) interval = 500;
+  if( interval>3000 ) interval = 3000;
+  uv_timer_start(&plugin->election_info_timer, election_info_timeout, interval, 0);
 
   {
     //send_broadcast_messagef(plugin, "last_block:%lld:%d", last_block, plugin->node_id);
