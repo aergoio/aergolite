@@ -230,6 +230,7 @@ void test_5_nodes(int bind_to_random_ports){
 
 void test_n_nodes(int n, bool bind_to_random_ports){
   sqlite3 *db[512];
+  char uri[256];
   int rc, i, count, done;
 
   printf("test_n_nodes(nodes=%d, random_ports=%d)...", n, bind_to_random_ports); fflush(stdout);
@@ -242,15 +243,22 @@ void test_n_nodes(int n, bool bind_to_random_ports){
 
   /* open the connections to the databases */
 
+#if 0
   assert( sqlite3_open("file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302", &db[1])==SQLITE_OK );
   assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
+#endif
+
+  sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&num_nodes=%d", n);
+  assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
+
+  sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&num_nodes=%d", n);
+  assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
 
   for(i=3; i<=n; i++){
-    char uri[256];
     if( bind_to_random_ports ){
-      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302", i);
+      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&num_nodes=%d", i, n);
     }else{
-      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302", i, 4300 + i);
+      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&num_nodes=%d", i, 4300 + i, n);
     }
     //puts(uri);
     assert( sqlite3_open(uri, &db[i])==SQLITE_OK );
@@ -414,6 +422,7 @@ void test_n_nodes(int n, bool bind_to_random_ports){
 
 void test_reconnection(int n, bool bind_to_random_ports, int len, int list[]){
   sqlite3 *db[512];
+  char uri[256];
   int rc, i, count, done;
 
   printf("test_reconnection(nodes=%d, disconnect=%d, random_ports=%d)...", n, len, bind_to_random_ports); fflush(stdout);
@@ -426,15 +435,22 @@ void test_reconnection(int n, bool bind_to_random_ports, int len, int list[]){
 
   /* open the connections to the databases */
 
+#if 0
   assert( sqlite3_open("file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302", &db[1])==SQLITE_OK );
   assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
+#endif
+
+  sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&num_nodes=%d", n);
+  assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
+
+  sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&num_nodes=%d", n);
+  assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
 
   for(i=3; i<=n; i++){
-    char uri[256];
     if( bind_to_random_ports ){
-      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302", i);
+      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&num_nodes=%d", i, n);
     }else{
-      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302", i, 4300 + i);
+      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&num_nodes=%d", i, 4300 + i, n);
     }
     //puts(uri);
     assert( sqlite3_open(uri, &db[i])==SQLITE_OK );
@@ -589,15 +605,22 @@ void test_reconnection(int n, bool bind_to_random_ports, int len, int list[]){
     int node = list[i];
     printf("reconnecting node %d\n", node);
     if( node==1 ){
+#if 0
       assert( sqlite3_open("file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302", &db[1])==SQLITE_OK );
+#endif
+      sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&num_nodes=%d", n);
+      assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
     }else if( node==2 ){
+#if 0
       assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
+#endif
+      sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&num_nodes=%d", n);
+      assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
     }else{
-      char uri[256];
       if( bind_to_random_ports ){
-        sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302", node);
+        sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&num_nodes=%d", node, n);
       }else{
-        sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302", node, 4300 + node);
+        sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&num_nodes=%d", node, 4300 + node, n);
       }
       assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
     }
@@ -654,19 +677,17 @@ void test_reconnection(int n, bool bind_to_random_ports, int len, int list[]){
 
 int main(){
 
-  test_5_nodes(0);
+//  test_5_nodes(0);
 //  test_5_nodes(1);
 
-  test_n_nodes(10, true);
-
+//  test_n_nodes(10, true);
 //  test_n_nodes(25, false);
-  test_n_nodes(25, true);
-//  test_n_nodes(50, true);  -- not working. failing at node 26-28 - it can be related to majority... either election or commit
+  test_n_nodes(50, true);
 //  test_n_nodes(100, true);
 
-  // sometimes fail on block generation after the nodes were disconnected
   test_reconnection(10, false, 3, (int[]){2,4,10});
-  test_reconnection(25, false, 7, (int[]){2,4,10,15,18,21,24});
+//  test_reconnection(25, false, 7, (int[]){2,4,10,15,18,21,24});
+  test_reconnection(50, false, 7, (int[]){2,4,10,15,18,21,24});
 
   puts("OK. All tests pass!"); return 0;
 }

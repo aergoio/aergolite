@@ -44,7 +44,7 @@ SQLITE_PRIVATE void update_known_nodes(plugin *plugin) {
   SYNCTRACE("update_known_nodes\n");
 
   /* check if nodes already exist in the list of known nodes */
-
+#if 0
   plugin->total_known_nodes = 1; // this node
 
   //add_known_node(plugin, plugin->node_id);
@@ -53,6 +53,7 @@ SQLITE_PRIVATE void update_known_nodes(plugin *plugin) {
     //add_known_node(plugin, node->id);
     plugin->total_known_nodes++;
   }
+#endif
 
   /* the leader must know the number of total known nodes, including those that are off-line */
 //  aergolite_queue_db_query_int32(this_node, &plugin->total_known_nodes, "SELECT count(*) FROM aergolite_allowed_nodes");

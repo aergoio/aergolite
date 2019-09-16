@@ -1893,6 +1893,17 @@ void * plugin_init(aergolite *this_node, char *uri) {
   plugin->is_leader = FALSE;
 
 
+  /* temporary: get the total number of nodes from the uri */
+  {
+    char *num_nodes = (char*) sqlite3_uri_parameter(uri, "num_nodes");
+    if( !num_nodes ){
+      sqlite3_log(SQLITE_MISUSE, "total number of nodes not informed");
+      return NULL;
+    }
+    plugin->total_known_nodes = atoi(num_nodes);
+  }
+
+
   /* parse the node discovery parameter */
 
   discovery = (char*) sqlite3_uri_parameter(uri, "discovery");
