@@ -56,8 +56,8 @@ buildit()
     #make install
 
     mkdir -p $pwd/ios/$target
-    mv liblitesync.a $pwd/ios/$target
-    mv liblitesync.dylib $pwd/ios/$target
+    mv libaergolite.a $pwd/ios/$target
+    mv libaergolite.dylib $pwd/ios/$target
 }
 
 cp ../binn/ios/libbinn.a .
@@ -78,23 +78,23 @@ buildit i386 iPhoneSimulator
 buildit x86_64 iPhoneSimulator
 
 LIPO=$(xcrun -sdk iphoneos -find lipo)
-$LIPO -create $pwd/ios/armv7/liblitesync.a  $pwd/ios/armv7s/liblitesync.a $pwd/ios/arm64/liblitesync.a $pwd/ios/x86_64/liblitesync.a $pwd/ios/i386/liblitesync.a -output liblitesync.a
-$LIPO -create $pwd/ios/armv7/liblitesync.dylib  $pwd/ios/armv7s/liblitesync.dylib $pwd/ios/arm64/liblitesync.dylib $pwd/ios/x86_64/liblitesync.dylib $pwd/ios/i386/liblitesync.dylib -output liblitesync.dylib
+$LIPO -create $pwd/ios/armv7/libaergolite.a  $pwd/ios/armv7s/libaergolite.a $pwd/ios/arm64/libaergolite.a $pwd/ios/x86_64/libaergolite.a $pwd/ios/i386/libaergolite.a -output libaergolite.a
+$LIPO -create $pwd/ios/armv7/libaergolite.dylib  $pwd/ios/armv7s/libaergolite.dylib $pwd/ios/arm64/libaergolite.dylib $pwd/ios/x86_64/libaergolite.dylib $pwd/ios/i386/libaergolite.dylib -output libaergolite.dylib
 
 #install_name_tool -id @rpath/libuv.dylib libuv.dylib
 #install_name_tool -id @rpath/libbinn.dylib libbinn.dylib
-#install_name_tool -id @rpath/liblitesync.dylib liblitesync.dylib
-#install_name_tool -change libuv.dylib @rpath/libuv.dylib liblitesync.dylib
-#install_name_tool -change libbinn.dylib @rpath/libbinn.dylib liblitesync.dylib
+#install_name_tool -id @rpath/libaergolite.dylib libaergolite.dylib
+#install_name_tool -change libuv.dylib @rpath/libuv.dylib libaergolite.dylib
+#install_name_tool -change libbinn.dylib @rpath/libbinn.dylib libaergolite.dylib
 
-install_name_tool -id @rpath/liblitesync.dylib liblitesync.dylib
+install_name_tool -id @rpath/libaergolite.dylib libaergolite.dylib
 
 cp libbinn.a $pwd/ios/
 cp libbinn.dylib $pwd/ios/
 cp libuv.a $pwd/ios/
 cp libuv.1.dylib libuv.dylib $pwd/ios/
-cp liblitesync.a $pwd/ios/
-cp liblitesync.dylib $pwd/ios/
+cp libaergolite.a $pwd/ios/
+cp libaergolite.dylib $pwd/ios/
 make clean
 
 echo "done."

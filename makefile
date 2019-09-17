@@ -7,21 +7,21 @@
 ifeq ($(OS),Windows_NT)
     CFLAGS   = -I../libuv/include -I../binn/src
     LFLAGS   = -L../libuv/Release -L../binn/src/win32/Release
-    IMPLIB   = litesync-0.1
-    LIBRARY  = litesync-0.1.dll
+    IMPLIB   = aergolite-0.1
+    LIBRARY  = aergolite-0.1.dll
     LDFLAGS  += -static-libgcc -static-libstdc++
 else ifeq ($(PLATFORM),iPhoneOS)
-    LIBRARY = liblitesync.dylib
+    LIBRARY = libaergolite.dylib
     CFLAGS += -fPIC
 else ifeq ($(PLATFORM),iPhoneSimulator)
-    LIBRARY = liblitesync.dylib
+    LIBRARY = libaergolite.dylib
     CFLAGS += -fPIC
 else
     UNAME_S := $(shell uname -s)
     ifeq ($(UNAME_S),Darwin)
         OS = OSX
-        LIBRARY  = liblitesync.0.dylib
-        LIBNICK1 = liblitesync.dylib
+        LIBRARY  = libaergolite.0.dylib
+        LIBNICK1 = libaergolite.dylib
         LIBNICK2 = libsqlite3.0.dylib
         LIBNICK3 = libsqlite3.dylib
         INSTNAME = $(LIBPATH2)/libsqlite3.dylib
@@ -29,17 +29,17 @@ else
         COMPAT_VERSION = 1.0.0
         prefix  ?= /usr/local
     else
-#        IMPLIB   = litesync
-        LIBRARY  = liblitesync.so.0.0.1
-        LIBNICK1 = liblitesync.so.0
-        LIBNICK2 = liblitesync.so
+#        IMPLIB   = aergolite
+        LIBRARY  = libaergolite.so.0.0.1
+        LIBNICK1 = libaergolite.so.0
+        LIBNICK2 = libaergolite.so
         LIBNICK3 = libsqlite3.so.0
         LIBNICK4 = libsqlite3.so
         SONAME   = libsqlite3.so.0
         prefix  ?= /usr
     endif
     LIBPATH  = $(prefix)/lib
-    LIBPATH2 = $(prefix)/lib/litesync
+    LIBPATH2 = $(prefix)/lib/aergolite
     INCPATH  = $(prefix)/include
     EXEPATH  = $(prefix)/bin
    #LIBFLAGS += -fPIC $(CFLAGS)
@@ -75,8 +75,8 @@ debug:    $(LIBRARY) $(SSHELL)
 
 valgrind: $(LIBRARY)
 
-ios:      liblitesync.a liblitesync.dylib
-iostest:  liblitesync.a liblitesync.dylib
+ios:      libaergolite.a libaergolite.dylib
+iostest:  libaergolite.a libaergolite.dylib
 
 debug:    export LIBFLAGS := -g -DSQLITE_DEBUG=1 -DDEBUGPRINT=1 $(DEBUGFLAGS) $(LIBFLAGS)
 
@@ -85,7 +85,7 @@ valgrind: export LIBFLAGS := -g -DSQLITE_DEBUG=1 $(DEBUGFLAGS) $(LIBFLAGS)
 
 OBJECTS = sqlite3.o plugin-mini-raft.o
 
-litesync-0.1.dll: $(OBJECTS)
+aergolite-0.1.dll: $(OBJECTS)
 	$(CC) -shared -Wl,--out-implib,$(IMPLIB).lib $^ -o $@ $(LFLAGS) -lbinn-1.0 -llibuv -lws2_32
 ifeq ($(MAKECMDGOALS),valgrind)
 else ifeq ($(MAKECMDGOALS),debug)
@@ -93,7 +93,7 @@ else
 	$(STRIP) $@
 endif
 
-liblitesync.0.dylib: $(OBJECTS)
+libaergolite.0.dylib: $(OBJECTS)
 	$(CC) -dynamiclib -install_name "$(INSTNAME)" -current_version $(CURR_VERSION) -compatibility_version $(COMPAT_VERSION) $^ -o $@ $(LDFLAGS) -lbinn -luv
 ifeq ($(MAKECMDGOALS),valgrind)
 else ifeq ($(MAKECMDGOALS),debug)
@@ -105,10 +105,10 @@ endif
 	ln -sf $(LIBRARY) $(LIBNICK2)
 	ln -sf $(LIBRARY) $(LIBNICK3)
 
-liblitesync.a: $(OBJECTS)
+libaergolite.a: $(OBJECTS)
 	$(AR) rcs $@ $^
 
-liblitesync.dylib: $(OBJECTS)
+libaergolite.dylib: $(OBJECTS)
 	$(CC) -dynamiclib -o $@ $^ $(LDFLAGS) -lbinn -luv
 ifeq ($(MAKECMDGOALS),valgrind)
 else ifeq ($(MAKECMDGOALS),debug)
@@ -116,7 +116,7 @@ else
 	$(STRIP) -x $@
 endif
 
-liblitesync.so.0.0.1: $(OBJECTS)
+libaergolite.so.0.0.1: $(OBJECTS)
 	$(CC) -shared -Wl,-soname,$(SONAME) $^ -o $@ $(LDFLAGS) -lbinn -luv
 ifeq ($(MAKECMDGOALS),valgrind)
 else ifeq ($(MAKECMDGOALS),debug)
@@ -166,7 +166,7 @@ endif
 	cp $(SSHELL) $(EXEPATH)
 
 clean:
-	rm -f *.o liblitesync.a liblitesync.dylib $(LIBRARY) $(LIBNICK1) $(LIBNICK2) $(LIBNICK3) $(LIBNICK4) $(SSHELL) tests
+	rm -f *.o libaergolite.a libaergolite.dylib $(LIBRARY) $(LIBNICK1) $(LIBNICK2) $(LIBNICK3) $(LIBNICK4) $(SSHELL) tests
 
 test: test/test.c
 	$(CC) $< -o test/$@ -L. -lsqlite3

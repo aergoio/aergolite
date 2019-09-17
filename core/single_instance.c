@@ -11,7 +11,7 @@ static void calc_unique_name(char *dest, char *str) {
   crc1 = crc32(str, strlen(str));
   crc2 = crc32rev(str, strlen(str));
 
-  sprintf(dest, "litesync%x%x", crc1, crc2);
+  sprintf(dest, "aergolite%x%x", crc1, crc2);
 
 }
 
@@ -32,7 +32,7 @@ static void create_mutex_name(char *dest, char *str) {
 /*
 ** -> it must be up to 96 characters <-
 ** implemented with a fixed prefix + crc32 of the given str:
-**   /tmp/litesync12345678
+**   /tmp/aergolite12345678
 */
 static void create_unix_tempfile_name(char *dest, char *str) {
 
