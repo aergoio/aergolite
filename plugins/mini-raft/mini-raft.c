@@ -488,19 +488,21 @@ SQLITE_PRIVATE void on_node_disconnected(node *node) {
   SYNCTRACE("--- node disconnected: %s:%d leader=%s\n", node->host, node->port,
             node==plugin->leader_node?"yes":"no");
 
+  if( node==plugin->last_leader ){
+    plugin->last_leader = NULL;
+  }
+
   if( node==plugin->leader_node ){
     plugin->leader_node = NULL;
     reset_node_state(plugin);
     uv_timer_stop(&plugin->process_transactions_timer);
     if( plugin->thread_active ){
-      enable_reconnect_timer(plugin);
+      check_current_leader(plugin);
       //start_leader_election(plugin);
     }
   }
 
-  if( node==plugin->last_leader ){
-    plugin->last_leader = NULL;
-  }
+  //enable_reconnect_timer(plugin);
 
   // it can log, notify the app, reconnect
 
