@@ -158,6 +158,69 @@ void db_check_int_fn(sqlite3 *db, char *sql, int expected, const char *function,
 
 /****************************************************************************/
 
+void db_check_str_fn(sqlite3 *db, char *sql, char *expected, const char *function, int line){
+  sqlite3_stmt *stmt=0;
+  const char *zTail=0;
+  char *returned;
+  int rc;
+
+  do{
+
+    rc = sqlite3_prepare(db, sql, -1, &stmt, &zTail);
+    if( rc!=SQLITE_OK ){
+      print_error(rc, "sqlite3_prepare", sql, function, line);
+      QUIT_TEST();
+    }
+
+    rc = sqlite3_step(stmt);
+
+    if( zTail && zTail[0] ){
+
+      if( rc!=SQLITE_DONE ){
+        print_error(rc, "multi command returned a row", sql, function, line);
+        QUIT_TEST();
+      }
+
+      sql = (char*) zTail;
+
+    } else {
+
+      if( rc!=SQLITE_ROW ){
+        print_error(rc, "no row returned", sql, function, line);
+        QUIT_TEST();
+      }
+
+      if( sqlite3_column_count(stmt)!=1 ){
+        printf("\n\tFAIL: returned %d columns\n\tsql: %s\n\tfunction: %s\n\tline: %d\n", sqlite3_column_count(stmt), sql, function, line);
+        QUIT_TEST();
+      }
+
+      returned = (char*) sqlite3_column_text(stmt, 0);
+      if( strcmp(returned,expected)!=0 ){
+        printf("\n\tFAIL: expected='%s' returned='%s'\n\tsql: %s\n\tfunction: %s\n\tline: %d\n", expected, returned, sql, function, line);
+        QUIT_TEST();
+      }
+
+      rc = sqlite3_step(stmt);
+      if( rc!=SQLITE_DONE ){
+        printf("\n\tFAIL: additional row returned\n\tsql: %s\n\tfunction: %s\n\tline: %d\n", sql, function, line);
+        QUIT_TEST();
+      }
+
+      sql = NULL;
+
+    }
+
+    sqlite3_finalize(stmt);
+
+  } while( sql );
+
+}
+
+#define db_check_str(db,sql,expected) db_check_str_fn(db, sql, expected, __FUNCTION__, __LINE__)
+
+/****************************************************************************/
+
 void db_check_empty(sqlite3 *db, char *sql){
   sqlite3_stmt *stmt=0;
   const char *zTail=0;
