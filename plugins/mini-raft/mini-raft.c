@@ -1690,10 +1690,22 @@ SQLITE_API void plugin_end(void *arg){
   /* close the worker thread with all the connections */
   close_worker_thread(plugin);
 
+  clear_leader_votes(plugin);
+
+  while( plugin->mempool ){
+    discard_mempool_transaction(plugin, plugin->mempool);
+  }
+
   while( plugin->bind ){
     struct tcp_address *next = plugin->bind->next;
     sqlite3_free(plugin->bind);
     plugin->bind = next;
+  }
+
+  while( plugin->discovery ){
+    struct tcp_address *next = plugin->discovery->next;
+    sqlite3_free(plugin->discovery);
+    plugin->discovery = next;
   }
 
   discard_block(plugin->current_block);
