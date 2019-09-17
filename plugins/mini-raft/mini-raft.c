@@ -1696,6 +1696,9 @@ SQLITE_API void plugin_end(void *arg){
     plugin->bind = next;
   }
 
+  discard_block(plugin->current_block);
+  discard_block(plugin->new_block);
+
   sqlite3_free(plugin);
 
 }
