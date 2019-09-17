@@ -128,6 +128,13 @@ After compiling, you can run the automated tests with:
 make test
 ```
 
+Running the tests with Valgrind is also available:
+
+```
+make valgrind
+```
+
+
 ## Using
 
 The compiled library has support for both native SQLite database files and for SQLite databases with blockchain support, so the application can open native SQLite databases and ones with blockchain at the same time.
