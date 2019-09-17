@@ -568,6 +568,10 @@ void test_reconnection(
     db_check_int(db[i], "select count(*) from t1 where name='aa1'", 1);
     db_check_int(db[i], "select count(*) from t1 where name='aa2'", 1);
 
+    char sql[128];
+    sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[i]);
+    db_check_str(db[i], sql, "processed");
+
   }
 
 
@@ -693,10 +697,10 @@ void test_reconnection(
       last_nonce[node]++;
       db_check_int(db[node], "PRAGMA last_nonce", last_nonce[node]);
 
-      db_check_int(db[i], "select count(*) from t1", 2 + num_txns_on_offline_nodes);
-      db_check_int(db[i], "select count(*) from t1 where name='aa1'", 1);
-      db_check_int(db[i], "select count(*) from t1 where name='aa2'", 1);
-      db_check_int(db[i], "select count(*) from t1 where name='offline'", num_txns_on_offline_nodes);
+      //db_check_int(db[node], "select count(*) from t1", 2 + num_txns_on_offline_nodes);
+      //db_check_int(db[node], "select count(*) from t1 where name='aa1'", 1);
+      //db_check_int(db[node], "select count(*) from t1 where name='aa2'", 1);
+      //db_check_int(db[node], "select count(*) from t1 where name='offline'", num_txns_on_offline_nodes);
     }
 
     /* close the off-line nodes */
@@ -923,7 +927,16 @@ int main(){
     /* active_nodes_on_reconnect[] */ (int[]){0}
   );
 
-#if 0
+  test_reconnection(10, false,
+    /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
+    /* num_txns_on_offline_nodes,  */ 0,
+    /* active_offline_nodes[],     */ (int[]){0},
+    /* num_txns_on_online_nodes,   */ 3,
+    /* active_online_nodes[],      */ (int[]){3,8,0},
+    /* num_txns_on_reconnect,      */ 5,
+    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,0}
+  );
+
   test_reconnection(10, false,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
     /* num_txns_on_offline_nodes,  */ 3,
@@ -943,7 +956,6 @@ int main(){
     /* num_txns_on_reconnect,      */ 5,
     /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,0}
   );
-#endif
 
   puts("OK. All tests pass!"); return 0;
 }
