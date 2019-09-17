@@ -897,6 +897,9 @@ SQLITE_PRIVATE void worker_thread_on_close(uv_handle_t *handle) {
       }
       SYNCTRACE("socket closed - releasing node\n");
       llist_remove(&plugin->peers, node);
+      if( node->id_conflict ){
+        stop_id_conflict_timer(node->id_conflict);
+      }
       sqlite3_free(node);
 
       //enable_node_reconnect_timer(node); //! it can activate a timer when there is no more peers
