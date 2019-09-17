@@ -1975,6 +1975,9 @@ void * plugin_init(aergolite *this_node, char *uri) {
   SYNCTRACE("worker thread socket address: %s\n", plugin->worker_address);
 #endif
 
+  /* ignore SIGPIPE signals */
+  signal(SIGPIPE, SIG_IGN);
+
   /* start the worker thread */
   SYNCTRACE("starting worker thread\n");
   uv_thread_create(&plugin->worker_thread, node_thread, plugin);
