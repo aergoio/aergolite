@@ -170,6 +170,7 @@ clean:
 
 test: test/test.c
 	$(CC) $< -o test/$@ -L. -lsqlite3
+	ulimit -Sn 16000
 ifeq ($(OS),OSX)
 	cd test && DYLD_LIBRARY_PATH=..:/usr/local/lib ./$@
 else
@@ -178,6 +179,7 @@ endif
 
 valgrind: test/test.c
 	$(CC) $< -o test/$@ -L. -lsqlite3
+	ulimit -Sn 16000
 ifeq ($(OS),OSX)
 	cd test && DYLD_LIBRARY_PATH=..:/usr/local/lib valgrind --leak-check=full --show-leak-kinds=all ./test
 else
