@@ -27,6 +27,17 @@ void delete_files(int n){
 }
 
 /****************************************************************************/
+
+void print_nodes(char *title, int list[]){
+  printf("%s=%d  { ", title, len_array_list(list));
+  for(int i=0; list[i]; i++){
+    if( i>0 ) printf(", ");
+    printf("%d", list[i]);
+  }
+  puts(" }");
+}
+
+/****************************************************************************/
 /****************************************************************************/
 
 void test_5_nodes(int bind_to_random_ports){
@@ -420,12 +431,38 @@ void test_n_nodes(int n, bool bind_to_random_ports){
 
 /****************************************************************************/
 
-void test_reconnection(int n, bool bind_to_random_ports, int len, int list[]){
+void test_reconnection(
+  int n, bool bind_to_random_ports,
+  /* nodes that should be disconnected */
+  int disconnect_nodes[],
+  /* transactions executed on disconnected nodes while in split */
+  int num_txns_on_offline_nodes,
+  int active_offline_nodes[],
+  /* transactions executed on connected nodes while in split */
+  int num_txns_on_online_nodes,
+  int active_online_nodes[],
+  /* transactions executed after the nodes were reconnected and in sync */
+  int num_txns_on_reconnect,
+  int active_nodes_on_reconnect[]
+){
   sqlite3 *db[512];
   char uri[256];
-  int rc, i, count, done;
+  int rc, i, j, count, done;
+  int last_nonce[512];
 
-  printf("test_reconnection(nodes=%d, disconnect=%d, random_ports=%d)...", n, len, bind_to_random_ports); fflush(stdout);
+  printf("----------------------------------------------------------\n"
+         "test_reconnection(\n"
+         "  nodes=%d\n", n);
+  printf("  random_ports=%s\n", bind_to_random_ports ? "yes" : "no");
+  print_nodes("  disconnect_nodes", disconnect_nodes);
+  print_nodes("  active_offline_nodes", active_offline_nodes);
+  print_nodes("  active_online_nodes", active_online_nodes);
+  print_nodes("  active_nodes_on_reconnect", active_nodes_on_reconnect);
+  printf("  num_txns_on_offline_nodes=%d\n", num_txns_on_offline_nodes);
+  printf("  num_txns_on_online_nodes=%d\n", num_txns_on_online_nodes);
+  printf("  num_txns_on_reconnect=%d\n", num_txns_on_reconnect);
+  puts(")");
+  fflush(stdout);
 
   assert(n>=5 && n<512);
 
@@ -457,17 +494,31 @@ void test_reconnection(int n, bool bind_to_random_ports, int len, int list[]){
   }
 
 
+  /* set the initial nonce value for each node */
+
+  for(i=1; i<=n; i++){
+    last_nonce[i] = 1;
+  }
+
+  for(i=1; i<=n; i++){
+    db_check_int(db[i], "PRAGMA last_nonce", last_nonce[i]);
+  }
+
+
   /* execute 3 db transactions on one of the databases */
 
-  db_check_int(db[1], "PRAGMA last_nonce", 1);
+// (later or in other fn) configurable: if it does this now or after leader election, how many txns, by which node
 
   db_execute(db[1], "create table t1 (name)");
   db_execute(db[1], "insert into t1 values ('aa1')");
   db_execute(db[1], "insert into t1 values ('aa2')");
 
+  last_nonce[1] = 4;
+
   db_check_int(db[1], "PRAGMA last_nonce", 4);
-  db_check_int(db[2], "PRAGMA last_nonce", 1);
-  db_check_int(db[3], "PRAGMA last_nonce", 1);
+  for(i=1; i<=n; i++){
+    db_check_int(db[i], "PRAGMA last_nonce", last_nonce[i]);
+  }
 
 
   /* wait until the transactions are processed in a new block */
@@ -475,7 +526,7 @@ void test_reconnection(int n, bool bind_to_random_ports, int len, int list[]){
   done = 0;
   for(count=0; !done && count<100; count++){
     char *result;
-    usleep(wait_time); // 100 ms
+    usleep(wait_time);
     rc = db_query_str(&result, db[1], "PRAGMA transaction_status(4)");
     assert(rc==SQLITE_OK);
     done = (strcmp(result,"processed")==0);
@@ -489,7 +540,7 @@ void test_reconnection(int n, bool bind_to_random_ports, int len, int list[]){
 
   /* check if the data was replicated to the other nodes */
 
-  for(i=2; i<=n; i++){
+  for(i=1; i<=n; i++){
 
     printf("checking node %d\n", i); fflush(stdout);
 
@@ -520,100 +571,156 @@ void test_reconnection(int n, bool bind_to_random_ports, int len, int list[]){
   }
 
 
-  /* db1 */
-
-  db_check_int(db[1], "select count(*) from t1", 2);
-  db_check_int(db[1], "select count(*) from t1 where name='aa1'", 1);
-  db_check_int(db[1], "select count(*) from t1 where name='aa2'", 1);
-
-
   /* disconnect some nodes */
 
-  for(i=0; i<len; i++){
-    int node = list[i];
+  for(i=0; disconnect_nodes[i]; i++){
+    int node = disconnect_nodes[i];
     printf("disconnecting node %d\n", node);
     sqlite3_close(db[node]);
+    db[node] = 0;
   }
 
 
-  /* insert some data */
+  /* execute transactions on online nodes */
 
-  puts("executing new transaction...");
+  if( num_txns_on_online_nodes>0 ){
+    assert(len_array_list(active_online_nodes)>0);
 
-  db_execute(db[3], "insert into t1 values ('aa3')");
-  db_check_int(db[3], "PRAGMA last_nonce", 2);
+    puts("executing new transactions on online nodes...");
 
+    for(j=0, i=0; j<num_txns_on_online_nodes; j++, i++){
+      int node = active_online_nodes[i];
+      if( node==0 ){
+        i = 0;
+        node = active_online_nodes[i];
+      }
+      printf("executing on node %d\n", node);
 
-  /* wait until the transactions are processed in a new block */
+      db_execute(db[node], "insert into t1 values ('online')");
 
-  printf("waiting for new block"); fflush(stdout);
+      last_nonce[node]++;
+      db_check_int(db[node], "PRAGMA last_nonce", last_nonce[node]);
+    }
 
-  done = 0;
-  for(count=0; !done && count<200; count++){
-    char *result;
-    usleep(150000);
-    rc = db_query_str(&result, db[3], "PRAGMA transaction_status(2)");
-    assert(rc==SQLITE_OK);
-    done = (strcmp(result,"processed")==0);
-    sqlite3_free(result);
-    printf("."); fflush(stdout);
+    /* wait until the transactions are processed in a new block */
+
+    printf("waiting for new block"); fflush(stdout);
+
+    for(i=0; active_online_nodes[i]; i++){
+      int node = active_online_nodes[i];
+
+      done = 0;
+      for(count=0; !done && count<200; count++){
+        char *result, sql[128];
+        if( count>0 ) usleep(150000);
+        sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[node]);
+        rc = db_query_str(&result, db[node], sql);
+        assert(rc==SQLITE_OK);
+        done = (strcmp(result,"processed")==0);
+        sqlite3_free(result);
+        printf("."); fflush(stdout);
+      }
+      assert(done);
+
+    }
+
+    puts("");
+
+    /* check if the data was replicated to the other nodes */
+
+    for(i=1; i<=n; i++){
+
+      if( in_array_list(i,disconnect_nodes) ) continue;
+
+      printf("checking node %d\n", i); fflush(stdout);
+
+      done = 0;
+      for(count=0; !done && count<100; count++){
+        int result;
+        if( count>0 ) usleep(wait_time);
+        rc = db_query_int32(&result, db[i], "select count(*) from sqlite_master where name='t1'");
+        assert(rc==SQLITE_OK);
+        done = (result>0);
+      }
+      assert(done);
+
+      done = 0;
+      for(count=0; !done && count<100; count++){
+        int result;
+        if( count>0 ) usleep(wait_time);
+        rc = db_query_int32(&result, db[i], "select count(*) from t1");
+        assert(rc==SQLITE_OK);
+        done = (result>2);
+      }
+      assert(done);
+
+      db_check_int(db[i], "select count(*) from t1", 2 + num_txns_on_online_nodes);
+      db_check_int(db[i], "select count(*) from t1 where name='aa1'", 1);
+      db_check_int(db[i], "select count(*) from t1 where name='aa2'", 1);
+      db_check_int(db[i], "select count(*) from t1 where name='online'", num_txns_on_online_nodes);
+
+    }
+
   }
-  assert(done);
-
-  puts("");
 
 
-  /* check if the data was replicated to the other nodes */
+  /* execute transactions on offline nodes */
 
-  for(i=1; i<=n; i++){
+  if( num_txns_on_offline_nodes>0 ){
+    assert(len_array_list(active_offline_nodes)>0);
 
-    if( in_array(i,len,list) ) continue;
+    /* reopen the nodes in off-line mode */
 
-    printf("checking node %d\n", i); fflush(stdout);
-
-    done = 0;
-    for(count=0; !done && count<100; count++){
-      int result;
-      if( count>0 ) usleep(wait_time);
-      rc = db_query_int32(&result, db[i], "select count(*) from sqlite_master where name='t1'");
-      assert(rc==SQLITE_OK);
-      done = (result>0);
+    for(i=0; active_offline_nodes[i]; i++){
+      int node = active_offline_nodes[i];
+      printf("reopening node %d in offline mode\n", node);
+      sprintf(uri, "file:db%d.db?blockchain=on&num_nodes=%d", node, n);
+      assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
     }
-    assert(done);
 
-    done = 0;
-    for(count=0; !done && count<100; count++){
-      int result;
-      if( count>0 ) usleep(wait_time);
-      rc = db_query_int32(&result, db[i], "select count(*) from t1");
-      assert(rc==SQLITE_OK);
-      done = (result>2);
+    puts("executing new transactions on offline nodes...");
+
+    for(j=0, i=0; j<num_txns_on_offline_nodes; j++, i++){
+      int node = active_offline_nodes[i];
+      if( node==0 ){
+        i = 0;
+        node = active_offline_nodes[i];
+      }
+      printf("executing on node %d\n", node);
+
+      db_execute(db[node], "insert into t1 values ('offline')");
+
+      last_nonce[node]++;
+      db_check_int(db[node], "PRAGMA last_nonce", last_nonce[node]);
+
+      db_check_int(db[i], "select count(*) from t1", 2 + num_txns_on_offline_nodes);
+      db_check_int(db[i], "select count(*) from t1 where name='aa1'", 1);
+      db_check_int(db[i], "select count(*) from t1 where name='aa2'", 1);
+      db_check_int(db[i], "select count(*) from t1 where name='offline'", num_txns_on_offline_nodes);
     }
-    assert(done);
 
-    db_check_int(db[i], "select count(*) from t1", 3);
-    db_check_int(db[i], "select count(*) from t1 where name='aa1'", 1);
-    db_check_int(db[i], "select count(*) from t1 where name='aa2'", 1);
-    db_check_int(db[i], "select count(*) from t1 where name='aa3'", 1);
+    /* close the off-line nodes */
+
+    for(i=0; active_offline_nodes[i]; i++){
+      int node = active_offline_nodes[i];
+      sqlite3_close(db[node]);
+      db[node] = 0;
+    }
 
   }
 
 
   /* reconnect the nodes */
 
-  for(int i=0; i<len; i++){
-    int node = list[i];
+  for(i=0; disconnect_nodes[i]; i++){
+    int node = disconnect_nodes[i];
     printf("reconnecting node %d\n", node);
     if( node==1 ){
-#if 0
-      assert( sqlite3_open("file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302", &db[1])==SQLITE_OK );
-#endif
+      //assert( sqlite3_open("file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302", &db[1])==SQLITE_OK );
       sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&num_nodes=%d", n);
       assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
     }else if( node==2 ){
-#if 0
-      assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
-#endif
+      //assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
       sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&num_nodes=%d", n);
       assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
     }else{
@@ -629,8 +736,46 @@ void test_reconnection(int n, bool bind_to_random_ports, int len, int list[]){
 
   /* check if they are up-to-date */
 
-  for(int j=0; j<len; j++){
-    int i = list[j];
+  for(i=0; disconnect_nodes[i]; i++){
+    int node = disconnect_nodes[i];
+
+    printf("checking node %d\n", node); fflush(stdout);
+
+    done = 0;
+    for(count=0; !done && count<100; count++){
+      char *result;
+      if( count>0 ) usleep(wait_time);
+      rc = db_query_str(&result, db[node], "pragma protocol_status");
+      assert(rc==SQLITE_OK);
+      done = strstr(result,"\"is_leader\": true")>0 || strstr(result,"\"leader\": null")==0;
+      sqlite3_free(result);
+    }
+    assert(done);
+
+    done = 0;
+    for(count=0; !done && count<100; count++){
+      int result;
+      if( count>0 ) usleep(wait_time);
+      rc = db_query_int32(&result, db[node], "select count(*) from t1");
+      assert(rc==SQLITE_OK);
+      done = (result >= 2 + num_txns_on_online_nodes + num_txns_on_offline_nodes);
+    }
+    assert(done);
+
+    db_check_int(db[node], "select count(*) from t1", 2 + num_txns_on_online_nodes + num_txns_on_offline_nodes);
+    db_check_int(db[node], "select count(*) from t1 where name='aa1'", 1);
+    db_check_int(db[node], "select count(*) from t1 where name='aa2'", 1);
+    db_check_int(db[node], "select count(*) from t1 where name='offline'", num_txns_on_offline_nodes);
+    db_check_int(db[node], "select count(*) from t1 where name='online'", num_txns_on_online_nodes);
+
+  }
+
+
+  /* check if the data was replicated to the other nodes */
+
+  for(i=1; i<=n; i++){
+
+    if( in_array_list(i,disconnect_nodes) ) continue;
 
     printf("checking node %d\n", i); fflush(stdout);
 
@@ -638,29 +783,92 @@ void test_reconnection(int n, bool bind_to_random_ports, int len, int list[]){
     for(count=0; !done && count<100; count++){
       int result;
       if( count>0 ) usleep(wait_time);
-      rc = db_query_int32(&result, db[i], "select count(*) from sqlite_master where name='t1'");
-      assert(rc==SQLITE_OK);
-      done = (result>0);
-    }
-    assert(done);
-
-    done = 0;
-    for(count=0; !done && count<100; count++){
-      int result;
-      if( count>0 ) usleep(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from t1");
       assert(rc==SQLITE_OK);
-      done = (result>2);
+      done = (result >= 2 + num_txns_on_online_nodes + num_txns_on_offline_nodes);
     }
     assert(done);
 
-    db_check_int(db[i], "select count(*) from t1", 3);
+    db_check_int(db[i], "select count(*) from t1", 2 + num_txns_on_online_nodes + num_txns_on_offline_nodes);
     db_check_int(db[i], "select count(*) from t1 where name='aa1'", 1);
     db_check_int(db[i], "select count(*) from t1 where name='aa2'", 1);
-    db_check_int(db[i], "select count(*) from t1 where name='aa3'", 1);
+    db_check_int(db[i], "select count(*) from t1 where name='offline'", num_txns_on_offline_nodes);
+    db_check_int(db[i], "select count(*) from t1 where name='online'", num_txns_on_online_nodes);
 
   }
 
+
+  /* execute new transactions after reconnection */
+
+  if( num_txns_on_reconnect>0 ){
+    assert(len_array_list(active_nodes_on_reconnect)>0);
+
+    puts("executing new transactions after reconnection...");
+
+    for(j=0, i=0; j<num_txns_on_reconnect; j++, i++){
+      int node = active_nodes_on_reconnect[i];
+      if( node==0 ){
+        i = 0;
+        node = active_nodes_on_reconnect[i];
+      }
+      printf("executing on node %d\n", node);
+
+      db_execute(db[node], "insert into t1 values ('reconnect')");
+
+      last_nonce[node]++;
+      db_check_int(db[node], "PRAGMA last_nonce", last_nonce[node]);
+    }
+
+    /* wait until the transactions are processed in a new block */
+
+    printf("waiting for new block"); fflush(stdout);
+
+    for(i=0; active_nodes_on_reconnect[i]; i++){
+      int node = active_nodes_on_reconnect[i];
+
+      done = 0;
+      for(count=0; !done && count<200; count++){
+        char *result, sql[128];
+        if( count>0 ) usleep(150000);
+        sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[node]);
+        rc = db_query_str(&result, db[node], sql);
+        assert(rc==SQLITE_OK);
+        done = (strcmp(result,"processed")==0);
+        sqlite3_free(result);
+        printf("."); fflush(stdout);
+      }
+      assert(done);
+
+    }
+
+    puts("");
+
+    /* check if the data was replicated to the other nodes */
+
+    for(i=1; i<=n; i++){
+
+      printf("checking node %d\n", i); fflush(stdout);
+
+      done = 0;
+      for(count=0; !done && count<100; count++){
+        int result;
+        if( count>0 ) usleep(wait_time);
+        rc = db_query_int32(&result, db[i], "select count(*) from t1");
+        assert(rc==SQLITE_OK);
+        done = (result >= 2 + num_txns_on_online_nodes + num_txns_on_offline_nodes + num_txns_on_reconnect);
+      }
+      assert(done);
+
+      db_check_int(db[i], "select count(*) from t1", 2 + num_txns_on_online_nodes + num_txns_on_offline_nodes + num_txns_on_reconnect);
+      db_check_int(db[i], "select count(*) from t1 where name='aa1'", 1);
+      db_check_int(db[i], "select count(*) from t1 where name='aa2'", 1);
+      db_check_int(db[i], "select count(*) from t1 where name='offline'", num_txns_on_offline_nodes);
+      db_check_int(db[i], "select count(*) from t1 where name='online'", num_txns_on_online_nodes);
+      db_check_int(db[i], "select count(*) from t1 where name='reconnect'", num_txns_on_reconnect);
+
+    }
+
+  }
 
   /* close the db connections */
 
@@ -682,12 +890,60 @@ int main(){
 
 //  test_n_nodes(10, true);
 //  test_n_nodes(25, false);
-  test_n_nodes(50, true);
+//  test_n_nodes(50, true);
 //  test_n_nodes(100, true);
 
-  test_reconnection(10, false, 3, (int[]){2,4,10});
-//  test_reconnection(25, false, 7, (int[]){2,4,10,15,18,21,24});
-  test_reconnection(50, false, 7, (int[]){2,4,10,15,18,21,24});
+  test_reconnection(10, false,
+    /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
+    /* num_txns_on_offline_nodes,  */ 0,
+    /* active_offline_nodes[],     */ (int[]){0},
+    /* num_txns_on_online_nodes,   */ 0,
+    /* active_online_nodes[],      */ (int[]){0},
+    /* num_txns_on_reconnect,      */ 0,
+    /* active_nodes_on_reconnect[] */ (int[]){0}
+  );
+
+  test_reconnection(10, false,
+    /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
+    /* num_txns_on_offline_nodes,  */ 0,
+    /* active_offline_nodes[],     */ (int[]){0},
+    /* num_txns_on_online_nodes,   */ 0,
+    /* active_online_nodes[],      */ (int[]){0},
+    /* num_txns_on_reconnect,      */ 3,
+    /* active_nodes_on_reconnect[] */ (int[]){3,6,9,0}
+  );
+
+  test_reconnection(10, false,
+    /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
+    /* num_txns_on_offline_nodes,  */ 0,
+    /* active_offline_nodes[],     */ (int[]){0},
+    /* num_txns_on_online_nodes,   */ 3,
+    /* active_online_nodes[],      */ (int[]){3,8,0},
+    /* num_txns_on_reconnect,      */ 0,
+    /* active_nodes_on_reconnect[] */ (int[]){0}
+  );
+
+#if 0
+  test_reconnection(10, false,
+    /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
+    /* num_txns_on_offline_nodes,  */ 3,
+    /* active_offline_nodes[],     */ (int[]){4,10,0},
+    /* num_txns_on_online_nodes,   */ 0,
+    /* active_online_nodes[],      */ (int[]){0},
+    /* num_txns_on_reconnect,      */ 0,
+    /* active_nodes_on_reconnect[] */ (int[]){0}
+  );
+
+  test_reconnection(10, false,
+    /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
+    /* num_txns_on_offline_nodes,  */ 3,
+    /* active_offline_nodes[],     */ (int[]){4,10,0},
+    /* num_txns_on_online_nodes,   */ 3,
+    /* active_online_nodes[],      */ (int[]){3,8,0},
+    /* num_txns_on_reconnect,      */ 5,
+    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,0}
+  );
+#endif
 
   puts("OK. All tests pass!"); return 0;
 }

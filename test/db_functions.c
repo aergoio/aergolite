@@ -508,3 +508,20 @@ bool in_array(int item, int len, int list[]){
   }
   return false;
 }
+
+/****************************************************************************/
+
+bool in_array_list(int item, int list[]){
+  for(int i=0; list[i]; i++){
+    if( list[i]==item ) return true;
+  }
+  return false;
+}
+
+/****************************************************************************/
+
+int len_array_list(int list[]){
+  int count = 0;
+  for(int i=0; list[i]; i++) count++;
+  return count;
+}
