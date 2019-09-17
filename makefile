@@ -66,33 +66,40 @@ endif
 LIBFLAGS := $(LIBFLAGS) $(CFLAGS) -DSQLITE_HAS_CODEC -DSQLITE_USE_URI=1 -DSQLITE_ENABLE_JSON1 -DSQLITE_THREADSAFE=1 -DHAVE_USLEEP -DHAVE_STDINT_H -DHAVE_INTTYPES_H -DSQLITE_ENABLE_COLUMN_METADATA
 
 
-.PHONY:  install debug test test2 tests clean
+.PHONY:  install debug test valgrind clean
 
 
-all:     $(LIBRARY) $(SSHELL)
+all:      $(LIBRARY) $(SSHELL)
 
-debug:   $(LIBRARY) $(SSHELL)
+debug:    $(LIBRARY) $(SSHELL)
 
-fortest: $(LIBRARY) $(SSHELL)
+valgrind: $(LIBRARY)
 
-ios:     liblitesync.a liblitesync.dylib
-iostest: liblitesync.a liblitesync.dylib
+ios:      liblitesync.a liblitesync.dylib
+iostest:  liblitesync.a liblitesync.dylib
 
-debug:   export LIBFLAGS := -g -DSQLITE_DEBUG=1 -DDEBUGPRINT=1 $(DEBUGFLAGS) $(LIBFLAGS)
+debug:    export LIBFLAGS := -g -DSQLITE_DEBUG=1 -DDEBUGPRINT=1 $(DEBUGFLAGS) $(LIBFLAGS)
 
-fortest: export LIBFLAGS := -DLITESYNC_FOR_TESTING $(LIBFLAGS)
-iostest: export LIBFLAGS := -DLITESYNC_FOR_TESTING $(LIBFLAGS)
+valgrind: export LIBFLAGS := -g -DSQLITE_DEBUG=1 $(DEBUGFLAGS) $(LIBFLAGS)
 
 
 OBJECTS = sqlite3.o plugin-mini-raft.o
 
 litesync-0.1.dll: $(OBJECTS)
 	$(CC) -shared -Wl,--out-implib,$(IMPLIB).lib $^ -o $@ $(LFLAGS) -lbinn-1.0 -llibuv -lws2_32
+ifeq ($(MAKECMDGOALS),valgrind)
+else ifeq ($(MAKECMDGOALS),debug)
+else
 	$(STRIP) $@
+endif
 
 liblitesync.0.dylib: $(OBJECTS)
 	$(CC) -dynamiclib -install_name "$(INSTNAME)" -current_version $(CURR_VERSION) -compatibility_version $(COMPAT_VERSION) $^ -o $@ $(LDFLAGS) -lbinn -luv
+ifeq ($(MAKECMDGOALS),valgrind)
+else ifeq ($(MAKECMDGOALS),debug)
+else
 	$(STRIP) -x $@
+endif
 	install_name_tool -change libbinn.1.dylib /usr/local/lib/libbinn.1.dylib $@
 	ln -sf $(LIBRARY) $(LIBNICK1)
 	ln -sf $(LIBRARY) $(LIBNICK2)
@@ -103,11 +110,19 @@ liblitesync.a: $(OBJECTS)
 
 liblitesync.dylib: $(OBJECTS)
 	$(CC) -dynamiclib -o $@ $^ $(LDFLAGS) -lbinn -luv
+ifeq ($(MAKECMDGOALS),valgrind)
+else ifeq ($(MAKECMDGOALS),debug)
+else
 	$(STRIP) -x $@
+endif
 
 liblitesync.so.0.0.1: $(OBJECTS)
 	$(CC) -shared -Wl,-soname,$(SONAME) $^ -o $@ $(LDFLAGS) -lbinn -luv
+ifeq ($(MAKECMDGOALS),valgrind)
+else ifeq ($(MAKECMDGOALS),debug)
+else
 	$(STRIP) $@
+endif
 	ln -sf $(LIBRARY) $(LIBNICK1)
 	ln -sf $(LIBNICK1) $(LIBNICK2)
 	ln -sf $(LIBRARY) $(LIBNICK3)
@@ -159,6 +174,14 @@ ifeq ($(OS),OSX)
 	cd test && DYLD_LIBRARY_PATH=..:/usr/local/lib ./$@
 else
 	cd test && LD_LIBRARY_PATH=..:/usr/local/lib ./$@
+endif
+
+valgrind: test/test.c
+	$(CC) $< -o test/$@ -L. -lsqlite3
+ifeq ($(OS),OSX)
+	cd test && DYLD_LIBRARY_PATH=..:/usr/local/lib valgrind --leak-check=full --show-leak-kinds=all ./test
+else
+	cd test && LD_LIBRARY_PATH=..:/usr/local/lib valgrind --leak-check=full --show-leak-kinds=all ./test
 endif
 
 test2: test/test.py
