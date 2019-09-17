@@ -3,6 +3,7 @@
 /****************************************************************************/
 
 SQLITE_PRIVATE void start_current_leader_query(plugin *plugin);
+SQLITE_PRIVATE void on_leader_vote(plugin *plugin, node *node, char *arg);
 
 /****************************************************************************/
 
@@ -280,6 +281,10 @@ SQLITE_PRIVATE void broadcast_leader_vote(plugin *plugin){
   sprintf(message, "vote:%d", leader_id);
 
   send_tcp_broadcast(plugin, message);
+
+  /* record this node's vote */
+
+  on_leader_vote(plugin, NULL, message + 5);
 
 }
 
