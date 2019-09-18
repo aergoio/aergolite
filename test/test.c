@@ -1009,5 +1009,8 @@ int main(){
   );
 #endif
 
+  /* delete the test db files on success */
+  delete_files(200);
+
   puts("OK. All tests pass!"); return 0;
 }
