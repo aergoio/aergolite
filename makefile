@@ -168,22 +168,23 @@ endif
 clean:
 	rm -f *.o libaergolite.a libaergolite.dylib $(LIBRARY) $(LIBNICK1) $(LIBNICK2) $(LIBNICK3) $(LIBNICK4) $(SSHELL) tests
 
-test: test/test.c
-	$(CC) $< -o test/$@ -L. -lsqlite3
+test/runtest: test/test.c
+	$(CC) $< -o $@ -L. -lsqlite3
+
+test: test/runtest
 	ulimit -Sn 16000
 ifeq ($(OS),OSX)
-	cd test && DYLD_LIBRARY_PATH=..:/usr/local/lib ./$@
+	cd test && DYLD_LIBRARY_PATH=..:/usr/local/lib ./runtest
 else
-	cd test && LD_LIBRARY_PATH=..:/usr/local/lib ./$@
+	cd test && LD_LIBRARY_PATH=..:/usr/local/lib ./runtest
 endif
 
-valgrind: test/test.c
-	$(CC) $< -o test/$@ -L. -lsqlite3
-	ulimit -Sn 16000
+valgrind: test/runtest
+	ulimit -Sn 512
 ifeq ($(OS),OSX)
-	cd test && DYLD_LIBRARY_PATH=..:/usr/local/lib valgrind --leak-check=full --show-leak-kinds=all ./test
+	cd test && DYLD_LIBRARY_PATH=..:/usr/local/lib valgrind --leak-check=full --show-leak-kinds=all ./runtest
 else
-	cd test && LD_LIBRARY_PATH=..:/usr/local/lib valgrind --leak-check=full --show-leak-kinds=all ./test
+	cd test && LD_LIBRARY_PATH=..:/usr/local/lib valgrind --leak-check=full --show-leak-kinds=all ./runtest
 endif
 
 test2: test/test.py
