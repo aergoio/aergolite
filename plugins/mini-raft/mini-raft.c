@@ -546,18 +546,22 @@ SQLITE_PRIVATE int worker_thread_on_tcp_connection(node *node) {
 
   /* start reading messages on the connection */
   rc = uv_msg_read_start(&node->socket, alloc_buffer, worker_thread_on_peer_message, free_buffer);
-  if (rc < 0) { sqlite3_log(SQLITE_ERROR, "worker thread: could not start read: (%d) %s", rc, uv_strerror(rc)); return rc; }
+  if (rc < 0) { sqlite3_log(SQLITE_ERROR, "worker thread: could not start read: (%d) %s", rc, uv_strerror(rc)); goto loc_failed; }
 
   rc = uv_tcp_nodelay( (uv_tcp_t*) &node->socket, 1);
-  if (rc < 0) { sqlite3_log(SQLITE_ERROR, "worker thread: could not set TCP no delay: (%d) %s", rc, uv_strerror(rc)); return rc; }
+  if (rc < 0) { sqlite3_log(SQLITE_ERROR, "worker thread: could not set TCP no delay: (%d) %s", rc, uv_strerror(rc)); goto loc_failed; }
 
   rc = uv_tcp_keepalive( (uv_tcp_t*) &node->socket, 1, 180);  /* 180 seconds = 3 minutes */
-  if (rc < 0) { sqlite3_log(SQLITE_ERROR, "worker thread: could not set TCP keep alive: (%d) %s", rc, uv_strerror(rc)); return rc; }
+  if (rc < 0) { sqlite3_log(SQLITE_ERROR, "worker thread: could not set TCP keep alive: (%d) %s", rc, uv_strerror(rc)); goto loc_failed; }
 
   /* set the state as connected */
   node->conn_state = CONN_STATE_CONNECTED;
 
   return SQLITE_OK;
+
+loc_failed:
+  uv_close2((uv_handle_t*) &node->socket, worker_thread_on_close);
+  return rc;
 
 }
 
@@ -662,6 +666,7 @@ SQLITE_PRIVATE int connect_to_peer_address(node *node, struct sockaddr *dest) {
   if ((rc = uv_tcp_connect(connect, (uv_tcp_t*) &node->socket, dest, worker_thread_on_outgoing_tcp_connection))) {
     sqlite3_log(SQLITE_ERROR, "worker thread: connect to TCP address [%s:%d] failed: (%d) %s", node->host, node->port, rc, uv_strerror(rc));
     node->conn_state = CONN_STATE_FAILED;
+    uv_close2((uv_handle_t*) &node->socket, worker_thread_on_close);
     return SQLITE_ERROR;
   }
 
@@ -1561,8 +1566,12 @@ SQLITE_PRIVATE void node_thread(void *arg) {
     server = sqlite3_malloc(sizeof(uv_tcp_t));
     if (!server) goto loc_no_memory;
     uv_tcp_init(&loop, server);
-    uv_tcp_bind(server, (const struct sockaddr*) &addr, 0);
-    if ((rc = uv_listen((uv_stream_t*) server, DEFAULT_BACKLOG, worker_thread_on_incoming_tcp_connection))) {
+    if( (rc = uv_tcp_bind(server, (const struct sockaddr*) &addr, 0)) ){
+      sqlite3_log(SQLITE_ERROR, "worker thread: bind TCP socket to address [%s:%d] failed: (%d) %s", address->host, address->port, rc, uv_strerror(rc));
+      //sqlite3_free(server);
+      goto loc_failed;
+    }
+    if( (rc = uv_listen((uv_stream_t*) server, DEFAULT_BACKLOG, worker_thread_on_incoming_tcp_connection)) ){
       sqlite3_log(SQLITE_ERROR, "worker thread: listen on TCP socket [%s:%d] failed: (%d) %s", address->host, address->port, rc, uv_strerror(rc));
       //sqlite3_free(server);
       goto loc_failed;
@@ -1578,8 +1587,16 @@ SQLITE_PRIVATE void node_thread(void *arg) {
     plugin->udp_sock = sqlite3_malloc_zero(sizeof(uv_udp_t));
     if (!plugin->udp_sock) goto loc_no_memory;
     uv_udp_init(&loop, plugin->udp_sock);
-    uv_udp_bind(plugin->udp_sock, (const struct sockaddr*) &addr, UV_UDP_REUSEADDR);
-    uv_udp_recv_start(plugin->udp_sock, alloc_buffer, on_udp_message);
+    if( (rc = uv_udp_bind(plugin->udp_sock, (const struct sockaddr*) &addr, UV_UDP_REUSEADDR)) ){
+      sqlite3_log(SQLITE_ERROR, "worker thread: bind UDP socket to address [%s:%d] failed: (%d) %s", address->host, address->port, rc, uv_strerror(rc));
+      //sqlite3_free(plugin->udp_sock);
+      goto loc_failed;
+    }
+    if( (rc = uv_udp_recv_start(plugin->udp_sock, alloc_buffer, on_udp_message)) ){
+      sqlite3_log(SQLITE_ERROR, "worker thread: UDP socket recv start at address [%s:%d] failed: (%d) %s", address->host, address->port, rc, uv_strerror(rc));
+      //sqlite3_free(plugin->udp_sock);
+      goto loc_failed;
+    }
   }
 
 
