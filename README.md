@@ -122,10 +122,25 @@ cd -
 
 ## Automated Tests
 
-After compiling, you can run the automated tests with:
+These tests simulate up to 100 nodes on your computer.
+
+Before running the tests you will need to increase the limit of open files on your terminal:
+
+```
+ulimit -Sn 16000
+```
+
+Then you can run the automated tests with:
 
 ```
 make test
+```
+
+For printing debug messages to a log file you must recompile the library in debug mode before running the tests:
+
+```
+make clean
+make debug
 ```
 
 Running the tests with Valgrind is also available:
