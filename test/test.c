@@ -957,5 +957,57 @@ int main(){
     /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,0}
   );
 
+  test_reconnection(25, false,
+    /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,0},
+    /* num_txns_on_offline_nodes,  */ 6,
+    /* active_offline_nodes[],     */ (int[]){2,7,15,23,0},
+    /* num_txns_on_online_nodes,   */ 6,
+    /* active_online_nodes[],      */ (int[]){3,8,11,17,0},
+    /* num_txns_on_reconnect,      */ 9,
+    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,20,21,0}
+  );
+
+  test_reconnection(50, false,
+    /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,0},
+    /* num_txns_on_offline_nodes,  */ 9,
+    /* active_offline_nodes[],     */ (int[]){4,10,20,33,38,49,0},
+    /* num_txns_on_online_nodes,   */ 9,
+    /* active_online_nodes[],      */ (int[]){3,8,11,25,35,45,0},
+    /* num_txns_on_reconnect,      */ 12,
+    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,20,25,44,45,0}
+  );
+
+  test_reconnection(100, false,
+    /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,55,66,77,88,95,0},
+    /* num_txns_on_offline_nodes,  */ 9,
+    /* active_offline_nodes[],     */ (int[]){4,10,20,33,38,49,0},
+    /* num_txns_on_online_nodes,   */ 9,
+    /* active_online_nodes[],      */ (int[]){3,8,11,25,35,45,0},
+    /* num_txns_on_reconnect,      */ 12,
+    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,20,25,44,45,0}
+  );
+
+#if 0
+  test_reconnection(150, false,
+    /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,55,66,77,88,95,0},
+    /* num_txns_on_offline_nodes,  */ 9,
+    /* active_offline_nodes[],     */ (int[]){4,10,20,33,38,49,0},
+    /* num_txns_on_online_nodes,   */ 9,
+    /* active_online_nodes[],      */ (int[]){3,8,11,25,35,45,0},
+    /* num_txns_on_reconnect,      */ 12,
+    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,20,25,44,45,0}
+  );
+
+  test_reconnection(200, false,
+    /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,55,66,77,88,95,0},
+    /* num_txns_on_offline_nodes,  */ 9,
+    /* active_offline_nodes[],     */ (int[]){4,10,20,33,38,49,0},
+    /* num_txns_on_online_nodes,   */ 9,
+    /* active_online_nodes[],      */ (int[]){3,8,11,25,35,45,0},
+    /* num_txns_on_reconnect,      */ 12,
+    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,20,25,44,45,0}
+  );
+#endif
+
   puts("OK. All tests pass!"); return 0;
 }
