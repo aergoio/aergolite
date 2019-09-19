@@ -884,7 +884,7 @@ SQLITE_PRIVATE void worker_thread_on_close(uv_handle_t *handle) {
 
   SYNCTRACE("worker_thread_on_(handle)_close - handle=%p\n", handle);
 
-  switch (handle->type) {
+  switch( handle->type ){
   case UV_NAMED_PIPE:
     SYNCTRACE("worker_thread_on_(handle)_close - named pipe\n");
     sqlite3_free(handle);
@@ -915,9 +915,11 @@ SQLITE_PRIVATE void worker_thread_on_close(uv_handle_t *handle) {
     break;
    }
   case UV_UDP:
+    SYNCTRACE("worker_thread_on_(handle)_close - UDP\n");
     sqlite3_free(handle);
     break;
   case UV_TIMER:
+    SYNCTRACE("worker_thread_on_(handle)_close - timer\n");
     if( ((uv_timer_t*)handle)->timer_cb==id_conflict_timer_cb ){
       if( handle->data ){
         sqlite3_free(handle->data);
@@ -925,6 +927,8 @@ SQLITE_PRIVATE void worker_thread_on_close(uv_handle_t *handle) {
     }
     break;
   default:  /* also to avoid compiler warning about not listed enum elements */
+    SYNCTRACE("worker_thread_on_(handle)_close - UNKNOWN TYPE: (%d) %s\n",
+              handle->type, uv_handle_type_name(handle->type));
 #if TARGET_OS_IPHONE
     //if (uv_is_callback(handle)) {
     //  uv_callback_release((uv_callback_t*) handle);
@@ -1101,7 +1105,7 @@ SQLITE_PRIVATE void worker_thread_on_thread_message(uv_msg_t *stream, void *msg,
     if (size != UV_EOF) {
       sqlite3_log(SQLITE_ERROR, "read message failed: (%d) %s", size, uv_strerror(size));
     }
-    uv_close2((uv_handle_t*) stream, NULL);
+    uv_close2((uv_handle_t*) stream, worker_thread_on_close);
     return;
   }
 
