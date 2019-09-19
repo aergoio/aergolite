@@ -73,8 +73,6 @@ all:      $(LIBRARY) $(SSHELL)
 
 debug:    $(LIBRARY) $(SSHELL)
 
-valgrind: $(LIBRARY)
-
 ios:      libaergolite.a libaergolite.dylib
 iostest:  libaergolite.a libaergolite.dylib
 
@@ -166,7 +164,7 @@ endif
 	cp $(SSHELL) $(EXEPATH)
 
 clean:
-	rm -f *.o libaergolite.a libaergolite.dylib $(LIBRARY) $(LIBNICK1) $(LIBNICK2) $(LIBNICK3) $(LIBNICK4) $(SSHELL) tests
+	rm -f *.o libaergolite.a libaergolite.dylib $(LIBRARY) $(LIBNICK1) $(LIBNICK2) $(LIBNICK3) $(LIBNICK4) $(SSHELL) test/runtest
 
 test/runtest: test/test.c
 	$(CC) $< -o $@ -L. -lsqlite3
@@ -178,7 +176,7 @@ else
 	cd test && LD_LIBRARY_PATH=..:/usr/local/lib ./runtest
 endif
 
-valgrind: test/runtest
+valgrind: $(LIBRARY) test/runtest
 ifeq ($(OS),OSX)
 	cd test && DYLD_LIBRARY_PATH=..:/usr/local/lib valgrind --leak-check=full --show-leak-kinds=all ./runtest
 else
