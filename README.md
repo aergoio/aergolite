@@ -1,8 +1,6 @@
 # AergoLite: SQLite with blockchain!
 
-The easiest way to deploy a blockchain for data storage on your app
-
----
+> *The easiest way to deploy a blockchain for data storage on your app*
 
 AergoLite allow us to have a replicated SQLite database enforced by a private and lightweight blockchain.
 
@@ -150,6 +148,19 @@ make valgrind
 ```
 
 
+## Manual Testing
+
+You can test it using the SQLite shell.
+
+Open an empty local database on each device:
+
+```
+sqlite3
+.log stdout
+.open "file:test.db?blockchain=on&discovery=local:4329"
+```
+
+
 ## Using
 
 The compiled library has support for both native SQLite database files and for SQLite databases with blockchain support, so the application can open native SQLite databases and ones with blockchain at the same time.
@@ -167,19 +178,6 @@ Here is an example using discovery via UDP on the local network. You can choose 
 ```
 
 All nodes from the same network must use the same node discovery method and the same UDP port.
-
-
-## Manual Testing
-
-You can test it using the SQLite shell.
-
-Open an empty local database on each device:
-
-```
-sqlite3
-.log stdout
-.open "file:test.db?blockchain=on&discovery=local:4329"
-```
 
 
 ## Retrieving status
