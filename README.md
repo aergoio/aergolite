@@ -2,7 +2,7 @@
 
 > *The easiest way to deploy a blockchain for data storage on your app*
 
-AergoLite allow us to have a replicated SQLite database enforced by a private and lightweight blockchain.
+AergoLite allow us to have a replicated SQLite database secured by a private and lightweight blockchain.
 
 Each app has a local replica of the database.
 
@@ -165,19 +165,84 @@ sqlite3
 
 The compiled library has support for both native SQLite database files and for SQLite databases with blockchain support, so the application can open native SQLite databases and ones with blockchain at the same time.
 
-The library works exacly the same way for a normal SQLite database.
+The library works exactly the same way for a normal SQLite database.
 
 For opening a database with blockchain support we inform the library using a URI parameter: `blockchain=on`
 
-We also need to inform the node discovery method. This is done via the `discovery` parameter.
-
-Here is an example using discovery via UDP on the local network. You can choose any port:
+Example:
 
 ```
 "file:test.db?blockchain=on&discovery=local:4329"
 ```
 
-All nodes from the same network must use the same node discovery method and the same UDP port.
+
+## Node discovery
+
+We specify the node discovery method using the `discovery` URI parameter.
+
+There are 2 options of node discovery:
+
+### Local UDP broadcast
+
+This method sends an UDP broadcast packet on the local area network to the specified port.
+
+All nodes from the same local network must use the same port number.
+
+Example:
+
+```
+"file:test.db?blockchain=on&discovery=local:4329"
+```
+
+### Known nodes
+
+On this method some nodes have a fixed IP address and the other nodes connect to them.
+
+The nodes with known address must also bind to a defined TCP port. This is informed using the `bind` parameter.
+
+Example URI for a "known" node:
+
+```
+"file:test.db?blockchain=on&bind=5501"
+```
+
+The other nodes must have an explicit `discovery` parameter containing the address of the known nodes.
+
+Example URI for the other nodes:
+
+```
+"file:test.db?blockchain=on&discovery=<ip-address>:<port>"
+```
+
+We can also specify the addresses of more known nodes:
+
+```
+"file:test.db?blockchain=on&discovery=<ip-address1>:<port1>,<ip-address2>:<port2>"
+```
+
+Once a connection is established and the node is accepted they exchange a list of active nodes addresses. 
+
+### Mixing
+
+We can also use the 2 above methods at the same time. This can be useful when we have some nodes on the LAN and others that are outside.
+
+We can fix the address of one or more nodes so they can be found by nodes from outside the local network.
+
+Nodes on the LAN will discover local nodes via UDP broadcast and can either connect to known nodes outside the LAN or receive connections from them.
+
+Known nodes can bind to a port, find local nodes via broadcast and also connect to external known nodes. Example:
+
+```
+"file:test.db?blockchain=on&bind=1234&discovery=local:1234,<outside_ip1>:<port1>,<outside_ip2>:<port2>"
+```
+
+Nodes without fixed address will use the local discovery and the connection to outside known nodes:
+
+```
+"file:test.db?blockchain=on&discovery=local:1234,<outside_ip1>:<port1>,<outside_ip2>:<port2>"
+```
+
+If nodes on this LAN are just receiving connections from outside, then the `discovery` parameter must contain just the local discovery method.
 
 
 ## Retrieving status
