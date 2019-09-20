@@ -1975,6 +1975,7 @@ void * plugin_init(aergolite *this_node, char *uri) {
   }else if( plugin->broadcast ){
     plugin->bind = sqlite3_memdup(plugin->broadcast, sizeof(struct tcp_address));
     if( plugin->bind ) plugin->bind->next = NULL;
+    strcpy(plugin->bind->host, "0.0.0.0");
   }else{
     /* bind to random port */
     plugin->bind = sqlite3_malloc_zero(sizeof(struct tcp_address));

@@ -29,7 +29,7 @@ SQLITE_PRIVATE void on_find_node_request(
 
   /* send a response message */
 
-  SYNCTRACE("on_udp_message: send a response message to %s\n", sender);
+  SYNCTRACE("on_udp_message: send a response message to %s\n", sender_ip);
 
   send_req = sqlite3_malloc(sizeof(uv_udp_send_t));
   if( !send_req ) return;
