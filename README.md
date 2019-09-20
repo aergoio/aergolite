@@ -250,7 +250,7 @@ If nodes on this LAN are just receiving connections from outside, then the `disc
 There are 2 ways to retrieve status:
 
 1. Locally via PRAGMA commands
-2. Remotely via status requests
+2. Remotely sending status requests via UDP packets
 
 The status are divided in 2 parts:
 
@@ -258,24 +258,22 @@ The status are divided in 2 parts:
 
 This has information about the local blockchain and database.
 
-It can be queried using the command:
+It can be queried locally using the command:
 
 ```
 PRAGMA blockchain_status
 ```
 
-That will return a result in JSON format like the following:
+It will return a result in JSON format like the following:
 
 ```
 {
 "use_blockchain": true,
 "blockchain": {
-  "num_transactions": 125,
-  "last_transaction": {
-    "id": 3476202423059134961,
-    "hash": "..."
-  }
+  "last_block": 125,
+  "state_hash": "..."
 },
+"local_nonce": 3,
 "local_changes": {
   "num_transactions": 3
 }
@@ -295,7 +293,7 @@ PRAGMA protocol_status
 
 The information returned depends on the selected consensus protocol.
 
-For the `raft-like` consensus protocol the result is in this format:
+For the `mini-raft` consensus protocol the result is in this format:
 
 ```
 {
