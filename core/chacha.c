@@ -1,7 +1,6 @@
 #include <string.h>
 #include <stdio.h>
 //#include "chacha.h"
-#include "../common/endianess.h"
 
 typedef unsigned char u8;
 typedef unsigned int u32;
@@ -12,7 +11,7 @@ typedef unsigned int u32;
 //#define U8V(v) ((u8)(v) & U8C(0xFF))
 //#define U32V(v) ((u32)(v) & U32C(0xFFFFFFFF))
 
-#if __BYTE_ORDER == __BIG_ENDIAN
+#ifdef SQLITE_BIGENDIAN
 
 #define U8TO32_LITTLE(p) \
           (*((u32*)(p)))
