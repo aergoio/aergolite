@@ -16,13 +16,15 @@ The application will read the new state of the database after the off-line modif
 
 Once the consensus is reached, the internal previous states are deleted.
 
-AergoLite uses special blockchain technology focused on resource constrained devices.
+AergoLite uses **special blockchain technology** focused on **resource constrained devices**.
 
 It is not like Bitcoin! No proof-of-work is used and the nodes do not need to keep all the history of blocks and transactions.
 
-AergoLite uses absolute finality. Once the nodes reach consensus on a new block they can discard the previous one. Only the last block is kept on the majority of nodes.
+AergoLite uses **special blockchain technology** focused on **resource constrained devices**.
 
-It also uses a hash of the database state. This lets the nodes to check if they have exactly the same content on the database, protects against intentional modifications on the database file and also works as a integrity check to detect failures on the storage media.
+AergoLite uses *absolute finality*. Once the nodes reach consensus on a new block they can discard the previous one. Only the last block is kept on the majority of nodes.
+
+It also uses a *hash of the database state*. This lets the nodes to check if they have exactly the same content on the database, protects against intentional modifications on the database file and also works as a integrity check to detect failures on the storage media.
 
 This final hash is updated using only the modified pages on each new block. It does not need to load the entire database to calculate the new state. The integrity check is also only made when a new db page is loaded. This drastically increases the database performance.
 
