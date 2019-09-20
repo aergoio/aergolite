@@ -1,27 +1,38 @@
 # AergoLite: SQLite with blockchain!
 
-> *The easiest way to deploy a blockchain for data storage on your app*
+> *The easiest way to deploy a blockchain for data storage on your app or device*
 
-AergoLite allow us to have a replicated SQLite database secured by a private and lightweight blockchain.
+AergoLite allows us to have a replicated SQLite database secured by a private and lightweight blockchain.
 
 Each app has a local replica of the database.
 
 New database transactions are distributed to all the peers and once they reach a consensus on the order of execution all the nodes can execute the transactions.
 
-As the order of execution of these transactions are the same, all the nodes have the same resulting database content.
+As the order of execution of these transactions is the same, all the nodes have the same resulting database content.
 
 Apps can also write to the local database when they are off-line. The database transactions are stored on a local queue and sent to the network once the connectivity is reestablished.
 
-As in any SQLite database, only the last state of the database is stored on the file. There is no stored snapshot for each previous states. This is important to reduce storage size on small devices.
+The application will read the new state of the database after the off-line modifications, and it can check if the off-line transactions were processed by the global consensus. If rejected, the database will return to the previous state.
 
-Only the blockchain itself has the full history, and it stores the SQL commands to generate the database.
+Once the consensus is reached, the internal previous states are deleted.
 
-The resulting increase in size of the database is 10-15% compared to the same SQLite database without the blockchain.
+AergoLite uses special blockchain technology focused on resource constrained devices.
 
-The network traffic is lightweight to reduce energy consumption. New packets are transferred only when there are new database transactions.
+It is not like Bitcoin! No proof-of-work is used and the nodes do not need to keep all the history of blocks and transactions.
 
-You can easily choose which consensus protocol to use between 2 available: 1 leader based and 1 gossip based.
+AergoLite uses absolute finality. Once the nodes reach consensus on a new block they can discard the previous one. Only the last block is kept on the majority of nodes.
 
+It also uses a hash of the database state. This lets the nodes to check if they have exactly the same content on the database, protects against intentional modifications on the database file and also works as a integrity check to detect failures on the storage media.
+
+This final hash is updated using only the modified pages on each new block. It does not need to load the entire database to calculate the new state. The integrity check is also only made when a new db page is loaded. This drastically increases the database performance.
+
+The resulting solution does not require big disk storage, uses low processor time and low RAM.
+
+The network traffic is also lightweight to reduce energy consumption. New packets are transferred only when there are new database transactions.
+
+This technology allows us to run a real private blockchain on IoT and mobile devices.
+
+AergoLite is also easy to use. You do not need to know how a blockchain works to use it.
 
 Supported OS:
 
@@ -48,6 +59,7 @@ Supported programming languages:
 And probably any other that has support for SQLite.
 
 Most of these languages are supported via a wrapper.
+
 
 ## Compiling and installing
 
