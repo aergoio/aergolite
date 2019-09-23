@@ -1,6 +1,4 @@
 
-SQLITE_PRIVATE void new_block_timer_cb(uv_timer_t* handle);
-
 /****************************************************************************/
 
 SQLITE_PRIVATE void on_local_transaction_sent(send_message_t *req, int status) {
@@ -282,9 +280,20 @@ SQLITE_PRIVATE struct transaction * store_transaction_on_mempool(
   plugin *plugin, int node_id, int64 nonce, void *log
 ){
   struct transaction *txn;
+  int64 tid;
 
   SYNCTRACE("store_transaction_on_mempool node_id=%d nonce=%"
             INT64_FORMAT "\n", node_id, nonce);
+
+  tid = aergolite_get_transaction_id(node_id, nonce);
+
+  /* check if the transaction is already in the local mempool */
+  for( txn=plugin->mempool; txn; txn=txn->next ){
+    if( txn->id==tid ){
+      SYNCTRACE("store_transaction_on_mempool - transaction already present\n");
+      return txn;
+    }
+  }
 
   txn = sqlite3_malloc_zero(sizeof(struct transaction));
   if( !txn ) return NULL;
@@ -294,7 +303,7 @@ SQLITE_PRIVATE struct transaction * store_transaction_on_mempool(
   /* transaction data */
   txn->node_id = node_id;
   txn->nonce = nonce;
-  txn->id = aergolite_get_transaction_id(node_id, nonce);
+  txn->id = tid;
   txn->log = sqlite3_memdup(binn_ptr(log), binn_size(log));
   //! it could create a copy here using only the SQL commands and removing not needed data. or maybe use netstring...
   //txn->data = xxx(log);    //! or maybe let the consensus protocol decide what to store here...
@@ -330,31 +339,17 @@ SQLITE_PRIVATE void discard_mempool_transaction(plugin *plugin, struct transacti
 */
 SQLITE_PRIVATE int process_new_transaction(plugin *plugin, int node_id, int64 nonce, void *log) {
   struct transaction *txn;
-  int64 tid;
   int rc;
 
   SYNCTRACE("process_new_transaction - node=%d nonce=%" INT64_FORMAT " sql_count=%d\n",
             node_id, nonce, binn_count(log)-2 );
 
-  tid = aergolite_get_transaction_id(node_id, nonce);
-
-  /* check if the transaction is already in the local mempool */
-  for( txn=plugin->mempool; txn; txn=txn->next ){
-    if( txn->id==tid ){
-      SYNCTRACE("process_new_transaction - transaction already on mempool\n");
-      return SQLITE_OK;
-    }
-  }
-  if( !txn ){
-    /* store the transaction in the local mempool */
-    txn = store_transaction_on_mempool(plugin, node_id, nonce, log);
-    if( !txn ) return SQLITE_NOMEM;
-  }
+  /* store the transaction in the local mempool */
+  txn = store_transaction_on_mempool(plugin, node_id, nonce, log);
+  if( !txn ) return SQLITE_NOMEM;
 
   /* start the timer to generate a new block */
-  if( !uv_is_active((uv_handle_t*)&plugin->new_block_timer) ){
-    uv_timer_start(&plugin->new_block_timer, new_block_timer_cb, NEW_BLOCK_WAIT_INTERVAL, 0);
-  }
+  start_new_block_timer(plugin);
 
   /* broadcast the transaction to all the peers */
   rc = broadcast_transaction(plugin, txn);
