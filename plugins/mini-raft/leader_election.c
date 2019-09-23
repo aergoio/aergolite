@@ -152,6 +152,10 @@ SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle) {
 
     //leader_node_process_local_transactions(plugin);
 
+    if( plugin->mempool ){
+      start_new_block_timer(plugin);
+    }
+
   }else{
     SYNCTRACE("on_leader_check_timeout: not connected to the current leader\n");
 

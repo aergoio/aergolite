@@ -305,7 +305,8 @@ SQLITE_PRIVATE void start_upstream_db_sync(plugin *plugin);
 SQLITE_PRIVATE int  load_current_state(plugin *plugin);
 SQLITE_PRIVATE void request_state_update(plugin *plugin);
 
-SQLITE_PRIVATE int broadcast_new_block(plugin *plugin, struct block *block);
+SQLITE_PRIVATE void start_new_block_timer(plugin *plugin);
+SQLITE_PRIVATE int  broadcast_new_block(plugin *plugin, struct block *block);
 
 /* event loop and timers */
 
