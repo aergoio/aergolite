@@ -45,6 +45,8 @@
 #define PLUGIN_NEW_BLOCK_ACK       0xdb22     /* follower -> leader */
 #define PLUGIN_COMMIT_BLOCK        0xdb23     /* follower <- leader -> follower (broadcast) */
 
+#define PLUGIN_GET_MEMPOOL         0xdb51     /* any -> any (request) */
+
 #define PLUGIN_GET_TRANSACTION     0xdb31     /* follower -> leader (request) */
 #define PLUGIN_REQUESTED_TRANSACTION  0xdb32     /* follower <- leader (response) */
 #define PLUGIN_TXN_NOTFOUND        0xdb33     /* follower <- leader (response) */

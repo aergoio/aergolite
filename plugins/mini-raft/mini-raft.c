@@ -1051,6 +1051,11 @@ SQLITE_PRIVATE void worker_thread_on_peer_message(uv_msg_t *stream, void *msg, i
     break;
 */
 
+  case PLUGIN_GET_MEMPOOL:
+    SYNCTRACE("   received message: PLUGIN_GET_MEMPOOL\n");
+    on_get_mempool_transactions(node, msg, size);
+    break;
+
   /* messages sent to the leader node */
   case PLUGIN_CMD_PONG:
     SYNCTRACE("   received message: PLUGIN_CMD_PONG\n");

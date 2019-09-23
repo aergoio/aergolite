@@ -215,6 +215,36 @@ loc_exit:
 
 /****************************************************************************/
 
+SQLITE_PRIVATE void send_mempool_transactions(plugin *plugin, node *node) {
+  struct transaction *txn;
+
+  SYNCTRACE("send_mempool_transactions - to node %d\n", node->id);
+
+  for( txn=plugin->mempool; txn; txn=txn->next ){
+    binn *map = binn_map();
+    binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_NEW_TRANSACTION);
+    binn_map_set_int32(map, PLUGIN_NODE_ID, txn->node_id);
+    binn_map_set_int64(map, PLUGIN_NONCE, txn->nonce);
+    binn_map_set_list (map, PLUGIN_SQL_CMDS, txn->log);
+    send_peer_message(node, map, NULL);
+    binn_free(map);
+  }
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void on_get_mempool_transactions(node *node, void *msg, int size) {
+  plugin *plugin = node->plugin;
+
+  SYNCTRACE("on_get_mempool_transactions - request from node %d\n", node->id);
+
+  send_mempool_transactions(plugin, node);
+
+}
+
+/****************************************************************************/
+
 /*
 ** Used by the leader.
 */

@@ -71,6 +71,8 @@ SQLITE_PRIVATE void on_new_accepted_node(node *node) {
 
   send_peer_list(plugin, node);
 
+  send_mempool_transactions(plugin, node);
+
   if( plugin->is_leader ){
     update_known_nodes(plugin);
   }
