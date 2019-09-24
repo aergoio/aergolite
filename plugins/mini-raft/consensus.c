@@ -358,11 +358,15 @@ SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
   struct transaction *txn;
   struct block *block;
   int64 block_height;
-  int rc;
+  int rc, count;
 
   SYNCTRACE("create_new_block\n");
 
-  if( plugin->mempool==NULL ) return NULL;
+  count = 0;
+  for( txn=plugin->mempool; txn; txn=txn->next ){
+    if( txn->block_height==0 ) count++;
+  }
+  if( count==0 ) return NULL;
 
   /* get the next block height */
   if( plugin->current_block ){
