@@ -370,6 +370,8 @@ SQLITE_PRIVATE void aergolite_core_timer_cb(uv_timer_t* handle){
     aergolite_periodic(plugin->this_node);
   }
 
+  check_current_leader(plugin);
+
 }
 
 /****************************************************************************/

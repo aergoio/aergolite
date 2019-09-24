@@ -194,7 +194,12 @@ SQLITE_PRIVATE void start_current_leader_query(plugin *plugin) {
   for( node=plugin->peers; node; node=node->next ){
     if( node->id!=0 ) count++;
   }
-  if( count<majority(plugin->total_known_nodes) ) return;
+  if( count<majority(plugin->total_known_nodes) ){
+    SYNCTRACE("start_current_leader_query - no sufficient nodes\n");
+    // it could have a timer here to recall this fn again. now it is using
+    // the aergolite timer to make the check regularly.
+    return;
+  }
 
   /* start a leader query */
 
