@@ -455,6 +455,14 @@ SQLITE_PRIVATE void on_requested_peer_leader(
   }
 
   if( !votes ){  /* no item allocated for the given node id */
+    if( plugin->leader_votes && plugin->leader_votes->id!=0 && node_id!=0 ){
+      /* there are nodes with different leader */
+      SYNCTRACE("on_requested_peer_leader: some node(s) with a different leader."
+                " leader1=%d leader2=%d\n", plugin->leader_votes->id, node_id);
+      start_leader_election(plugin);
+      return;
+    }
+    /* store the node id */
     votes = sqlite3_malloc(sizeof(struct leader_votes));
     if( !votes ) return;
     votes->id = node_id;
