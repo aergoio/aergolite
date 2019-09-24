@@ -276,11 +276,33 @@ SQLITE_PRIVATE int broadcast_transaction(plugin *plugin, struct transaction *txn
 
 /****************************************************************************/
 
-SQLITE_PRIVATE struct transaction * store_transaction_on_mempool(
-  plugin *plugin, int node_id, int64 nonce, void *log
+SQLITE_PRIVATE int check_transaction_nonce(plugin *plugin, int node_id, int64 nonce){
+  aergolite *this_node = plugin->this_node;
+  int64 last_nonce=0;
+  int rc;
+
+  SYNCTRACE("check_transaction_nonce\n");
+
+  /* get it from the allowed_nodes table */
+  rc = aergolite_get_allowed_node(this_node, node_id, NULL, NULL, &last_nonce);
+  rc = SQLITE_OK;  //! temporary!!
+  if( rc==SQLITE_OK && nonce<=last_nonce ){
+    SYNCTRACE("check_transaction_nonce EXISTS node_id=%d last_nonce=%" INT64_FORMAT
+              " txn_nonce=%" INT64_FORMAT "\n", node_id, last_nonce, nonce);
+    rc = SQLITE_EXISTS;
+  }
+
+  return rc;
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE int store_transaction_on_mempool(
+  plugin *plugin, int node_id, int64 nonce, void *log, struct transaction **ptxn
 ){
   struct transaction *txn;
   int64 tid;
+  int rc;
 
   SYNCTRACE("store_transaction_on_mempool node_id=%d nonce=%"
             INT64_FORMAT "\n", node_id, nonce);
@@ -291,16 +313,23 @@ SQLITE_PRIVATE struct transaction * store_transaction_on_mempool(
   for( txn=plugin->mempool; txn; txn=txn->next ){
     if( txn->id==tid ){
       SYNCTRACE("store_transaction_on_mempool - transaction already present\n");
-      return (struct transaction *) -1;
+      if( ptxn ) *ptxn = txn;
+      return SQLITE_EXISTS;
     }
   }
 
-  txn = sqlite3_malloc_zero(sizeof(struct transaction));
-  if( !txn ) return NULL;
+  /* check if this transaction is valid */
+  rc = check_transaction_nonce(plugin, node_id, nonce);
+  if( rc!=SQLITE_OK ) return rc;
 
+  /* allocate a new transaction object */
+  txn = sqlite3_malloc_zero(sizeof(struct transaction));
+  if( !txn ) return SQLITE_NOMEM;
+
+  /* add it to the list */
   llist_add(&plugin->mempool, txn);
 
-  /* transaction data */
+  /* store the transaction data */
   txn->node_id = node_id;
   txn->nonce = nonce;
   txn->id = tid;
@@ -310,7 +339,8 @@ SQLITE_PRIVATE struct transaction * store_transaction_on_mempool(
   //! or the core could supply the txn already without the metadata
   // but: probably the txn will already be signed in the WAL file. in this case it cannot be changed here
 
-  return txn;
+  if( ptxn ) *ptxn = txn;
+  return SQLITE_OK;
 }
 
 /****************************************************************************/
@@ -345,9 +375,9 @@ SQLITE_PRIVATE int process_new_transaction(plugin *plugin, int node_id, int64 no
             node_id, nonce, binn_count(log)-2 );
 
   /* store the transaction in the local mempool */
-  txn = store_transaction_on_mempool(plugin, node_id, nonce, log);
-  if( !txn ) return SQLITE_NOMEM;
-  if( txn == (struct transaction *) -1 ) return SQLITE_OK;
+  rc = store_transaction_on_mempool(plugin, node_id, nonce, log, &txn);
+  if( rc==SQLITE_EXISTS ) return SQLITE_OK;
+  if( rc ) return rc;
 
   /* start the timer to generate a new block */
   start_new_block_timer(plugin);
@@ -442,10 +472,7 @@ SQLITE_PRIVATE int on_new_remote_transaction(node *node, void *msg, int size) {
             " sql_count=%d\n", node_id, nonce, binn_count(log)-2 );
 
   /* store the transaction in the local mempool */
-  txn = store_transaction_on_mempool(plugin, node_id, nonce, log);
-  if( !txn ) return SQLITE_NOMEM;
-
-  return SQLITE_OK;
+  return store_transaction_on_mempool(plugin, node_id, nonce, log, NULL);
 }
 
 /****************************************************************************/
