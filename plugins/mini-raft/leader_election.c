@@ -74,9 +74,17 @@ SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle) {
   SYNCTRACE("on_leader_check_timeout\n");
 
   for( votes=plugin->leader_votes; votes; votes=votes->next ){
-    if( votes->count >= majority(plugin->total_known_nodes) ){
-      leader_id = votes->id;
-      break;
+    if( plugin->in_election ){
+      if( votes->count >= majority(plugin->total_known_nodes) ){
+        leader_id = votes->id;
+        break;
+      }
+    }else{  /* inquirying the current leader */
+      if( votes->count >= majority(plugin->total_known_nodes)-1 ){
+        /* if it lacks one to the majority, this node assumes the same leader as them */
+        leader_id = votes->id;
+        break;
+      }
     }
   }
 
@@ -472,8 +480,10 @@ SQLITE_PRIVATE void on_requested_peer_leader(
     plugin->leader_votes = votes;
   }
 
+  if( plugin->total_known_nodes<=1 ) return;
+
   /* stop the election timer if the number of votes for a single node reaches the majority */
-  if( plugin->total_known_nodes>1 && votes->count >= majority(plugin->total_known_nodes) ){
+  if( votes->count >= majority(plugin->total_known_nodes)-1 ){
     uv_timer_stop(&plugin->leader_check_timer);
     on_leader_check_timeout(&plugin->leader_check_timer);
   }
