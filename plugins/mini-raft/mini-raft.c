@@ -147,8 +147,10 @@ SQLITE_API char * get_protocol_status(void *arg, BOOL extended) {
     int num_transactions = 0;
 
     for( txn=plugin->mempool; txn; txn=txn->next ){
-      num_transactions++;
-      last = txn;
+      if( txn->block_height==0 ){
+        num_transactions++;
+        last = txn;
+      }
     }
 
     sqlite3_str_appendf(str, "  \"num_transactions\": %d", num_transactions);
