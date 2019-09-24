@@ -291,7 +291,7 @@ SQLITE_PRIVATE struct transaction * store_transaction_on_mempool(
   for( txn=plugin->mempool; txn; txn=txn->next ){
     if( txn->id==tid ){
       SYNCTRACE("store_transaction_on_mempool - transaction already present\n");
-      return txn;
+      return (struct transaction *) -1;
     }
   }
 
@@ -347,6 +347,7 @@ SQLITE_PRIVATE int process_new_transaction(plugin *plugin, int node_id, int64 no
   /* store the transaction in the local mempool */
   txn = store_transaction_on_mempool(plugin, node_id, nonce, log);
   if( !txn ) return SQLITE_NOMEM;
+  if( txn == (struct transaction *) -1 ) return SQLITE_OK;
 
   /* start the timer to generate a new block */
   start_new_block_timer(plugin);
