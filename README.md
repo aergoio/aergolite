@@ -136,6 +136,17 @@ Use the [SQLite Android Bindings](https://github.com/aergoio/aergolite-tools/tre
 to generate an `aar` file and then include it on the Android Studio project.
 
 
+### For iOS
+
+Generate static and dynamic libraries with the command:
+
+```
+./makeios
+```
+
+They can be included as a module on iOS projects.
+
+
 ## Automated Tests
 
 These tests simulate up to 100 nodes on your computer.
