@@ -441,7 +441,7 @@ SQLITE_PRIVATE void on_requested_peer_leader(
   char *arg
 ){
   struct leader_votes *votes;
-  int node_id=0;
+  int node_id, total_votes;
 
   if( !plugin->in_leader_query ) return;
   /* if an election was started in the middle of the inquiry, ignore the message */
@@ -453,6 +453,11 @@ SQLITE_PRIVATE void on_requested_peer_leader(
   if( node_id==-1 ){
     on_new_election_request(plugin, NULL, NULL);
     return;
+  }
+
+  total_votes = 1;  /* the arriving 'vote' */
+  for( votes=plugin->leader_votes; votes; votes=votes->next ){
+    total_votes += votes->count;
   }
 
   for( votes=plugin->leader_votes; votes; votes=votes->next ){
@@ -480,10 +485,11 @@ SQLITE_PRIVATE void on_requested_peer_leader(
     plugin->leader_votes = votes;
   }
 
-  if( plugin->total_known_nodes<=1 ) return;
+  assert( plugin->total_known_nodes>1 );
 
   /* stop the election timer if the number of votes for a single node reaches the majority */
-  if( votes->count >= majority(plugin->total_known_nodes)-1 ){
+  if( votes->count >= majority(plugin->total_known_nodes)-1 ||
+      total_votes+1==plugin->total_known_nodes ){
     uv_timer_stop(&plugin->leader_check_timer);
     on_leader_check_timeout(&plugin->leader_check_timer);
   }
@@ -499,12 +505,17 @@ SQLITE_PRIVATE void on_leader_vote(
   char *arg
 ){
   struct leader_votes *votes;
-  int node_id=0;
+  int node_id, total_votes;
 
   /* if this node is not in an election, ignore the message */
   if( !plugin->in_election ) return;
 
   node_id = atoi(arg);
+
+  total_votes = 1;  /* the arriving 'vote' */
+  for( votes=plugin->leader_votes; votes; votes=votes->next ){
+    total_votes += votes->count;
+  }
 
   for( votes=plugin->leader_votes; votes; votes=votes->next ){
     if( votes->id==node_id ){
@@ -523,8 +534,11 @@ SQLITE_PRIVATE void on_leader_vote(
     plugin->leader_votes = votes;
   }
 
+  assert( plugin->total_known_nodes>1 );
+
   /* stop the election timer if the number of votes for a single node reaches the majority */
-  if( plugin->total_known_nodes>1 && votes->count >= majority(plugin->total_known_nodes) ){
+  if( votes->count >= majority(plugin->total_known_nodes) ||
+      total_votes==plugin->total_known_nodes ){
     uv_timer_stop(&plugin->leader_check_timer);
     on_leader_check_timeout(&plugin->leader_check_timer);
   }
