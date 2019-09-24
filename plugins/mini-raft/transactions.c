@@ -276,6 +276,40 @@ SQLITE_PRIVATE int broadcast_transaction(plugin *plugin, struct transaction *txn
 
 /****************************************************************************/
 
+SQLITE_PRIVATE void check_mempool_transaction_cb(
+  void *arg,
+  int node_id,
+  char *pubkey,
+  int pklen,
+  int64 last_nonce
+){
+  struct plugin *plugin = (struct plugin *) arg;
+  struct transaction *txn;
+
+loc_repeat:
+
+  /* remove the old transactions from the local mempool */
+  for( txn=plugin->mempool; txn; txn=txn->next ){
+    if( txn->node_id==node_id && txn->nonce<=last_nonce && txn->block_height==0 ){
+      discard_mempool_transaction(plugin, txn);
+      goto loc_repeat;
+    }
+  }
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE int check_mempool_transactions(plugin *plugin){
+  aergolite *this_node = plugin->this_node;
+
+  SYNCTRACE("check_mempool_transactions\n");
+
+  return aergolite_iterate_allowed_nodes(this_node, check_mempool_transaction_cb, plugin);
+}
+
+/****************************************************************************/
+
 SQLITE_PRIVATE int check_transaction_nonce(plugin *plugin, int node_id, int64 nonce){
   aergolite *this_node = plugin->this_node;
   int64 last_nonce=0;

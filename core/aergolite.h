@@ -174,6 +174,21 @@ SQLITE_API int aergolite_get_allowed_node(
   int64 *plast_nonce
 );
 
+typedef void (*on_allowed_node_cb)(
+  void *arg,
+  int node_id,
+  char *pubkey,
+  int pklen,
+  int64 last_nonce
+);
+
+SQLITE_API int aergolite_iterate_allowed_nodes(
+  aergolite *this_node,
+  on_allowed_node_cb cb,
+  void *arg
+);
+
+
 
 SQLITE_PRIVATE int check_page(aergolite *this_node, Pgno pgno, void *data, int size);
 

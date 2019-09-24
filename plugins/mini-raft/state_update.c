@@ -267,6 +267,9 @@ SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
 
   plugin->sync_down_state = DB_STATE_IN_SYNC;
 
+  /* remove old transactions from mempool */
+  check_mempool_transactions(plugin);
+
 loc_exit:
   plugin->is_updating_state = false;
   return;

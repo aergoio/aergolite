@@ -227,6 +227,9 @@ SQLITE_PRIVATE int apply_block(plugin *plugin, struct block *block){
     }
   }
 
+  /* remove old transactions from mempool */
+  check_mempool_transactions(plugin);
+
   /* replace the previous block by the new one */
   if( plugin->current_block ) discard_block(plugin->current_block);
   plugin->current_block = block;

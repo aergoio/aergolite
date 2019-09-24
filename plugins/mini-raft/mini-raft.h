@@ -292,10 +292,11 @@ SQLITE_PRIVATE void leader_node_process_local_transactions(plugin *plugin);
 
 /* mempool */
 
-SQLITE_PRIVATE int store_transaction_on_mempool(
+SQLITE_PRIVATE int  store_transaction_on_mempool(
   plugin *plugin, int node_id, int64 nonce, void *log, struct transaction **ptxn
 );
 SQLITE_PRIVATE void discard_mempool_transaction(plugin *plugin, struct transaction *txn);
+SQLITE_PRIVATE int  check_mempool_transactions(plugin *plugin);
 
 /* blockchain */
 
