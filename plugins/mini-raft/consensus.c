@@ -387,7 +387,6 @@ SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
       aergolite_execute_transaction(this_node, txn->node_id, txn->nonce, txn->log);
       /* no need to check the return result. if the execution failed or was rejected
       ** the nonce will be included in the block as a failed transaction */
-      txn->block_height = block_height;
     }
   }
 
@@ -400,10 +399,6 @@ SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
 loc_failed:
 
   if( block ) sqlite3_free(block);
-  /* reset the used transactions on mempool */
-  for( txn=plugin->mempool; txn; txn=txn->next ){
-    if( txn->block_height==block_height ) txn->block_height = 0;
-  }
   return NULL;
 
 #if 0
