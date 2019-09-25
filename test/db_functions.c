@@ -4,6 +4,7 @@
 #include <string.h>
 #include "../core/sqlite3.h"
 #include "assert.h"
+#include <time.h>
 
 #include <unistd.h>  /* for STDERR_FILENO */
 #include "../common/backtrace.c"
@@ -565,6 +566,17 @@ void unlinkf(char *base, ...){
 
 /****************************************************************************/
 
+int random_number(int lower, int upper){
+  static bool init = false;
+  if( !init ){
+    srand(time(0));
+    init = true;
+  }
+  return (rand() % (upper - lower + 1)) + lower;
+}
+
+/****************************************************************************/
+
 bool in_array(int item, int len, int list[]){
   for(int i=0; i<len; i++){
     if( list[i]==item ) return true;
@@ -587,4 +599,20 @@ int len_array_list(int list[]){
   int count = 0;
   for(int i=0; list[i]; i++) count++;
   return count;
+}
+
+/****************************************************************************/
+
+void add_to_array_list(int list[], int item){
+  int i;
+  for(i=0; list[i]; i++){}
+  list[i] = item;
+}
+
+/****************************************************************************/
+
+void clear_array_list(int list[]){
+  for(int i=0; list[i]; i++){
+    list[i] = 0;
+  }
 }
