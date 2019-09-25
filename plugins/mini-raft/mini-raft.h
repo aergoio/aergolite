@@ -152,7 +152,6 @@ struct connect_req {
 
 typedef uint32_t Pgno;
 
-
 typedef struct plugin plugin;
 typedef struct node node;
 
@@ -168,7 +167,6 @@ struct leader_votes {
   int count;
   struct leader_votes *next;
 };
-
 
 struct node {
   node *next;            /* Next item in the list */
@@ -193,6 +191,10 @@ struct node {
   int     db_state;
 };
 
+struct node_nonce {
+  int node_id;
+  int64 last_nonce;
+};
 
 struct transaction {
   struct transaction *next;
@@ -213,7 +215,6 @@ struct block {
   BOOL commit_sent;
   int  downloading_txns;
 };
-
 
 struct plugin {
   int node_id;                /* Node id */
@@ -236,6 +237,8 @@ struct plugin {
   BOOL in_election;           /* True if in a leader election */
 
   struct transaction *mempool;
+
+  void *nonces;
 
   struct block *current_block;
   struct block *new_block;

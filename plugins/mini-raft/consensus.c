@@ -351,6 +351,32 @@ SQLITE_PRIVATE void on_commit_block(node *node, void *msg, int size) {
 
 /****************************************************************************/
 
+SQLITE_PRIVATE bool is_next_nonce(plugin *plugin, int node_id, int64 nonce){
+  struct node_nonce *item;
+  int count, i;
+  bool node_found = false;
+
+  SYNCTRACE("is_next_nonce node_id=%d nonce=%" INT64_FORMAT "\n",
+            node_id, nonce);
+
+  count = array_count(plugin->nonces);
+  for( i=0; i<count; i++ ){
+    item = array_get(plugin->nonces, i);
+    //if( item->node_id==node_id && nonce==item->last_nonce+1 ){
+    if( item->node_id==node_id ){
+      node_found = true;
+      SYNCTRACE("is_next_nonce node_id=%d last_nonce=%" INT64_FORMAT "\n",
+                node_id, item->last_nonce);
+      if( nonce==item->last_nonce+1 ) return true;
+    }
+  }
+
+  if( !node_found && nonce==1 ) return true;  //! workaround. remove it later!
+  return false;
+}
+
+/****************************************************************************/
+
 
 //! ---> it can only create it if the previous state is applied on the db!!!
 //!      it must check this
@@ -365,11 +391,15 @@ SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
 
   SYNCTRACE("create_new_block\n");
 
+  /* are there unused transactions on mempool? */
   count = 0;
   for( txn=plugin->mempool; txn; txn=txn->next ){
     if( txn->block_height==0 ) count++;
   }
   if( count==0 ) return NULL;
+
+  /* get the list of last_nonce for each node */
+  build_last_nonce_array(plugin);
 
   /* get the next block height */
   if( plugin->current_block ){
@@ -388,24 +418,39 @@ SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
   if( rc ) goto loc_failed;
 
   /* execute the transactions from the local mempool */
+  count = 0;
+loc_again:
   for( txn=plugin->mempool; txn; txn=txn->next ){
-    if( txn->block_height==0 ){
+    if( txn->block_height==0 && is_next_nonce(plugin,txn->node_id,txn->nonce) ){
       /* include this transaction on the block */
-      aergolite_execute_transaction(this_node, txn->node_id, txn->nonce, txn->log);
       /* no need to check the return result. if the execution failed or was rejected
       ** the nonce will be included in the block as a failed transaction */
+      aergolite_execute_transaction(this_node, txn->node_id, txn->nonce, txn->log);
+      update_last_nonce_array(plugin, txn->node_id, txn->nonce);
+      txn->block_height = -1;
+      count++;
+      goto loc_again;
     }
   }
+  /* reset the flag on used transactions */
+  for( txn=plugin->mempool; txn; txn=txn->next ){
+    if( txn->block_height==-1 ) txn->block_height = 0;
+  }
+
+  /* if no valid transactions were found */
+  if( count==0 ) goto loc_failed;
 
   /* finalize the block creation */
   rc = aergolite_create_block(this_node, &block->height, &block->header, &block->body);
   if( rc ) goto loc_failed;
 
+  array_free(&plugin->nonces);
   return block;
 
 loc_failed:
 
   if( block ) sqlite3_free(block);
+  array_free(&plugin->nonces);
   return NULL;
 
 #if 0

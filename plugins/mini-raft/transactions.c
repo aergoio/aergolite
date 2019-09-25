@@ -276,6 +276,86 @@ SQLITE_PRIVATE int broadcast_transaction(plugin *plugin, struct transaction *txn
 
 /****************************************************************************/
 
+SQLITE_PRIVATE int update_last_nonce_array(
+  plugin *plugin,
+  int node_id,
+  int64 nonce
+){
+  struct node_nonce *item, new_item = {0};
+  int pos;
+
+  SYNCTRACE("update_last_nonce_array node_id=%d nonce=%" INT64_FORMAT
+            "\n", node_id, nonce);
+
+  if( plugin->nonces==NULL ){
+    plugin->nonces = new_array(4, sizeof(struct node_nonce));
+    if( plugin->nonces==NULL ){
+      SYNCTRACE("update_last_nonce_array FAILED: %s\n", "out of memory");
+      return SQLITE_NOMEM;
+    }
+  }else{
+    int i, count = array_count(plugin->nonces);
+    for( i=0; i<count; i++ ){
+      item = array_get(plugin->nonces, i);
+      if( item->node_id==node_id ){
+        /* found. just update the value */
+        item->last_nonce = nonce;
+        return SQLITE_OK;
+      }
+    }
+  }
+
+  /* not found. add a new item to the array */
+  new_item.node_id = node_id;
+  new_item.last_nonce = nonce;
+  pos = array_append(&plugin->nonces, &new_item);
+  if( pos<0 ){
+    SYNCTRACE("update_last_nonce_array FAILED: %s\n", "adding new item");
+    return SQLITE_NOMEM;
+  }
+
+  return SQLITE_OK;
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void build_last_nonce_array_cb(
+  void *arg,
+  int node_id,
+  char *pubkey,
+  int pklen,
+  int64 last_nonce
+){
+  struct plugin *plugin = (struct plugin *) arg;
+  struct transaction *txn;
+
+  /* check if there are transactions from this node on the local mempool */
+  for( txn=plugin->mempool; txn; txn=txn->next ){
+    if( txn->node_id==node_id && txn->block_height==0 ){
+      /* add the node's last_nonce to the array */
+      update_last_nonce_array(plugin, node_id, last_nonce);
+      break;
+    }
+  }
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE int build_last_nonce_array(plugin *plugin){
+  aergolite *this_node = plugin->this_node;
+
+  SYNCTRACE("build_last_nonce_array\n");
+
+  if( plugin->nonces ){
+    array_free(&plugin->nonces);
+  }
+
+  return aergolite_iterate_allowed_nodes(this_node, build_last_nonce_array_cb, plugin);
+}
+
+/****************************************************************************/
+
 SQLITE_PRIVATE void check_mempool_transaction_cb(
   void *arg,
   int node_id,
