@@ -406,37 +406,48 @@ SQLITE_PRIVATE int is_local_ip_address(char *address){
 
 /****************************************************************************/
 
+// use the integer IP address from the sockaddr_in structure
+#define INTEGER_IP(SA) SA.sin_addr.s_addr
+
 // option 1: send to the one that starts with 192 -- will not work on some networks
-// option 2: send to 255.255.255.255 - it works
+// option 2: send to 255.255.255.255 - it sometimes fails on Android
 // option 3: send to all the interfaces, always
 // option 4: send to all the interfaces the first time, the next ones use the address that returned responses.
 
-SQLITE_PRIVATE int get_local_broadcast_address(char *address){
-
-  //strcpy(address, "192.168.0.255");
-  strcpy(address, "255.255.255.255");
-
-  return SQLITE_OK;
-
-#if 0
-  int count=0, i, ret=0;
+SQLITE_PRIVATE int get_local_broadcast_address(char *list, int size){
+  int count=0, i;
   uv_interface_address_t *net_interface=NULL;  /* we cannot use the variable name 'interface' on MinGW */
+
+  //strcpy(list, "255.255.255.255");
+  //return SQLITE_OK;
+
+  list[0] = 0;  /* empty the list */
 
   uv_interface_addresses(&net_interface, &count);
   for(i=0; i<count; i++){
-    char local[17] = { 0 };
-    int rc = uv_ip4_name(&net_interface[i].address.address4, local, 16);
-    if( rc ){
-      rc = uv_ip6_name(&net_interface[i].address.address6, local, 16);
+    char broadcast[32];
+    broadcast[0] = 0;
+    if( net_interface[i].is_internal ) continue;
+    if( net_interface[i].address.address4.sin_family==AF_INET ){
+      struct sockaddr_in bcast = {0};
+      INTEGER_IP(bcast) = INTEGER_IP(net_interface[i].address.address4) |
+                         ~INTEGER_IP(net_interface[i].netmask.netmask4);
+      uv_ip4_name(&bcast, broadcast, 16);
+    //}else if( interface.address.address4.sin_family==AF_INET6 ){
+    // TODO: IPv6 uses multicast instead of broadcast
     }
-    printf("Local net_interface %d: %s\n", i, local);
-    if( strcmp(address,local)==0 ){
-      ret = 1;
+    if( broadcast[0]!=0 ){
+      SYNCTRACE("network interface %d - broadcast: %s\n", i, broadcast);
+      if( list[0]!=0 ){
+        if( strlen(list)+strlen(broadcast)+2 > size ) break;
+        strcat(list, ",");
+      }
+      strcat(list, broadcast);
     }
   }
   uv_free_interface_addresses(net_interface, count);
-  return ret;
-#endif
+
+  return SQLITE_OK;
 }
 
 /****************************************************************************/

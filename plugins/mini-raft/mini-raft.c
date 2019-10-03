@@ -1337,38 +1337,48 @@ SQLITE_PRIVATE void on_text_command_received(node *node, char *message){
 SQLITE_PRIVATE int send_local_udp_broadcast(plugin *plugin, char *message) {
   struct sockaddr_in dest_addr;
   uv_udp_send_t *send_req;
-  char *address;
+  char address_list[64], *address, *next;
   int port, rc = SQLITE_OK;
   uv_buf_t buffer;
 
-  //buffer.base = message;
-  //buffer.len = strlen(message) + 1;
+  assert(sizeof(address_list)==sizeof(plugin->broadcast->host));
+
+  SYNCTRACE("send_local_udp_broadcast - %s\n", message);
 
   if( !plugin->broadcast ) return SQLITE_INTERNAL;
 
-  address = plugin->broadcast->host;
+  strcpy(address_list, plugin->broadcast->host);
   port = plugin->broadcast->port;
 
-  SYNCTRACE("send_local_udp_broadcast [%s:%d]: %s\n", address, port, message);
+  address = address_list;
 
-  if( uv_ip4_addr(address, port, (struct sockaddr_in *) &dest_addr)!=0 ){
-    if( uv_ip6_addr(address, port, (struct sockaddr_in6 *) &dest_addr)!=0 ){
-      sqlite3_log(SQLITE_ERROR, "send_local_udp_broadcast: invalid address [%s:%d]", address, port);
-      return SQLITE_ERROR;
+  do{
+    next = stripchr(address, ',');
+
+    SYNCTRACE("send_local_udp_broadcast [%s:%d]: %s\n", address, port, message);
+
+    if( uv_ip4_addr(address, port, (struct sockaddr_in *) &dest_addr)!=0 ){
+      if( uv_ip6_addr(address, port, (struct sockaddr_in6 *) &dest_addr)!=0 ){
+        sqlite3_log(SQLITE_ERROR, "send_local_udp_broadcast: invalid address [%s:%d]", address, port);
+        goto loc_next; //return SQLITE_ERROR;
+      }
     }
-  }
 
-  buffer.len = strlen(message) + 1;
-  send_req = sqlite3_malloc(sizeof(uv_udp_send_t) + buffer.len);  /* allocates additional space for the message */
-  if (!send_req) return SQLITE_NOMEM;
-  buffer.base = (char*)send_req + sizeof(uv_udp_send_t);
-  strcpy(buffer.base, message);
+    buffer.len = strlen(message) + 1;
+    send_req = sqlite3_malloc(sizeof(uv_udp_send_t) + buffer.len);  /* allocates additional space for the message */
+    if( !send_req ) return SQLITE_NOMEM;
+    buffer.base = (char*)send_req + sizeof(uv_udp_send_t);
+    strcpy(buffer.base, message);
 
-  uv_udp_set_broadcast(plugin->udp_sock, 1);
-  rc = uv_udp_send(send_req, plugin->udp_sock, &buffer, 1, (const struct sockaddr *)&dest_addr, on_udp_send);
-  if( rc ) rc = SQLITE_ERROR;
+    uv_udp_set_broadcast(plugin->udp_sock, 1);
+    rc = uv_udp_send(send_req, plugin->udp_sock, &buffer, 1, (const struct sockaddr *)&dest_addr, on_udp_send);
+    if( rc ) rc = SQLITE_ERROR;
+
+loc_next:
+    address = next;
+  }while(address);
+
   return rc;
-
 }
 
 /****************************************************************************/
@@ -1402,7 +1412,7 @@ SQLITE_PRIVATE int send_udp_broadcast(plugin *plugin, char *message) {
     if( uv_ip4_addr(node->host, node->bind_port, (struct sockaddr_in *) &dest_addr)!=0 ){
       if( uv_ip6_addr(node->host, node->bind_port, (struct sockaddr_in6 *) &dest_addr)!=0 ){
         sqlite3_log(SQLITE_ERROR, "send_udp_broadcast: invalid address [%s:%d]", node->host, node->port);
-        //return SQLITE_ERROR;
+        continue; //return SQLITE_ERROR;
       }
     }
 
@@ -1893,7 +1903,7 @@ SQLITE_PRIVATE struct tcp_address * parse_discovery_address(char *address, int c
     }
     if( strncmp(host, "local", 5)==0 ){
       addr->is_broadcast = 1;
-      get_local_broadcast_address(addr->host);
+      get_local_broadcast_address(addr->host, sizeof addr->host);
     }else{
       strcpy(addr->host, host);
     }
