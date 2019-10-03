@@ -1334,25 +1334,28 @@ SQLITE_PRIVATE void on_text_command_received(node *node, char *message){
 
 /****************************************************************************/
 
+/*
+** This function retrieves the current list of active network interfaces and
+** sends the broadcast message to all of them.
+*/
 SQLITE_PRIVATE int send_local_udp_broadcast(plugin *plugin, char *message) {
   struct sockaddr_in dest_addr;
   uv_udp_send_t *send_req;
-  char address_list[64], *address, *next;
+  char address_list[128], *address, *next;
   int port, rc = SQLITE_OK;
   uv_buf_t buffer;
-
-  assert(sizeof(address_list)==sizeof(plugin->broadcast->host));
 
   SYNCTRACE("send_local_udp_broadcast - %s\n", message);
 
   if( !plugin->broadcast ) return SQLITE_INTERNAL;
 
-  strcpy(address_list, plugin->broadcast->host);
   port = plugin->broadcast->port;
+
+  get_local_broadcast_address(address_list, sizeof address_list);
 
   address = address_list;
 
-  do{
+  while( address && address[0] ){
     next = stripchr(address, ',');
 
     SYNCTRACE("send_local_udp_broadcast [%s:%d]: %s\n", address, port, message);
@@ -1376,7 +1379,7 @@ SQLITE_PRIVATE int send_local_udp_broadcast(plugin *plugin, char *message) {
 
 loc_next:
     address = next;
-  }while(address);
+  }
 
   return rc;
 }
@@ -1903,7 +1906,6 @@ SQLITE_PRIVATE struct tcp_address * parse_discovery_address(char *address, int c
     }
     if( strncmp(host, "local", 5)==0 ){
       addr->is_broadcast = 1;
-      get_local_broadcast_address(addr->host, sizeof addr->host);
     }else{
       strcpy(addr->host, host);
     }
