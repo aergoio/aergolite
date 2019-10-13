@@ -460,6 +460,7 @@ SQLITE_PRIVATE void on_new_node_connected(node *node) {
   if (!map) goto loc_failed;
 
   if (binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_CMD_ID) == FALSE) goto loc_failed;
+  if (binn_map_set_int32(map, PLUGIN_VERSION, PLUGIN_VERSION_NUMBER) == FALSE) goto loc_failed;
   if (binn_map_set_int32(map, PLUGIN_NODE_ID, plugin->node_id) == FALSE) goto loc_failed;
   if (binn_map_set_int32(map, PLUGIN_PORT, plugin->bind->port) == FALSE) goto loc_failed;
 
@@ -981,7 +982,7 @@ SQLITE_PRIVATE void worker_thread_on_peer_message(uv_msg_t *stream, void *msg, i
 
   case PLUGIN_CMD_ID:
     SYNCTRACE("   received message: PLUGIN_CMD_ID\n");
-    on_new_node_identified(node, msg, size);
+    on_node_identification(node, msg, size);
     break;
   case PLUGIN_PEERS:
     SYNCTRACE("   received message: PLUGIN_PEERS\n");

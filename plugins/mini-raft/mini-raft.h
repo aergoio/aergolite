@@ -18,7 +18,12 @@
 
 #define PLUGIN_CMD                 0x43292173
 
+#define PLUGIN_VERSION_NUMBER      1
+
 /* peer message commands */
+
+#define PLUGIN_VERSION             0xcd00
+
 #define PLUGIN_CMD_ID              0xcd01     /* peer identification */
 //#define PLUGIN_REQUEST_NODE_ID     0xcd02     /* request a node id */
 //#define PLUGIN_NEW_NODE_ID         0xcd03     /* send the new node id */

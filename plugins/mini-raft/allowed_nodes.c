@@ -336,9 +336,17 @@ loc_failed:
 
 /****************************************************************************/
 
-SQLITE_PRIVATE void on_new_node_identified(node *node, void *msg, int size) {
+SQLITE_PRIVATE void on_node_identification(node *node, void *msg, int size) {
   plugin *plugin = node->plugin;
   aergolite *this_node = node->this_node;
+  int version;
+
+  version = binn_map_int32(msg, PLUGIN_VERSION);
+  if( version!=PLUGIN_VERSION_NUMBER ){
+    sqlite3_log(1, "on_node_identification: wrong plugin version: %d", version);
+    disconnect_peer(node);
+    return;
+  }
 
   node->id = binn_map_int32(msg, PLUGIN_NODE_ID);
   node->bind_port = binn_map_int32(msg, PLUGIN_PORT);
@@ -348,7 +356,7 @@ SQLITE_PRIVATE void on_new_node_identified(node *node, void *msg, int size) {
 
   /* if the node id was not supplied */
   if( plugin->node_id==0 ){
-    sqlite3_log(1, "on_new_node_identified: empty node id!");
+    sqlite3_log(1, "on_node_identification: empty node id!");
     disconnect_peer(node);
   } else if( node->id > 0 ){
     /* xxx */
