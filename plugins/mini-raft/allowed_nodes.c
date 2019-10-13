@@ -375,3 +375,35 @@ SQLITE_PRIVATE void on_id_msg_sent(send_message_t *req, int status) {
   }
 
 }
+
+/****************************************************************************/
+
+SQLITE_PRIVATE BOOL send_node_identification(plugin *plugin, node *node) {
+  aergolite *this_node = plugin->this_node;
+  binn *map;
+  BOOL ret=FALSE;
+
+  /* send the identification to the other peer */
+  map = binn_map();
+  if( !map ) goto loc_exit;
+
+  if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_CMD_ID)==FALSE ) goto loc_failed;
+  if( binn_map_set_int32(map, PLUGIN_VERSION, PLUGIN_VERSION_NUMBER)==FALSE ) goto loc_failed;
+  if( binn_map_set_int32(map, PLUGIN_NODE_ID, plugin->node_id)==FALSE ) goto loc_failed;
+  if( binn_map_set_int32(map, PLUGIN_PORT, plugin->bind->port)==FALSE ) goto loc_failed;
+
+  if (send_peer_message(node, map, on_id_msg_sent) == FALSE) {
+    sqlite3_log(1, "on_new_node_connected: send_peer_message failed");
+    goto loc_exit;
+  }
+
+  ret = TRUE;
+
+loc_exit:
+  if( map ) binn_free(map);
+  return ret;
+
+loc_failed:
+  sqlite3_log(1, "on_new_node_connected: binn failed. probably out of memory");
+  goto loc_exit;
+}

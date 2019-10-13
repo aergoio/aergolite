@@ -446,37 +446,16 @@ SQLITE_PRIVATE node * node_from_socket(uv_msg_t *socket) {
 
 SQLITE_PRIVATE void on_new_node_connected(node *node) {
   plugin *plugin = node->plugin;
-  aergolite *this_node = node->this_node;
-  binn *map=0;
 
-  if (node == NULL) return;
+  if( !node ) return;
 
   SYNCTRACE("new node connected: %s:%d ---\n", node->host, node->port);
 
   // it could call a user callback function to ... identify/authenticate it, or simply to log
 
-  /* send the identification to the other peer */
-  map = binn_map();
-  if (!map) goto loc_failed;
-
-  if (binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_CMD_ID) == FALSE) goto loc_failed;
-  if (binn_map_set_int32(map, PLUGIN_VERSION, PLUGIN_VERSION_NUMBER) == FALSE) goto loc_failed;
-  if (binn_map_set_int32(map, PLUGIN_NODE_ID, plugin->node_id) == FALSE) goto loc_failed;
-  if (binn_map_set_int32(map, PLUGIN_PORT, plugin->bind->port) == FALSE) goto loc_failed;
-
-  if (send_peer_message(node, map, on_id_msg_sent) == FALSE) {
-    sqlite3_log(1, "on_new_node_connected: send_peer_message failed");
-    goto loc_failed;
+  if( send_node_identification(plugin, node)==FALSE ){
+    disconnect_peer(node);
   }
-
-loc_exit:
-  if (map) binn_free(map);
-  return;
-
-loc_failed:
-  sqlite3_log(1, "on_new_node_connected: binn failed. probably out of memory");
-  disconnect_peer(node);
-  goto loc_exit;
 
 }
 
