@@ -93,3 +93,13 @@ void xrc4_crypt(unsigned char *out, unsigned char *in, unsigned int len,
     }
 
 }
+
+/* basic encryption/decryption function */
+void xrc4_basic_crypt(char *out, char *in, int len, char *key, int keylen){
+  unsigned char sbox[256];
+  xrc4_init((unsigned char*)key, keylen, sbox);
+  xrc4_crypt((unsigned char*)out, (unsigned char*)in, len, sbox, (unsigned char*)key, keylen, 0x11223344);
+}
+
+#define xrc4_encrypt_inplace(a,b,c,d) xrc4_basic_crypt(a,a,b,c,d)
+#define xrc4_decrypt_inplace(a,b,c,d) xrc4_basic_crypt(a,a,b,c,d)

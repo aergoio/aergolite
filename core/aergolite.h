@@ -60,6 +60,9 @@ struct aergolite {
   char *uri;                  /* the URI filename with parameters */
   char *node_info;            /* User defined information about this node */
 
+  BOOL has_privkey;           /* if the private key for this node is available */
+  char privkey[32];           /* the private key for this node */
+
   aergolite_plugin *plugin_functions; /* Which plugin is being used */
   void *plugin_instance;      /* The instance of the plugin related to this db connection */
 
@@ -109,6 +112,11 @@ struct aergolite_plugin {
 
 SQLITE_PRIVATE int aergolitePluginsInit();
 
+
+void xrc4_basic_crypt(char *out, char *in, int len, char *key, int keylen);
+
+#define xrc4_encrypt_inplace(a,b,c,d) xrc4_basic_crypt(a,a,b,c,d)
+#define xrc4_decrypt_inplace(a,b,c,d) xrc4_basic_crypt(a,a,b,c,d)
 
 SQLITE_PRIVATE Pager * getPager(sqlite3 *db, const char *name);
 SQLITE_PRIVATE Pager * getPagerFromiDb(sqlite3 *db, int iDb);
