@@ -84,7 +84,7 @@ valgrind: export LIBFLAGS := -g -DSQLITE_DEBUG=1 $(DEBUGFLAGS) $(LIBFLAGS)
 OBJECTS = sqlite3.o plugin-mini-raft.o
 
 aergolite-0.1.dll: $(OBJECTS)
-	$(CC) -shared -Wl,--out-implib,$(IMPLIB).lib $^ -o $@ $(LFLAGS) -lbinn-1.0 -llibuv -lws2_32
+	$(CC) -shared -Wl,--out-implib,$(IMPLIB).lib $^ -o $@ $(LFLAGS) -lbinn-1.0 -llibuv -lsecp256k1 -lws2_32
 ifeq ($(MAKECMDGOALS),valgrind)
 else ifeq ($(MAKECMDGOALS),debug)
 else
@@ -92,7 +92,7 @@ else
 endif
 
 libaergolite.0.dylib: $(OBJECTS)
-	$(CC) -dynamiclib -install_name "$(INSTNAME)" -current_version $(CURR_VERSION) -compatibility_version $(COMPAT_VERSION) $^ -o $@ $(LDFLAGS) -lbinn -luv
+	$(CC) -dynamiclib -install_name "$(INSTNAME)" -current_version $(CURR_VERSION) -compatibility_version $(COMPAT_VERSION) $^ -o $@ $(LDFLAGS) -lbinn -luv -lsecp256k1
 ifeq ($(MAKECMDGOALS),valgrind)
 else ifeq ($(MAKECMDGOALS),debug)
 else
@@ -107,7 +107,7 @@ libaergolite.a: $(OBJECTS)
 	$(AR) rcs $@ $^
 
 libaergolite.dylib: $(OBJECTS)
-	$(CC) -dynamiclib -o $@ $^ $(LDFLAGS) -lbinn -luv
+	$(CC) -dynamiclib -o $@ $^ $(LDFLAGS) -lbinn -luv -lsecp256k1
 ifeq ($(MAKECMDGOALS),valgrind)
 else ifeq ($(MAKECMDGOALS),debug)
 else
@@ -115,7 +115,7 @@ else
 endif
 
 libaergolite.so.0.0.1: $(OBJECTS)
-	$(CC) -shared -Wl,-soname,$(SONAME) $^ -o $@ $(LDFLAGS) -lbinn -luv
+	$(CC) -shared -Wl,-soname,$(SONAME) $^ -o $@ $(LDFLAGS) -lbinn -luv -lsecp256k1
 ifeq ($(MAKECMDGOALS),valgrind)
 else ifeq ($(MAKECMDGOALS),debug)
 else

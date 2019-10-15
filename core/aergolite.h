@@ -1,4 +1,4 @@
-
+#include "secp256k1.h"
 #include "single_instance.h"
 
 typedef unsigned char uchar;
@@ -62,6 +62,7 @@ struct aergolite {
 
   BOOL has_privkey;           /* if the private key for this node is available */
   char privkey[32];           /* the private key for this node */
+  secp256k1_context *ecdsa;   /* the ECDSA context */
 
   aergolite_plugin *plugin_functions; /* Which plugin is being used */
   void *plugin_instance;      /* The instance of the plugin related to this db connection */

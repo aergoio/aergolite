@@ -62,6 +62,7 @@
 
 //#define PLUGIN_LOG_EXISTS          0xdb20     /* follower <- leader (response) */
 
+#define PLUGIN_SIGNATURE           0xdb51
 
 
 #define PLUGIN_CONTENT             0xc0de011

@@ -11909,6 +11909,17 @@ SQLITE_API char *stripchr(char *mainstr, int separator);
 
 
 /*
+** Digital signatures
+*/
+
+int aergolite_sign(aergolite *this_node, char *msg, int msglen,
+                   char *signature, int *psiglen);
+int aergolite_verify(aergolite *this_node, char *msg, int msglen,
+                     char *pubkey, int pklen,
+                     char *signature, int siglen);
+
+
+/*
 ** Encryption
 */
 
