@@ -80,7 +80,34 @@ SQLITE_PRIVATE void on_new_accepted_node(node *node) {
 }
 
 /****************************************************************************/
-/* PEER FUNCTIONS ***********************************************************/
+
+SQLITE_PRIVATE void on_valid_node_id(node *node) {
+  plugin *plugin = node->plugin;
+
+  SYNCTRACE("on_valid_node_id\n");
+
+#if 0
+  if( !node->invitation_sent ){
+    /* check if remote node has authorization */
+    xxx
+
+    if( x ){
+      /* send authorization to the remote node */
+      yyy
+
+      node->is_active = TRUE;
+    }
+  }
+#endif
+
+  if( node->is_active ){
+    on_new_accepted_node(node);
+  }
+
+}
+
+/****************************************************************************/
+/* NODE ID CONFLICT *********************************************************/
 /****************************************************************************/
 
 SQLITE_PRIVATE void stop_id_conflict_timer(struct node_id_conflict *id_conflict) {
@@ -110,7 +137,7 @@ SQLITE_PRIVATE void id_conflict_timer_cb(uv_timer_t* handle) {
   disconnect_peer(existing_node);
 
   /* start the db sync */
-  on_new_accepted_node(new_node);
+  on_valid_node_id(new_node);
 
 }
 
@@ -236,7 +263,7 @@ SQLITE_PRIVATE void check_new_node_id(node *node) {
   }
 
   /* start the db sync */
-  on_new_accepted_node(node);
+  on_valid_node_id(node);
 
   return;
 
@@ -336,25 +363,36 @@ loc_failed:
 
 /****************************************************************************/
 
+//SQLITE_PRIVATE void on_new_node_identified(node *node, void *msg, int size) {
+
+// the node could also send the pubkey to then get a node id
+
 SQLITE_PRIVATE void on_node_identification(node *node, void *msg, int size) {
   plugin *plugin = node->plugin;
   aergolite *this_node = node->this_node;
-  char *signature, pubkey[96];
-  int rc, version, siglen=0, pklen=0;
+  char *signature, pubkey_int[96], *pubkey_ext, msg2[2048];
+  char *cpu, *os, *host, *app, *pubkey;
+  int rc, version, siglen=0, pklen, pklen_int=0, pklen_ext=0;
 
   version = binn_map_int32(msg, PLUGIN_VERSION);
   if( version!=PLUGIN_VERSION_NUMBER ){
-    sqlite3_log(1, "on_node_identification: wrong plugin version: %d", version);
+    sqlite3_log(1, "on_node_identification: wrong protocol version: %d", version);
     disconnect_peer(node);
     return;
   }
 
   node->id = binn_map_int32(msg, PLUGIN_NODE_ID);
   node->bind_port = binn_map_int32(msg, PLUGIN_PORT);
+  cpu = binn_map_str(msg, PLUGIN_CPU);
+  os = binn_map_str(msg, PLUGIN_OS);
+  host = binn_map_str(msg, PLUGIN_HOSTNAME);
+  app = binn_map_str(msg, PLUGIN_APP);
+  pubkey_ext = binn_map_blob(msg, PLUGIN_PUBKEY, &pklen_ext);
   signature = binn_map_blob(msg, PLUGIN_SIGNATURE, &siglen);
 
   SYNCTRACE("on_node_identification - node_id=%d remote_bind_port=%d remote_port=%d\n",
             node->id, node->bind_port, node->port);
+  SYNCTRACE("on_node_identification - hostname=[%s] app=[%s]\n", host, app);
 
   if( plugin->node_id==0 ){
     sqlite3_log(1, "on_node_identification: empty node id!");
@@ -362,23 +400,36 @@ SQLITE_PRIVATE void on_node_identification(node *node, void *msg, int size) {
   }else if( node->id < 0 ){
     sqlite3_log(1, "on_node_identification: invalid node id!");
     goto loc_failed;
-  }
-
-  if( !signature ){
+  }else if( !signature ){
     sqlite3_log(1, "on_node_identification: no digital signature");
     goto loc_failed;
   }
 
-  /* load the public key from the connecting node */
-  rc = aergolite_get_allowed_node(this_node, node->id, pubkey, &pklen, NULL);
-  if( rc || pklen==0 ){
-    sqlite3_log(1, "on_node_identification: node not found or failure");
+  /* load the public key from the allowed nodes table */
+  rc = aergolite_get_allowed_node(this_node, node->id, pubkey_int, &pklen_int, NULL);
+  if( rc==SQLITE_OK ){
+    if( pubkey_ext ){
+      if( pklen_int!=pklen_ext || memcmp(pubkey_int, pubkey_ext, pklen_int)!=0 ){
+        sqlite3_log(1, "on_node_identification: different public keys for node %d", node->id);
+        goto loc_failed;
+      }
+    }
+    pubkey = pubkey_int;
+    pklen = pklen_int;
+  }else{
+    pubkey = pubkey_ext;
+    pklen = pklen_ext;
+    assert(pklen_int==0);
+  }
+
+  if( pklen_int==0 && pklen_ext==0 ){
+    sqlite3_log(1, "on_node_identification: no public key");
     goto loc_failed;
   }
 
   /* verify the digital signature */
-  sprintf(msg, "%d:%d", node->id, node->bind_port);
-  rc = aergolite_verify(this_node, msg, strlen(msg), pubkey, pklen, signature, siglen);
+  sprintf(msg2, "%d:%d:%s:%s:%s:%s", node->id, node->bind_port, cpu, os, host, app);
+  rc = aergolite_verify(this_node, msg2, strlen(msg2), pubkey, pklen, signature, siglen);
   if( rc==SQLITE_INVALID ){
     sqlite3_log(rc, "on_node_identification: invalid digital signature");
     goto loc_failed;
@@ -389,8 +440,31 @@ SQLITE_PRIVATE void on_node_identification(node *node, void *msg, int size) {
 
   SYNCTRACE("remote node authenticated - node_id=%d\n", node->id);
 
+  /* store the node info */
+  strcpy(node->cpu, cpu);
+  strcpy(node->os, os);
+  strcpy(node->hostname, host);
+  strcpy(node->app, app);
+  memcpy(node->pubkey, pubkey, pklen);
+  node->pklen = pklen;
+
+  /* store the node state */
+  if( pklen_int>0 ){    // || has_authorization ){  == 'invitation card'
+    node->is_active = TRUE;
+  }
+  if( pklen_ext==0 ){
+    node->invitation_sent = TRUE;
+  }
+
   /* xxx */
   check_new_node_id(node);
+
+
+//   3 possible cases:
+// 1. both nodes have no content - they are just starting
+// 2. one is part of the network and the other is not - this one can be any of these 2
+// 3. both are already part of the network
+
 
   return;
 loc_failed:
@@ -412,19 +486,13 @@ SQLITE_PRIVATE void on_id_msg_sent(send_message_t *req, int status) {
 
 SQLITE_PRIVATE BOOL send_node_identification(plugin *plugin, node *node) {
   aergolite *this_node = plugin->this_node;
-  char msg[16], signature[72];
+  int64 last_block = plugin->current_block ? plugin->current_block->height : 0;
+  char msg[2048], signature[72];
   binn *map;
   BOOL ret=FALSE;
   int rc, siglen;
 
   /* send the identification to the other peer */
-
-  sprintf(msg, "%d:%d", plugin->node_id, plugin->bind->port);
-  rc = aergolite_sign(this_node, msg, strlen(msg), signature, &siglen);
-  if( rc ){
-    sqlite3_log(rc, "send_node_identification: digital signature failed");
-    goto loc_exit;
-  }
 
   map = binn_map();
   if( !map ) goto loc_exit;
@@ -433,7 +501,65 @@ SQLITE_PRIVATE BOOL send_node_identification(plugin *plugin, node *node) {
   if( binn_map_set_int32(map, PLUGIN_VERSION, PLUGIN_VERSION_NUMBER)==FALSE ) goto loc_failed;
   if( binn_map_set_int32(map, PLUGIN_NODE_ID, plugin->node_id)==FALSE ) goto loc_failed;
   if( binn_map_set_int32(map, PLUGIN_PORT, plugin->bind->port)==FALSE ) goto loc_failed;
+
+  /* send the public key if this node was not yet authorized */
+  if( last_block==0 ){
+    int pklen;
+    char *pubkey = aergolite_pubkey(this_node, &pklen);
+    if( !pubkey ) goto loc_exit;
+    if( binn_map_set_blob(map, PLUGIN_PUBKEY, pubkey, pklen)==FALSE ) goto loc_failed;
+  }
+
+  {
+    char hostname[256];
+    char cpu_info[256];
+    char os_info[256];
+    char app_info[256];
+    uv_cpu_info_t *cpus;
+    uv_utsname_t os;
+    size_t size;
+    int count=0;
+
+    /* get CPU info */
+    uv_cpu_info(&cpus, &count);
+    if( count>0 ){
+      strcpy(cpu_info, cpus[0].model);
+    }else{
+      cpu_info[0] = 0;
+    }
+    uv_free_cpu_info(cpus, count);
+
+    /* get OS info */
+    uv_os_uname(&os);
+    snprintf(os_info, sizeof os_info, "%s %s %s", os.sysname, os.release, os.machine);  // os.version
+
+    /* get hostname */
+    size = sizeof hostname;
+    uv_os_gethostname(hostname, &size);
+
+    /* get executable path and name */
+    size = sizeof app_info;
+    uv_exepath(app_info, &size);
+
+    if( binn_map_set_str(map, PLUGIN_CPU, cpu_info)==FALSE ) goto loc_failed;
+    if( binn_map_set_str(map, PLUGIN_OS, os_info)==FALSE ) goto loc_failed;
+    if( binn_map_set_str(map, PLUGIN_HOSTNAME, hostname)==FALSE ) goto loc_failed;
+    if( binn_map_set_str(map, PLUGIN_APP, app_info)==FALSE ) goto loc_failed;
+
+    sprintf(msg, "%d:%d:%s:%s:%s:%s", plugin->node_id, plugin->bind->port,
+            cpu_info, os_info, hostname, app_info);
+  }
+
+  /* sign the message content */
+
+  rc = aergolite_sign(this_node, msg, strlen(msg), signature, &siglen);
+  if( rc ){
+    sqlite3_log(rc, "send_node_identification: digital signature failed");
+    goto loc_exit;
+  }
   if( binn_map_set_blob(map, PLUGIN_SIGNATURE, signature, siglen)==FALSE ) goto loc_failed;
+
+  /* send the message to the peer */
 
   if (send_peer_message(node, map, on_id_msg_sent) == FALSE) {
     sqlite3_log(1, "send_node_identification: send_peer_message failed");

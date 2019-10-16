@@ -62,8 +62,13 @@
 
 //#define PLUGIN_LOG_EXISTS          0xdb20     /* follower <- leader (response) */
 
-#define PLUGIN_SIGNATURE           0xdb51
+#define PLUGIN_PUBKEY              0xdb51
+#define PLUGIN_SIGNATURE           0xdb52
 
+#define PLUGIN_CPU                 0xc0de021
+#define PLUGIN_OS                  0xc0de022
+#define PLUGIN_HOSTNAME            0xc0de023
+#define PLUGIN_APP                 0xc0de024
 
 #define PLUGIN_CONTENT             0xc0de011
 #define PLUGIN_PGNO                0xc0de012
@@ -185,6 +190,14 @@ struct node {
   int   port;            /* Remote port */
   int   bind_port;       /* Remote bind port. Used on incoming TCP connections */
 
+  char  cpu[256];        /* CPU information */
+  char  os[256];         /* OS information */
+  char  hostname[256];   /* node's hostname */
+  char  app[256];        /* application path and name */
+
+  char  pubkey[36];      /* node's public key */
+  int   pklen;           /* node's public key length */
+
   uv_msg_t socket;       /* Socket used to connect with the other peer */
   int   conn_state;      /* The state of this connection/peer */
 
@@ -192,6 +205,9 @@ struct node {
   plugin *plugin;        /* x */
 
   int64 last_block;      /* The height of the last block */
+
+  BOOL    is_active;
+  BOOL    invitation_sent;
 
   /* used for the query status */
   int     db_state;
