@@ -198,6 +198,72 @@ SQLITE_API char * get_protocol_status(void *arg, BOOL extended) {
 
 /****************************************************************************/
 
+struct print_node {
+  plugin *plugin;
+  void   *vdbe;
+};
+
+SQLITE_PRIVATE void print_allowed_node_cb(
+  void *arg,
+  int node_id,
+  char *pubkey,
+  int pklen,
+  int64 last_nonce
+){
+  struct print_node *data = (struct print_node *) arg;
+  struct node *node;
+  char hexpubkey[72];
+
+  /* check if the node is connected */
+  for(node=data->plugin->peers; node; node=node->next){
+    if( node->id==node_id ) return;
+  }
+
+  /* print the offline node */
+  to_hex(pubkey, pklen, hexpubkey);
+  node_list_add(data->vdbe, node_id, hexpubkey, "", "", "", "", "", "");
+
+}
+
+/****************************************************************************/
+
+// node_id | pubkey | address | CPU | OS | hostname | app | external |
+
+SQLITE_API void print_node_list(void *arg, void *vdbe) {
+  plugin *plugin = (struct plugin *) arg;
+  aergolite *this_node = plugin->this_node;
+  struct node *node;
+
+  /* iterate over the connected nodes */
+
+  for(node=plugin->peers; node; node=node->next){
+    char hexpubkey[72];
+    char address[32];
+
+    to_hex(node->pubkey, node->pklen, hexpubkey);
+    sprintf(address, "%s:%d", node->host, node->port);
+
+    node_list_add(vdbe,
+       node->id,
+       hexpubkey,
+       address,
+       node->cpu,
+       node->os,
+       node->hostname,
+       node->app,
+       node->is_active ? "" : "yes");
+
+  }
+
+  /* iterate over the allowed nodes table */
+
+  aergolite_iterate_allowed_nodes(this_node, print_allowed_node_cb,
+    &(struct print_node){ plugin, vdbe });
+
+}
+
+/****************************************************************************/
+
 /* a broadcast message requesting blockchain status info */
 SQLITE_PRIVATE void on_blockchain_status_request(
   plugin *plugin,
@@ -2048,7 +2114,8 @@ int register_miniraft_plugin(){
     plugin_init,
     plugin_end,
     on_new_local_transaction,
-    get_protocol_status
+    get_protocol_status,
+    print_node_list
   );
 
   return rc;

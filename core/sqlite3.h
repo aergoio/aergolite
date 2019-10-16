@@ -11729,7 +11729,8 @@ SQLITE_API int aergolite_plugin_register(
   void* (*xInit)(aergolite*, char* uri), /* initializes a new plugin instance */
   void (*xEnd)(void*),                   /* terminates the instance */
   void (*xOnNewLocalTransaction)(void*), /* on_new_local_transaction notification */
-  char* (*xStatus)(void*, int extended)  /* used to retrieve the protocol status */
+  char* (*xStatus)(void*, int extended), /* used to retrieve the protocol status */
+  void (*xNodeList)(void*, void*)        /* used to retrieve the node list */
 );
 
 /*
@@ -11852,6 +11853,16 @@ SQLITE_API int aergolite_iterate_allowed_nodes(
 
 SQLITE_API char * aergolite_get_blockchain_status(aergolite *this_node);
 
+SQLITE_API void node_list_add(void *vdbe,
+  int node_id,
+  char *pubkey,
+  char *address,
+  char *cpu,
+  char *os,
+  char *hostname,
+  char *app,
+  char *external
+);
 
 
 
@@ -11906,6 +11917,7 @@ SQLITE_API void *sqlite3_malloc_zero(int64 n);
 SQLITE_API void *sqlite3_memdup(void *source, int size);
 SQLITE_API char *sqlite3_strdup(char *text);
 SQLITE_API char *stripchr(char *mainstr, int separator);
+SQLITE_API void to_hex(char *source, int size, char *dest);
 
 
 /*
