@@ -53,6 +53,14 @@ struct block {
 #define BODY_TXN_IDS    0x22
 
 
+/*
+** Internal constants
+*/
+
+#define TXN_PUBKEY      1
+#define TXN_SIGNATURE   2
+
+
 
 struct aergolite {
   int id;                     /* Node id */

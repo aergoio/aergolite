@@ -390,27 +390,6 @@ SQLITE_PRIVATE int check_mempool_transactions(plugin *plugin){
 
 /****************************************************************************/
 
-SQLITE_PRIVATE int check_transaction_nonce(plugin *plugin, int node_id, int64 nonce){
-  aergolite *this_node = plugin->this_node;
-  int64 last_nonce=0;
-  int rc;
-
-  SYNCTRACE("check_transaction_nonce\n");
-
-  /* get it from the allowed_nodes table */
-  rc = aergolite_get_allowed_node(this_node, node_id, NULL, NULL, &last_nonce);
-  rc = SQLITE_OK;  //! temporary!!
-  if( rc==SQLITE_OK && nonce<=last_nonce ){
-    SYNCTRACE("check_transaction_nonce EXISTS node_id=%d last_nonce=%" INT64_FORMAT
-              " txn_nonce=%" INT64_FORMAT "\n", node_id, last_nonce, nonce);
-    rc = SQLITE_EXISTS;
-  }
-
-  return rc;
-}
-
-/****************************************************************************/
-
 SQLITE_PRIVATE int store_transaction_on_mempool(
   plugin *plugin, int node_id, int64 nonce, void *log, struct transaction **ptxn
 ){
@@ -433,7 +412,7 @@ SQLITE_PRIVATE int store_transaction_on_mempool(
   }
 
   /* check if this transaction is valid */
-  rc = check_transaction_nonce(plugin, node_id, nonce);
+  rc = aergolite_verify_transaction(plugin->this_node, node_id, log);
   if( rc!=SQLITE_OK ) return rc;
 
   /* allocate a new transaction object */
