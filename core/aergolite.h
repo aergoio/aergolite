@@ -139,6 +139,7 @@ SQLITE_PRIVATE void aergoliteDiscardLastCommand(sqlite3 *db);
 SQLITE_PRIVATE int  aergoliteStoreLastCommand(Pager *pPager);
 SQLITE_PRIVATE int  aergoliteStoreLogTransactionNonce(Pager *pPager);
 SQLITE_PRIVATE void aergoliteStoreLogTransactionTime(Pager *pPager);
+SQLITE_PRIVATE int  aergoliteCheckSignTransaction(Pager *pPager);
 
 SQLITE_PRIVATE void invalidate_loaded_schemas(aergolite *this_node, BOOL on_main_db, BOOL on_worker_db);
 SQLITE_PRIVATE int  check_for_log_rotation(aergolite *this_node);
