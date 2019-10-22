@@ -267,6 +267,44 @@ SQLITE_PRIVATE void on_node_info_request(
 
 }
 
+/*****************************************************************************/
+
+/*
+** This app changed the node info.
+** Sends the updated information to all the connected peers.
+*/
+SQLITE_API void on_local_node_info_changed(void *arg, char *node_info) {
+  plugin *plugin = (struct plugin *) arg;
+  char *msg;
+
+  msg = sqlite3_mprintf("node_info:%s", node_info);
+  if( !msg ) return;
+
+  send_tcp_broadcast(plugin, msg);
+
+  sqlite3_free(msg);
+
+}
+
+/****************************************************************************/
+
+/* node info */
+SQLITE_PRIVATE void on_peer_info_changed(
+  plugin *plugin,
+  node *node,
+  char *arg
+){
+
+  sqlite3_free(node->info);
+
+  if( arg ){
+    node->info = sqlite3_strdup(arg);
+  }else{
+    node->info = NULL;
+  }
+
+}
+
 /***************************************************************************/
 /****************************************************************************/
 
@@ -1557,6 +1595,9 @@ SQLITE_PRIVATE void node_thread(void *arg) {
   /* a broadcast message requesting node info */
   register_udp_message("node_info", on_node_info_request);
 
+  /* new node info from peer */
+  register_tcp_message("node_info", on_peer_info_changed);
+
 
 #if TARGET_OS_IPHONE
   /* initialize a callback to receive notifications from the main thread */
@@ -2080,7 +2121,8 @@ int register_miniraft_plugin(){
     plugin_init,
     plugin_end,
     on_new_local_transaction,
-    get_protocol_status
+    get_protocol_status,
+    on_local_node_info_changed
   );
 
   return rc;

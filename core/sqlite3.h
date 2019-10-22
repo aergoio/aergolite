@@ -11729,7 +11729,8 @@ SQLITE_API int aergolite_plugin_register(
   void* (*xInit)(aergolite*, char* uri), /* initializes a new plugin instance */
   void (*xEnd)(void*),                   /* terminates the instance */
   void (*xOnNewLocalTransaction)(void*), /* on_new_local_transaction notification */
-  char* (*xStatus)(void*, int extended)  /* used to retrieve the protocol status */
+  char* (*xStatus)(void*, int extended), /* used to retrieve the protocol status */
+  void (*xNodeInfo)(void*, char*)        /* node info changed */
 );
 
 /*
