@@ -376,6 +376,7 @@ In this case the returned data will contain the list of connected nodes:
 }
 ```
 
+
 ### Application defined node information
 
 Your application can set node specific information using this command:
@@ -391,3 +392,57 @@ This information is kept on memory locally and also sent to the connected peers.
 The last set value can be retrieved locally using the `PRAGMA node_info` command.
 
 It will also appear in the result of the `PRAGMA protocol_status(1)` command on its peer nodes.
+
+
+### Last nonce
+
+It is possible to retrieve the node's last nonce with the command:
+
+```
+PRAGMA last_nonce
+```
+
+If the returned number is zero it means that this node has not generated any transaction yet.
+
+
+### Transaction Status
+
+To retrieve the status of a local transaction:
+
+```
+PRAGMA transaction_status(<nonce>)
+```
+
+Where `<nonce>` should be replaced by the transaction's nonce. eg: `PRAGMA transaction_status(3)`
+
+It will return
+
+On full nodes: (not yet implemented)
+
+* `unprocessed`: the transaction was not yet processed by the network
+* `included`: a consensus was reached and the transaction was included on a block
+* `rejected`: a consensus was reached and the transaction was rejected
+
+On pruned nodes:
+
+* `unprocessed`: the transaction was not yet processed by the network
+* `processed`: the transaction was processed by the network and a consensus was reached on its result
+
+Pruned nodes do not keep information about specific transactions.
+
+To be informed whether a specific transaction was included on a block or rejected the application must use a callback function. It is set up as an user defined function:
+
+> **Note:** the callback is not yet implemented
+
+Example in Python:
+
+```python
+def on_processed_transaction(nonce, status):
+  print "transaction " + str(nonce) + ": " + status
+  return None
+
+con.create_function("on_processed_transaction", 2, on_processed_transaction)
+```
+
+> **ATTENTION:** This function is called by the **worker thread**!!
+> Your application should not use the db connection here and it must return as fast as possible!
