@@ -375,3 +375,19 @@ In this case the returned data will contain the list of connected nodes:
 "sync_up_state": "in sync"
 }
 ```
+
+### Application defined node information
+
+Your application can set node specific information using this command:
+
+```
+PRAGMA node_info=<text>
+```
+
+The text value can be a single node identifier or it can contain many information serialized in any text format. Only your applications will use it.
+
+This information is kept on memory locally and also sent to the connected peers. It is not saved on the database and it is dynamic: the next time this command is executed with a different value it will replace the previous one.
+
+The last set value can be retrieved locally using the `PRAGMA node_info` command.
+
+It will also appear in the result of the `PRAGMA protocol_status(1)` command on its peer nodes.
