@@ -106,6 +106,9 @@ SQLITE_API char * get_protocol_status(void *arg, BOOL extended) {
       sqlite3_str_appendall(str, "{\n");
 
       sqlite3_str_appendf(str, "  \"node_id\": %d,\n", node->id);
+      if( node->info ){
+        sqlite3_str_appendf(str, "  \"node_info\": \"%s\",\n", node->info);
+      }
       sqlite3_str_appendf(str, "  \"is_leader\": %s,\n", (node==plugin->leader_node) ? "true" : "false");
       sqlite3_str_appendf(str, "  \"conn_type\": \"%s\",\n", getConnType(node->conn_type));
       sqlite3_str_appendf(str, "  \"address\": \"%s:%d\"\n", node->host, node->port);
@@ -447,6 +450,7 @@ SQLITE_PRIVATE node * node_from_socket(uv_msg_t *socket) {
 SQLITE_PRIVATE void on_new_node_connected(node *node) {
   plugin *plugin = node->plugin;
   aergolite *this_node = node->this_node;
+  char *node_info;
   binn *map=0;
 
   if (node == NULL) return;
@@ -462,6 +466,12 @@ SQLITE_PRIVATE void on_new_node_connected(node *node) {
   if (binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_CMD_ID) == FALSE) goto loc_failed;
   if (binn_map_set_int32(map, PLUGIN_NODE_ID, plugin->node_id) == FALSE) goto loc_failed;
   if (binn_map_set_int32(map, PLUGIN_PORT, plugin->bind->port) == FALSE) goto loc_failed;
+
+  node_info = aergolite_get_node_info(this_node);
+  if( node_info ){
+    if (binn_map_set_str(map, PLUGIN_NODE_INFO, node_info) == FALSE) goto loc_failed;
+    sqlite3_free(node_info);
+  }
 
   if (send_peer_message(node, map, on_id_msg_sent) == FALSE) {
     sqlite3_log(1, "on_new_node_connected: send_peer_message failed");
@@ -527,6 +537,7 @@ SQLITE_PRIVATE node * new_node(uv_loop_t *loop) {
   /* initialize the socket */
   if ((rc = uv_msg_init(loop, &node->socket, UV_TCP))) {
     sqlite3_log(SQLITE_ERROR, "worker thread: could not initialize TCP socket: (%d) %s", rc, uv_strerror(rc));
+    sqlite3_free(node->info);
     sqlite3_free(node);
     return NULL;
   }
@@ -909,6 +920,7 @@ SQLITE_PRIVATE void worker_thread_on_close(uv_handle_t *handle) {
       if( node->id_conflict ){
         stop_id_conflict_timer(node->id_conflict);
       }
+      sqlite3_free(node->info);
       sqlite3_free(node);
 
       //enable_node_reconnect_timer(node); //! it can activate a timer when there is no more peers

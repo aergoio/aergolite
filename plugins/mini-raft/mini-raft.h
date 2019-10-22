@@ -75,6 +75,7 @@
 #define PLUGIN_ERROR               0xc0de002  /*  */
 
 #define PLUGIN_NODE_ID             0xc0de003  /*  */
+#define PLUGIN_NODE_INFO           0xc0de009  /*  */
 #define PLUGIN_PORT                0xc0de004  /*  */
 
 #define PLUGIN_SEQ                 0xc0de005  /*  */
@@ -178,6 +179,8 @@ struct node {
   char  host[64];        /* Remode IP address */
   int   port;            /* Remote port */
   int   bind_port;       /* Remote bind port. Used on incoming TCP connections */
+
+  char  *info;           /* Dynamic information set by this peer */
 
   uv_msg_t socket;       /* Socket used to connect with the other peer */
   int   conn_state;      /* The state of this connection/peer */
