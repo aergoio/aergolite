@@ -137,7 +137,7 @@ SQLITE_PRIVATE int  disable_aergolite(Pager *pPager);
 
 SQLITE_PRIVATE void aergoliteCheckUserCommand(sqlite3 *db, Vdbe *p, char *zTrace);
 SQLITE_PRIVATE void aergoliteProcessUserCommand(sqlite3 *db, int iDb, Pager *pPager, char *zSql);
-SQLITE_PRIVATE void aergoliteCheckUserCmdResponse(sqlite3 *db, int rc);
+SQLITE_PRIVATE int  aergoliteCheckExecResult(sqlite3 *db, int rc);
 SQLITE_PRIVATE void aergoliteTransactionFailed(Pager *pPager);
 SQLITE_PRIVATE void aergoliteDiscardLog(Pager *pPager);
 
