@@ -59,6 +59,7 @@ struct block {
 
 #define TXN_PUBKEY      1
 #define TXN_SIGNATURE   2
+#define TXN_DATETIME    3
 
 
 
