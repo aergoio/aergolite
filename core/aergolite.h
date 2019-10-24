@@ -139,14 +139,14 @@ SQLITE_PRIVATE void aergoliteCheckUserCommand(sqlite3 *db, Vdbe *p, char *zTrace
 SQLITE_PRIVATE void aergoliteProcessUserCommand(sqlite3 *db, int iDb, Pager *pPager, char *zSql);
 SQLITE_PRIVATE int  aergoliteCheckExecResult(sqlite3 *db, int rc);
 SQLITE_PRIVATE void aergoliteTransactionFailed(Pager *pPager);
-SQLITE_PRIVATE void aergoliteDiscardLog(Pager *pPager);
+SQLITE_PRIVATE void aergoliteDiscardTransaction(Pager *pPager);
 
 SQLITE_PRIVATE void aergoliteSetSqlCommand(Pager *pPager, char *sql);
 SQLITE_PRIVATE void aergoliteDiscardLastCommand(sqlite3 *db);
 SQLITE_PRIVATE int  aergoliteStoreCommand(Pager *pPager, char *sql);
 SQLITE_PRIVATE int  aergoliteStoreLastCommand(Pager *pPager);
-SQLITE_PRIVATE int  aergoliteStoreLogTransactionNonce(Pager *pPager);
-SQLITE_PRIVATE int  aergoliteStoreLogTransactionTime(Pager *pPager);
+SQLITE_PRIVATE int  aergoliteStoreTransactionNonce(Pager *pPager);
+SQLITE_PRIVATE int  aergoliteStoreTransactionTime(Pager *pPager);
 SQLITE_PRIVATE int  aergoliteCheckSignTransaction(Pager *pPager);
 
 SQLITE_PRIVATE int  sign_txn_by_user(aergolite *this_node, binn *log);
