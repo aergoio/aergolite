@@ -138,16 +138,24 @@ SQLITE_PRIVATE int  disable_aergolite(Pager *pPager);
 SQLITE_PRIVATE void aergoliteCheckUserCommand(sqlite3 *db, Vdbe *p, char *zTrace);
 SQLITE_PRIVATE void aergoliteProcessUserCommand(sqlite3 *db, int iDb, Pager *pPager, char *zSql);
 SQLITE_PRIVATE void aergoliteCheckUserCmdResponse(sqlite3 *db, int rc);
-//SQLITE_PRIVATE int  aergoliteAddSqlCommand(Pager *pPager, char *sql);
-SQLITE_PRIVATE int  aergoliteSaveSession(Pager *pPager);
+SQLITE_PRIVATE void aergoliteTransactionFailed(Pager *pPager);
 SQLITE_PRIVATE void aergoliteDiscardLog(Pager *pPager);
 
 SQLITE_PRIVATE void aergoliteSetSqlCommand(Pager *pPager, char *sql);
 SQLITE_PRIVATE void aergoliteDiscardLastCommand(sqlite3 *db);
+SQLITE_PRIVATE int  aergoliteStoreCommand(Pager *pPager, char *sql);
 SQLITE_PRIVATE int  aergoliteStoreLastCommand(Pager *pPager);
 SQLITE_PRIVATE int  aergoliteStoreLogTransactionNonce(Pager *pPager);
-SQLITE_PRIVATE void aergoliteStoreLogTransactionTime(Pager *pPager);
+SQLITE_PRIVATE int  aergoliteStoreLogTransactionTime(Pager *pPager);
 SQLITE_PRIVATE int  aergoliteCheckSignTransaction(Pager *pPager);
+
+SQLITE_PRIVATE int  sign_txn_by_user(aergolite *this_node, binn *log);
+SQLITE_PRIVATE int  sign_txn_by_node(aergolite *this_node, binn *log);
+
+SQLITE_PRIVATE int  save_local_txn(aergolite *this_node, binn *log);
+
+SQLITE_PRIVATE int  lock_main_db(aergolite *this_node);
+SQLITE_PRIVATE void unlock_main_db(aergolite *this_node);
 
 SQLITE_PRIVATE void invalidate_loaded_schemas(aergolite *this_node, BOOL on_main_db, BOOL on_worker_db);
 SQLITE_PRIVATE int  check_for_log_rotation(aergolite *this_node);
