@@ -146,6 +146,7 @@ SQLITE_PRIVATE void aergoliteSetSqlCommand(Pager *pPager, char *sql);
 SQLITE_PRIVATE void aergoliteDiscardLastCommand(sqlite3 *db);
 SQLITE_PRIVATE int  aergoliteStoreCommand(Pager *pPager, char *sql);
 SQLITE_PRIVATE int  aergoliteStoreLastCommand(Pager *pPager);
+SQLITE_PRIVATE int  aergoliteStoreTransactionPubkey(Pager *pPager);
 SQLITE_PRIVATE int  aergoliteStoreTransactionNonce(Pager *pPager);
 SQLITE_PRIVATE int  aergoliteStoreTransactionTime(Pager *pPager);
 SQLITE_PRIVATE int  aergoliteCheckSignTransaction(Pager *pPager);
