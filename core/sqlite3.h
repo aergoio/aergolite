@@ -11919,6 +11919,7 @@ SQLITE_API void *sqlite3_memdup(void *source, int size);
 SQLITE_API char *sqlite3_strdup(char *text);
 SQLITE_API char *stripchr(char *mainstr, int separator);
 SQLITE_API void to_hex(char *source, int size, char *dest);
+SQLITE_API void from_hex(char *source, int size, char *dest);
 
 
 /*
