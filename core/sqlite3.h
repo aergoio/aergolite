@@ -11820,6 +11820,7 @@ SQLITE_API int aergolite_insert_allowed_node(
   int node_id,
   char *pubkey,
   int pklen,
+  void *authorization,
   int64 last_nonce
 );
 
@@ -11828,6 +11829,7 @@ SQLITE_API int aergolite_get_allowed_node(
   int node_id,
   char *pubkey,
   int *ppklen,
+  void **pauthorization,
   int64 *plast_nonce
 );
 
@@ -11836,6 +11838,7 @@ typedef void (*on_allowed_node_cb)(
   int node_id,
   char *pubkey,
   int pklen,
+  void *authorization,
   int64 last_nonce
 );
 

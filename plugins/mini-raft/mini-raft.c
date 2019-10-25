@@ -208,6 +208,7 @@ SQLITE_PRIVATE void print_allowed_node_cb(
   int node_id,
   char *pubkey,
   int pklen,
+  void *authorization,
   int64 last_nonce
 ){
   struct print_node *data = (struct print_node *) arg;

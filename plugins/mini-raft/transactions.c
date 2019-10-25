@@ -324,6 +324,7 @@ SQLITE_PRIVATE void build_last_nonce_array_cb(
   int node_id,
   char *pubkey,
   int pklen,
+  void *authorization,
   int64 last_nonce
 ){
   struct plugin *plugin = (struct plugin *) arg;
@@ -361,6 +362,7 @@ SQLITE_PRIVATE void check_mempool_transaction_cb(
   int node_id,
   char *pubkey,
   int pklen,
+  void *authorization,
   int64 last_nonce
 ){
   struct plugin *plugin = (struct plugin *) arg;

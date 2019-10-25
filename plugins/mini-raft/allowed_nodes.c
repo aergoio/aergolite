@@ -406,7 +406,7 @@ SQLITE_PRIVATE void on_node_identification(node *node, void *msg, int size) {
   }
 
   /* load the public key from the allowed nodes table */
-  rc = aergolite_get_allowed_node(this_node, node->id, pubkey_int, &pklen_int, NULL);
+  rc = aergolite_get_allowed_node(this_node, node->id, pubkey_int, &pklen_int, NULL, NULL);
   if( rc==SQLITE_OK ){
     if( pubkey_ext ){
       if( pklen_int!=pklen_ext || memcmp(pubkey_int, pubkey_ext, pklen_int)!=0 ){
