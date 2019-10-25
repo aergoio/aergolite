@@ -444,5 +444,21 @@ def on_processed_transaction(nonce, status):
 con.create_function("on_processed_transaction", 2, on_processed_transaction)
 ```
 
-> **ATTENTION:** This function is called by the **worker thread**!!
-> Your application should not use the db connection here and it must return as fast as possible!
+Example in C:
+
+```C
+static void on_processed_transaction(sqlite3_context *context, int argc, sqlite3_value **argv){
+  long long int nonce = sqlite3_value_int64(argv[0]);
+  char *status = sqlite3_value_text(argv[1]);
+
+  printf("transaction %lld: %s\n", nonce, status);
+
+  sqlite3_result_null(context);
+}
+
+sqlite3_create_function(db, "on_processed_transaction", 2, SQLITE_UTF8 | SQLITE_DETERMINISTIC,
+  NULL, &on_processed_transaction, NULL, NULL);
+```
+
+> **ATTENTION:** The callback function is called by the **worker thread**!!
+> Your application should not use the db connection there and it must return as fast as possible!
