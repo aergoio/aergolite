@@ -1,12 +1,3 @@
-
-struct product {
-  char   name[32];
-  int    qty;
-  double price;
-};
-
-typedef struct product product;
-
 #include "db_functions.c"
 
 #define majority(X)  X / 2 + 1

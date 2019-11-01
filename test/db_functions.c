@@ -12,6 +12,8 @@
 //#define QUIT_TEST()  print_backtrace()
 #define QUIT_TEST()  exit(1)
 
+int bind_sql_parameters(sqlite3_stmt *stmt, const char *types, va_list ap);
+
 /****************************************************************************/
 
 void print_error(int rc, char *desc, char *sql, const char *function, int line){
@@ -56,44 +58,54 @@ void db_catch_fn(sqlite3 *db, char *sql, const char *function, int line){
 
 /****************************************************************************/
 
-void db_execute_many(sqlite3 *db, char *sql, product *list, int count){
+void db_execute_many_fn(sqlite3 *db, char *sql, char *types, int count,
+  const char *function, int line, ...
+){
+  va_list args;
   sqlite3_stmt *stmt=0;
-  char *zErrMsg=0; // *zTail=0;
+  char *zErrMsg=0;
   int rc, i;
 
-  rc = sqlite3_prepare(db, sql, -1, &stmt, NULL);  //&zTail);
+  db_execute_fn(db, "BEGIN", function, line);
+
+  rc = sqlite3_prepare(db, sql, -1, &stmt, NULL);
   if( rc!=SQLITE_OK ){
-    printf("FAIL %d: %s\n\tsql: %s\n", rc, zErrMsg, sql);
+    print_error(rc, zErrMsg, sql, function, line);
     sqlite3_free(zErrMsg);
     QUIT_TEST();
   }
 
-  //if( sqlite3_bind_parameter_count(stmt)!=3 ){
-  //  printf("FAIL: statement uses %d parameters\n\tsql: %s\n", sqlite3_bind_parameter_count(stmt), sql);
-  //  QUIT_TEST();
-  //}
+  va_start(args, line);
 
   for( i=0; i<count; i++ ){
-    sqlite3_bind_text(stmt, 2, list[i].name, -1, SQLITE_STATIC);
-    sqlite3_bind_int(stmt, 3, list[i].qty);
-    sqlite3_bind_double(stmt, 4, list[i].price);
+    rc = bind_sql_parameters(stmt, types, args);
+    if( rc!=SQLITE_OK ){
+      print_error(rc, "bind parameters", sql, function, line);
+      QUIT_TEST();
+    }
 
     rc = sqlite3_step(stmt);
     if( rc!=SQLITE_DONE ){
-      printf("FAIL %d: on step\nsql: %s\n", rc, sql);
+      print_error(rc, "sqlite3_step", sql, function, line);
       QUIT_TEST();
     }
 
     rc = sqlite3_reset(stmt);
     if( rc!=SQLITE_OK ){
-      printf("FAIL %d: on reset\nsql: %s\n", rc, sql);
+      print_error(rc, "sqlite3_reset", sql, function, line);
       QUIT_TEST();
     }
   }
 
+  va_end(args);
+
   sqlite3_finalize(stmt);
 
+  db_execute_fn(db, "COMMIT", function, line);
+
 }
+
+#define db_execute_many(db,sql,types,count,...) db_execute_many_fn(db, sql, types, count, __FUNCTION__, __LINE__, __VA_ARGS__)
 
 /****************************************************************************/
 
