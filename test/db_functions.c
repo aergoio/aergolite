@@ -304,17 +304,42 @@ loc_invalid:
 
 /****************************************************************************/
 
-int db_exec_bind(sqlite3 *db, const char *sql, const char *types, ...){
-  va_list ap;
+int db_prepare_and_bind(sqlite3 *db, const char *sql, va_list args, sqlite3_stmt **pstmt){
   sqlite3_stmt *stmt=0;
   int rc;
 
-  rc = sqlite3_prepare(db, sql, -1, &stmt, NULL);
-  if( rc!=SQLITE_OK ) return rc;
+  rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+  if( rc!=SQLITE_OK ) goto loc_exit;
+  if( !stmt ) goto loc_failed;
 
-  va_start(ap, types);
-  rc = bind_sql_parameters(stmt, types, ap);
-  va_end(ap);
+  if( sqlite3_bind_parameter_count(stmt)>0 ){
+    const char *types;
+    types = va_arg(args, char*);
+    rc = bind_sql_parameters(stmt, types, args);
+    if( rc ){
+      sqlite3_finalize(stmt);
+      goto loc_exit;
+    }
+  }
+
+  *pstmt = stmt;
+
+loc_exit:
+  return rc;
+
+loc_failed:
+  rc = SQLITE_ERROR;
+  goto loc_exit;
+
+}
+
+/****************************************************************************/
+
+int db_exec_bindv(sqlite3 *db, const char *sql, va_list args){
+  sqlite3_stmt *stmt=NULL;
+  int rc;
+
+  rc = db_prepare_and_bind(db, sql, args, &stmt);
   if( rc ) goto loc_exit;
 
   rc = sqlite3_step(stmt);
@@ -327,29 +352,37 @@ loc_exit:
 
 /****************************************************************************/
 
+int db_exec(sqlite3 *db, const char *sql, ...){
+  va_list args;
+  int rc;
+
+  va_start(args, sql);
+  rc = db_exec_bindv(db, sql, args);
+  va_end(args);
+
+  return rc;
+}
+
+/****************************************************************************/
+
 int db_query(
   sqlite3 *db,
   int(*callback)(void*,sqlite3_stmt*),
   void *user,
   const char *sql,
-  const char *types,
   ...
 ){
   sqlite3_stmt *stmt = 0;
-  va_list ap;
+  va_list args;
   int rc;
 
   if( !sql ) sql = "";
 
-  rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
-  if( rc!=SQLITE_OK ) goto loc_exit;
+  va_start(args, sql);
+  rc = db_prepare_and_bind(db, sql, args, &stmt);
+  va_end(args);
 
-  if( types ){
-    va_start(ap, types);
-    rc = bind_sql_parameters(stmt, types, ap);
-    va_end(ap);
-    if( rc ) goto loc_exit;
-  }
+  if( rc ) goto loc_exit;
 
   while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
     /* call the callback function */
@@ -365,6 +398,8 @@ loc_exit:
 
 }
 
+/****************************************************************************/
+
 #ifndef SQLITE_INT32
 #define SQLITE_INT32 12732
 #endif
@@ -377,15 +412,8 @@ struct blob_info {
   int size;
 };
 
-int db_query_value(void **pvalue, int type, sqlite3 *db, const char *sql) {
-  sqlite3_stmt *stmt = 0;
+int db_query_value_stmt(void **pvalue, int type, sqlite3_stmt *stmt) {
   int rc, ncols, nrows=0;
-
-  if( !sql ) sql = "";
-
-  rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
-  if( rc!=SQLITE_OK ) goto loc_exit;
-  if( !stmt ) goto loc_failed;
 
   ncols = sqlite3_column_count(stmt);
   if( ncols!=1 ) goto loc_failed;
@@ -440,23 +468,28 @@ loc_failed:
 /****************************************************************************/
 
 int db_query_valuev(void **pvalue, int type, sqlite3 *db, const char *sql, va_list args) {
-  char *sql2;
-  int  rc;
+  sqlite3_stmt *stmt = 0;
+  int rc;
 
-  if( sql==NULL ) return SQLITE_MISUSE;
+  if( !sql ) sql = "";
 
-  sql2 = sqlite3_vmprintf(sql, args);
-  if( sql2==NULL ) return SQLITE_NOMEM;
+  rc = db_prepare_and_bind(db, sql, args, &stmt);
+  if( rc ) goto loc_exit;
 
-  rc = db_query_value(pvalue, type, db, sql2);
+  rc = db_query_value_stmt(pvalue, type, stmt);
 
-  sqlite3_free(sql2);
+loc_exit:
   return rc;
+
+loc_failed:
+  rc = SQLITE_ERROR;
+  goto loc_exit;
+
 }
 
 /****************************************************************************/
 
-int db_query_valuef(void **pvalue, int type, sqlite3 *db, const char *sql, ...) {
+int db_query_value(void **pvalue, int type, sqlite3 *db, const char *sql, ...) {
   va_list args;
   int rc;
 
@@ -553,6 +586,7 @@ int db_query_blob(char **pvalue, int *psize, sqlite3 *db, char *sql, ...) {
   return rc;
 }
 
+/****************************************************************************/
 /****************************************************************************/
 
 void unlinkf(char *base, ...){
