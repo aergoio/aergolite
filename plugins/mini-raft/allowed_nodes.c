@@ -487,6 +487,7 @@ SQLITE_PRIVATE void on_id_msg_sent(send_message_t *req, int status) {
 SQLITE_PRIVATE BOOL send_node_identification(plugin *plugin, node *node) {
   aergolite *this_node = plugin->this_node;
   int64 last_block = plugin->current_block ? plugin->current_block->height : 0;
+  char hostname[256], cpu_info[256], os_info[256], app_info[256];
   char msg[2048], signature[72];
   binn *map;
   BOOL ret=FALSE;
@@ -502,7 +503,15 @@ SQLITE_PRIVATE BOOL send_node_identification(plugin *plugin, node *node) {
   if( binn_map_set_int32(map, PLUGIN_NODE_ID, plugin->node_id)==FALSE ) goto loc_failed;
   if( binn_map_set_int32(map, PLUGIN_PORT, plugin->bind->port)==FALSE ) goto loc_failed;
 
+  get_this_device_info(hostname, cpu_info, os_info, app_info);
+
+  if( binn_map_set_str(map, PLUGIN_CPU, cpu_info)==FALSE ) goto loc_failed;
+  if( binn_map_set_str(map, PLUGIN_OS, os_info)==FALSE ) goto loc_failed;
+  if( binn_map_set_str(map, PLUGIN_HOSTNAME, hostname)==FALSE ) goto loc_failed;
+  if( binn_map_set_str(map, PLUGIN_APP, app_info)==FALSE ) goto loc_failed;
+
   /* send the public key if this node was not yet authorized */
+
   if( last_block==0 ){
     int pklen;
     char *pubkey = aergolite_pubkey(this_node, &pklen);
@@ -510,47 +519,10 @@ SQLITE_PRIVATE BOOL send_node_identification(plugin *plugin, node *node) {
     if( binn_map_set_blob(map, PLUGIN_PUBKEY, pubkey, pklen)==FALSE ) goto loc_failed;
   }
 
-  {
-    char hostname[256];
-    char cpu_info[256];
-    char os_info[256];
-    char app_info[256];
-    uv_cpu_info_t *cpus;
-    uv_utsname_t os;
-    size_t size;
-    int count=0;
-
-    /* get CPU info */
-    uv_cpu_info(&cpus, &count);
-    if( count>0 ){
-      strcpy(cpu_info, cpus[0].model);
-    }else{
-      cpu_info[0] = 0;
-    }
-    uv_free_cpu_info(cpus, count);
-
-    /* get OS info */
-    uv_os_uname(&os);
-    snprintf(os_info, sizeof os_info, "%s %s %s", os.sysname, os.release, os.machine);  // os.version
-
-    /* get hostname */
-    size = sizeof hostname;
-    uv_os_gethostname(hostname, &size);
-
-    /* get executable path and name */
-    size = sizeof app_info;
-    uv_exepath(app_info, &size);
-
-    if( binn_map_set_str(map, PLUGIN_CPU, cpu_info)==FALSE ) goto loc_failed;
-    if( binn_map_set_str(map, PLUGIN_OS, os_info)==FALSE ) goto loc_failed;
-    if( binn_map_set_str(map, PLUGIN_HOSTNAME, hostname)==FALSE ) goto loc_failed;
-    if( binn_map_set_str(map, PLUGIN_APP, app_info)==FALSE ) goto loc_failed;
-
-    sprintf(msg, "%d:%d:%s:%s:%s:%s", plugin->node_id, plugin->bind->port,
-            cpu_info, os_info, hostname, app_info);
-  }
-
   /* sign the message content */
+
+  sprintf(msg, "%d:%d:%s:%s:%s:%s", plugin->node_id, plugin->bind->port,
+          cpu_info, os_info, hostname, app_info);
 
   rc = aergolite_sign(this_node, msg, strlen(msg), signature, &siglen);
   if( rc ){

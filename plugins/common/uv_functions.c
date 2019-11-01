@@ -468,3 +468,35 @@ SQLITE_PRIVATE void get_ip_address(const struct sockaddr *sa, char *name, int si
     uv_ip6_name((struct sockaddr_in6*)sa, name, size);
   }
 }
+
+/****************************************************************************/
+/****************************************************************************/
+
+SQLITE_PRIVATE void get_this_device_info(char *hostname, char *cpu_info, char *os_info, char *app_info){
+  uv_cpu_info_t *cpus;
+  uv_utsname_t os;
+  size_t size;
+  int count=0;
+
+  /* get CPU info */
+  uv_cpu_info(&cpus, &count);
+  if( count>0 ){
+    strcpy(cpu_info, cpus[0].model);
+  }else{
+    cpu_info[0] = 0;
+  }
+  uv_free_cpu_info(cpus, count);
+
+  /* get OS info */
+  uv_os_uname(&os);
+  snprintf(os_info, sizeof os_info, "%s %s %s", os.sysname, os.release, os.machine);  // os.version
+
+  /* get hostname */
+  size = sizeof hostname;
+  uv_os_gethostname(hostname, &size);
+
+  /* get executable path and name */
+  size = sizeof app_info;
+  uv_exepath(app_info, &size);
+
+}

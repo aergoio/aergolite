@@ -234,12 +234,34 @@ SQLITE_API void print_node_list(void *arg, void *vdbe) {
   plugin *plugin = (struct plugin *) arg;
   aergolite *this_node = plugin->this_node;
   struct node *node;
+  int64 last_block = plugin->current_block ? plugin->current_block->height : 0;
+  char hostname[256], cpu[256], os[256], app[256];
+  char *pubkey, hexpubkey[72], address[32];
+  int pklen;
+
+  /* add this node to the list of nodes (always the first one) */
+
+  pubkey = aergolite_pubkey(this_node, &pklen);
+  if( pubkey )
+    to_hex(pubkey, pklen, hexpubkey);
+  else
+    hexpubkey[0] = 0;
+  sprintf(address, "%s:%d", plugin->bind->host, plugin->bind->port);
+  get_this_device_info(hostname, cpu, os, app);
+
+  node_list_add(vdbe,
+     plugin->node_id,
+     hexpubkey,
+     address,
+     cpu,
+     os,
+     hostname,
+     app,
+     last_block==0 ? "yes" : "");
 
   /* iterate over the connected nodes */
 
   for(node=plugin->peers; node; node=node->next){
-    char hexpubkey[72];
-    char address[32];
 
     to_hex(node->pubkey, node->pklen, hexpubkey);
     sprintf(address, "%s:%d", node->host, node->port);
