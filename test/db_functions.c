@@ -234,7 +234,7 @@ void db_check_str_fn(sqlite3 *db, char *sql, char *expected, const char *functio
 
 /****************************************************************************/
 
-void db_check_empty(sqlite3 *db, char *sql){
+void db_check_empty_fn(sqlite3 *db, char *sql, const char *function, int line){
   sqlite3_stmt *stmt=0;
   const char *zTail=0;
   int rc;
@@ -243,7 +243,7 @@ void db_check_empty(sqlite3 *db, char *sql){
 
     rc = sqlite3_prepare(db, sql, -1, &stmt, &zTail);
     if( rc!=SQLITE_OK ){
-      printf("FAIL %d: prepare\n\tsql: %s\n", rc, sql);
+      print_error(rc, "sqlite3_prepare", sql, function, line);
       QUIT_TEST();
     }
 
@@ -252,7 +252,7 @@ void db_check_empty(sqlite3 *db, char *sql){
     if( zTail && zTail[0] ){
 
       if( rc!=SQLITE_DONE ){
-        printf("FAIL %d: multi command returned a row\nsql: %s\n", rc, sql);
+        print_error(rc, "multi command returned a row", sql, function, line);
         QUIT_TEST();
       }
 
@@ -261,7 +261,7 @@ void db_check_empty(sqlite3 *db, char *sql){
     } else {
 
       if( rc==SQLITE_ROW ){
-        printf("FAIL: unexpected row returned\nsql: %s\n", sql);
+        print_error(rc, "unexpected row returned", sql, function, line);
         QUIT_TEST();
       }
 
@@ -274,6 +274,8 @@ void db_check_empty(sqlite3 *db, char *sql){
   } while( sql );
 
 }
+
+#define db_check_empty(db,sql) db_check_empty_fn(db, sql, __FUNCTION__, __LINE__)
 
 /****************************************************************************/
 /****************************************************************************/
