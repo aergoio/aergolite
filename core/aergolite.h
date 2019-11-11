@@ -60,6 +60,7 @@ struct block {
 #define TXN_PUBKEY      1
 #define TXN_SIGNATURE   2
 #define TXN_DATETIME    3
+#define TXN_SQL         4
 
 
 
@@ -118,7 +119,7 @@ struct aergolite_plugin {
   char name[64];                         /* name of the plugin */
   void* (*xInit)(aergolite*, char* uri); /* initializes a new plugin instance */
   void (*xEnd)(void*);                   /* terminates the instance */
-  void (*xOnNewLocalTransaction)(void*); /* on_new_local_transaction notification */
+  void (*xOnNewLocalTransaction)(void*,void*); /* on_new_local_transaction notification */
   char* (*xStatus)(void*, int extended); /* used to retrieve the protocol status */
   void (*xNodeList)(void*, void*);       /* used to retrieve the node list */
 };
@@ -155,6 +156,7 @@ SQLITE_PRIVATE int  sign_txn_by_user(aergolite *this_node, binn *log);
 SQLITE_PRIVATE int  sign_txn_by_node(aergolite *this_node, binn *log);
 
 SQLITE_PRIVATE int  save_local_txn(aergolite *this_node, binn *log);
+SQLITE_PRIVATE BOOL is_special_transaction(binn *log);
 
 SQLITE_PRIVATE int  lock_main_db(aergolite *this_node);
 SQLITE_PRIVATE void unlock_main_db(aergolite *this_node);

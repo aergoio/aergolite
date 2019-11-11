@@ -11728,7 +11728,7 @@ SQLITE_API int aergolite_plugin_register(
   char *name,                            /* name of the plugin */
   void* (*xInit)(aergolite*, char* uri), /* initializes a new plugin instance */
   void (*xEnd)(void*),                   /* terminates the instance */
-  void (*xOnNewLocalTransaction)(void*), /* on_new_local_transaction notification */
+  void (*xOnNewLocalTransaction)(void*,void*), /* on_new_local_transaction notification */
   char* (*xStatus)(void*, int extended), /* used to retrieve the protocol status */
   void (*xNodeList)(void*, void*)        /* used to retrieve the node list */
 );
@@ -11813,6 +11813,21 @@ SQLITE_API int aergolite_rollback_block(aergolite *this_node);
 /*
 ** Allowed nodes
 */
+
+SQLITE_API int aergolite_verify_authorization(
+  aergolite *this_node,
+  void *log,
+  char *pubkey,
+  int  *ppklen
+);
+
+typedef int (*auth_cb)(void *arg, void *log);
+
+SQLITE_API int aergolite_iterate_authorizations(
+  aergolite *this_node,
+  auth_cb cb,
+  void *arg
+);
 
 
 SQLITE_API int aergolite_insert_allowed_node(

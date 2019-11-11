@@ -1,65 +1,196 @@
-
-// ATTENTION: the first section of this file is temporary and the code will be
-//            soon removed or modified
-
 /****************************************************************************/
 /*** ALLOWED NODES **********************************************************/
 /****************************************************************************/
 
-#if 0
-/*
-** Check if the node is allowed to participate in the network
-*/
-SQLITE_PRIVATE int check_if_allowed_node(plugin *plugin, int id, int *pis_allowed) {
+SQLITE_PRIVATE int store_authorization(plugin *plugin, void *log){
   aergolite *this_node = plugin->this_node;
+  nodeauth *auth;
+  char pubkey[36];
+  int rc, pklen;
+
+  rc = aergolite_verify_authorization(this_node, log, pubkey, &pklen);
+  if( rc ) return rc;
+
+  /* check if already on the list */
+  for( auth=plugin->authorizations; auth; auth=auth->next ){
+    if( auth->pklen==pklen && memcmp(auth->pk,pubkey,pklen)==0 ){
+      goto loc_exit;
+    }
+  }
+
+  /* add it to the list */
+
+  auth = sqlite3_malloc(sizeof(struct nodeauth));
+  if( !auth ) return SQLITE_NOMEM;
+
+  memcpy(auth->pk, pubkey, pklen);
+  auth->pklen = pklen;
+  auth->log = log;
+#if 0
+  auth->log = sqlite3_memdup(log, binn_size(log));
+  if( !auth->log ){
+    sqlite3_free(auth);
+    return SQLITE_NOMEM;
+  }
+#endif
+
+  llist_add(&plugin->authorizations, auth);
+
+loc_exit:
+  return SQLITE_OK;
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE int load_authorizations_cb(void *arg, void *log){
+  plugin *plugin = (struct plugin*) arg;
+  int rc;
+
+  log = sqlite3_memdup(log, binn_size(log));
+  if( !log ) return SQLITE_NOMEM;
+
+  rc = store_authorization(plugin, log);
+  if( rc ){
+    sqlite3_free(log);
+  }
+
+  return SQLITE_OK;  /* discards the result, so it continues with the next auth */
+}
+
+SQLITE_PRIVATE int load_authorizations(plugin *plugin){
+  aergolite *this_node = plugin->this_node;
+  return aergolite_iterate_authorizations(this_node, load_authorizations_cb, plugin);
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE int is_node_authorized(plugin *plugin, char *pubkey, int pklen, BOOL *is_authorized){
+  aergolite *this_node = plugin->this_node;
+  nodeauth *auth;
+  char *sql;
   int count, rc;
 
-  SYNCTRACE("check_if_allowed_node id=%d\n", id);
+  *is_authorized = FALSE;
 
-//! should it check the public key?
-//! should it use some authentication?
+  /* check for authorization on memory */
+  for( auth=plugin->authorizations; auth; auth=auth->next ){
+    if( auth->pklen==pklen && memcmp(auth->pk,pubkey,pklen)==0 ){
+      *is_authorized = TRUE;
+      return SQLITE_OK;
+    }
+  }
 
-// this function could be in the core
+  //rc = aergolite_get_node_by_pubkey(this_node, pubkey, pklen, NULL, NULL, &last_nonce);
+  //if( rc==SQLITE_OK && count>0 ){
 
-  /* check if already in the list of known nodes */
-  rc = aergolite_consensus_db_query_int32(this_node, pis_allowed,
-         "SELECT count(*) FROM aergolite_allowed_nodes WHERE id=%d", id);
-  if( rc ) return;
+  count = 0;
+  sql = "SELECT count(*) FROM aergolite_allowed_nodes WHERE pubkey = ?";
+  rc = aergolite_consensus_db_query_int32(this_node, &count, sql, "b", pubkey, pklen);
+  if( rc ) return rc;
 
-  return rc;
+  if( count>0 ){
+    *is_authorized = TRUE;
+  }
+
+  return SQLITE_OK;
 }
-#endif
 
 /****************************************************************************/
 
 /*
-** Notes:
-** This function is reading from the main_db2.
-** It is currently NOT informing other nodes about the total_known_nodes.
+** Updates the number of allowed nodes on this network.
+** It must also count the nodes that are off-line
 */
 SQLITE_PRIVATE void update_known_nodes(plugin *plugin) {
-  aergolite *this_node = plugin->this_node;
-  node *node;
+  //aergolite *this_node = plugin->this_node;
+  nodeauth *auth;
 
   SYNCTRACE("update_known_nodes\n");
 
-  /* check if nodes already exist in the list of known nodes */
-#if 0
-  plugin->total_known_nodes = 1; // this node
+  plugin->total_known_nodes = 0;
 
-  //add_known_node(plugin, plugin->node_id);
-
-  for( node=plugin->peers; node; node=node->next ){
-    //add_known_node(plugin, node->id);
+  for( auth=plugin->authorizations; auth; auth=auth->next ){
     plugin->total_known_nodes++;
   }
-#endif
 
   /* the leader must know the number of total known nodes, including those that are off-line */
-//  aergolite_queue_db_query_int32(this_node, &plugin->total_known_nodes, "SELECT count(*) FROM aergolite_allowed_nodes");
+  //aergolite_consensus_db_query_int32(this_node, &plugin->total_known_nodes, "SELECT count(*) FROM aergolite_allowed_nodes");
 
   SYNCTRACE("update_known_nodes total_known_nodes=%d\n", plugin->total_known_nodes);
 
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE int send_authorizations(node *node, void *log){
+  plugin *plugin = node->plugin;
+  nodeauth *auth;
+  binn *list, *map;
+  int rc;
+
+  SYNCTRACE("send_authorizations log=%p\n", log);
+
+  if( !node->is_authorized ) return SQLITE_PERM;
+
+  /* send all the authorizations to the remote node */
+
+  list = binn_list();
+
+  if( log ){
+    /* add the given authorization to the list */
+    if( binn_list_add_list(list, log)==FALSE ) goto loc_failed;
+  }else{
+    /* add all authorizations to the list */
+    for( auth=plugin->authorizations; auth; auth=auth->next ){
+      if( binn_list_add_list(list, auth->log)==FALSE ) goto loc_failed;
+    }
+  }
+
+  map = binn_map();
+  if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_AUTHORIZATION)==FALSE ) goto loc_failed;
+  if( binn_map_set_list(map, PLUGIN_AUTHORIZATION, list)==FALSE ) goto loc_failed;
+
+  if( send_peer_message(node, map, NULL)==FALSE ){
+    sqlite3_log(1, "send_node_identification: send_peer_message failed");
+    goto loc_failed;
+  }
+
+  node->authorization_sent = TRUE;
+
+  rc = SQLITE_OK;
+
+loc_exit:
+  binn_free(map);
+  binn_free(list);
+  return rc;
+
+loc_failed:
+  rc = SQLITE_NOMEM;
+  goto loc_exit;
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log, char *pubkey, int pklen){
+  node *node;
+  int rc;
+
+  rc = store_authorization(plugin, log);  /* keep the pointer instead of copying the data */
+  if( rc ) return rc;
+
+  for( node=plugin->peers; node; node=node->next ){
+    if( node->pklen==pklen && memcmp(node->pubkey,pubkey,pklen)==0 ){
+      /* send all the authorizations to the new node */
+      rc = send_authorizations(node, NULL);
+    }else{
+      /* send only this new authorization to this node */
+      rc = send_authorizations(node, log);
+    }
+    if( rc ) break;
+  }
+
+  return rc;
 }
 
 /****************************************************************************/
@@ -83,26 +214,16 @@ SQLITE_PRIVATE void on_new_accepted_node(node *node) {
 
 SQLITE_PRIVATE void on_valid_node_id(node *node) {
   plugin *plugin = node->plugin;
+  int rc;
 
   SYNCTRACE("on_valid_node_id\n");
 
-#if 0
-  if( !node->invitation_sent ){
-    /* check if remote node has authorization */
-    xxx
+  if( !node->is_authorized ) return;
 
-    if( x ){
-      /* send authorization to the remote node */
-      yyy
+  /* send all the authorizations to the remote node */
+  rc = send_authorizations(node, NULL);
 
-      node->is_active = TRUE;
-    }
-  }
-#endif
-
-  if( node->is_active ){
-    on_new_accepted_node(node);
-  }
+  on_new_accepted_node(node);
 
 }
 
@@ -449,11 +570,17 @@ SQLITE_PRIVATE void on_node_identification(node *node, void *msg, int size) {
   node->pklen = pklen;
 
   /* store the node state */
-  if( pklen_int>0 ){    // || has_authorization ){  == 'invitation card'
-    node->is_active = TRUE;
+  if( pklen_int>0 ){
+    /* authorization stored on the blockchain */
+    node->is_authorized = TRUE;
+  }else{
+    /* check for authorization */
+    rc = is_node_authorized(plugin, pubkey, pklen, &node->is_authorized);
+    //if( rc ) xxx
   }
+
   if( pklen_ext==0 ){
-    node->invitation_sent = TRUE;
+    node->authorization_sent = TRUE;
   }
 
   /* xxx */

@@ -655,9 +655,46 @@ SQLITE_PRIVATE void leader_node_on_local_transaction(plugin *plugin) {
 
 /****************************************************************************/
 
+// check cmd type
+//
+// add_node:
+//   if node is connected, mark it as authorized + send all auths to him
+//   send this new auth to other connected nodes
+//
+// remove_node: (later)
+
+SQLITE_PRIVATE void process_new_special_transaction(plugin *plugin) {
+  aergolite *this_node = plugin->this_node;
+
+  SYNCTRACE("process_new_special_transaction\n");
+
+  while( plugin->special_txn ){
+    struct txn_list *txn = plugin->special_txn;
+    char pubkey[36];
+    int rc, pklen;
+
+    /* is it an authorization? */
+    rc = aergolite_verify_authorization(this_node, txn->log, pubkey, &pklen);
+    if( rc==SQLITE_OK ){
+      rc = on_new_authorization(plugin, txn->log, pubkey, pklen);
+      if( rc ) return;
+    }
+
+    plugin->special_txn = txn->next;
+    sqlite3_free(txn);
+  }
+
+}
+
+/****************************************************************************/
+
 SQLITE_PRIVATE void db_sync_on_local_transaction(plugin *plugin) {
 
   SYNCTRACE("db_sync_on_local_transaction\n");
+
+  if( plugin->special_txn ){
+    process_new_special_transaction(plugin);
+  }
 
   if( plugin->is_leader ){
     leader_node_on_local_transaction(plugin);
@@ -684,10 +721,20 @@ SQLITE_PRIVATE void worker_thread_on_local_transaction(plugin *plugin) {
 ** This function is called on the main thread. It must send the notification
 ** to the worker thread and return as fast as possible.
 */
-SQLITE_API void on_new_local_transaction(void *arg) {
+SQLITE_API void on_new_local_transaction(void *arg, void *log) {
   plugin *plugin = (struct plugin *) arg;
 
   SYNCTRACE("on_new_local_transaction\n");
+
+  if( log ){  /* special transaction */
+    struct txn_list *txn = sqlite3_malloc_zero(sizeof(struct txn_list));
+    if( txn ){
+      txn->log = log;
+      llist_add(&plugin->special_txn, txn);
+    }else{
+      sqlite3_free(log);
+    }
+  }
 
   if( plugin->thread_active ){
     int rc, cmd = WORKER_THREAD_NEW_TRANSACTION;

@@ -274,7 +274,7 @@ SQLITE_API void print_node_list(void *arg, void *vdbe) {
        node->os,
        node->hostname,
        node->app,
-       node->is_active ? "" : "yes");
+       node->is_authorized ? "" : "yes");
 
   }
 
@@ -1719,6 +1719,9 @@ SQLITE_PRIVATE void node_thread(void *arg) {
   /* load the database state */
   load_current_state(plugin);
 
+  /* load the nodes authorizations */
+  load_authorizations(plugin);
+
 
   /* mark this thread as active */
   plugin->thread_active = TRUE;
@@ -1799,6 +1802,8 @@ SQLITE_PRIVATE void close_worker_thread(plugin *plugin) {
 
 }
 
+/****************************************************************************/
+
 SQLITE_API void plugin_end(void *arg){
   plugin *plugin = (struct plugin *) arg;
 
@@ -1821,6 +1826,12 @@ SQLITE_API void plugin_end(void *arg){
     struct tcp_address *next = plugin->discovery->next;
     sqlite3_free(plugin->discovery);
     plugin->discovery = next;
+  }
+
+  while( plugin->authorizations ){
+    struct nodeauth *next = plugin->authorizations->next;
+    sqlite3_free(plugin->authorizations);
+    plugin->authorizations = next;
   }
 
   discard_block(plugin->current_block);
@@ -2022,17 +2033,6 @@ void * plugin_init(aergolite *this_node, char *uri) {
 
 
   plugin->is_leader = FALSE;
-
-
-  /* temporary: get the total number of nodes from the uri */
-  {
-    char *num_nodes = (char*) sqlite3_uri_parameter(uri, "num_nodes");
-    if( !num_nodes ){
-      sqlite3_log(SQLITE_MISUSE, "total number of nodes not informed");
-      return NULL;
-    }
-    plugin->total_known_nodes = atoi(num_nodes);
-  }
 
 
   /* parse the node discovery parameter */

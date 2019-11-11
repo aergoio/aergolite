@@ -65,6 +65,8 @@
 #define PLUGIN_PUBKEY              0xdb51
 #define PLUGIN_SIGNATURE           0xdb52
 
+#define PLUGIN_AUTHORIZATION       0xdb53
+
 #define PLUGIN_CPU                 0xc0de021
 #define PLUGIN_OS                  0xc0de022
 #define PLUGIN_HOSTNAME            0xc0de023
@@ -165,7 +167,14 @@ typedef uint32_t Pgno;
 
 typedef struct plugin plugin;
 typedef struct node node;
+typedef struct nodeauth nodeauth;
 
+struct nodeauth {
+  struct nodeauth *next;
+  char *pk;
+  int pklen;
+  void *log;
+};
 
 struct node_id_conflict {
   node *existing_node;
@@ -206,8 +215,8 @@ struct node {
 
   int64 last_block;      /* The height of the last block */
 
-  BOOL    is_active;
-  BOOL    invitation_sent;
+  BOOL    is_authorized;
+  BOOL    authorization_sent;
 
   /* used for the query status */
   int     db_state;
@@ -238,6 +247,11 @@ struct block {
   int  downloading_txns;
 };
 
+struct txn_list {
+  struct txn_list *next;
+  void *log;
+};
+
 struct plugin {
   int node_id;                /* Node id */
 
@@ -250,6 +264,9 @@ struct plugin {
 
   node *peers;                /* Remote nodes connected to this one */
   int total_known_nodes;      /* Including those that are currently off-line */
+
+  nodeauth *authorizations;   /* List of node authorizations */
+  struct txn_list *special_txn; /* New special transaction */
 
   BOOL is_leader;             /* True if this node is the current leader */
   node *leader_node;          /* Points to the leader node if it is connected */
@@ -374,3 +391,7 @@ SQLITE_PRIVATE void start_node_discovery(plugin *plugin);
 
 SQLITE_PRIVATE void send_peer_list(plugin *plugin, node *to_node);
 SQLITE_PRIVATE void on_peer_list_received(node *node, void *msg, int size);
+
+/* node authorization */
+
+SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log, char *pubkey, int pklen);
