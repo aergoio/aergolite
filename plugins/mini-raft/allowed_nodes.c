@@ -8,14 +8,18 @@ SQLITE_PRIVATE int store_authorization(plugin *plugin, void *log){
   char pubkey[36];
   int rc, pklen;
 
-  rc = aergolite_verify_authorization(this_node, log, pubkey, &pklen);
-  if( rc ) return rc;
-
   /* check if already on the list */
   for( auth=plugin->authorizations; auth; auth=auth->next ){
     if( auth->pklen==pklen && memcmp(auth->pk,pubkey,pklen)==0 ){
       goto loc_exit;
     }
+  }
+
+  rc = aergolite_verify_authorization(this_node, log, pubkey, &pklen);
+  if( rc ) return rc;
+
+  if( plugin->pklen==pklen && memcmp(plugin->pubkey,pubkey,pklen)==0 ){
+    plugin->is_authorized = TRUE;
   }
 
   /* add it to the list */
@@ -177,12 +181,20 @@ SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log, char *pubkey,
   int rc;
 
   rc = store_authorization(plugin, log);  /* keep the pointer instead of copying the data */
-  if( rc ) return rc;
+  if( rc ){
+    sqlite3_free(log);
+    return rc;
+  }
+
+  if( plugin->pklen==pklen && memcmp(plugin->pubkey,pubkey,pklen)==0 ){
+    plugin->is_authorized = TRUE;
+  }
 
   for( node=plugin->peers; node; node=node->next ){
     if( node->pklen==pklen && memcmp(node->pubkey,pubkey,pklen)==0 ){
       /* send all the authorizations to the new node */
       rc = send_authorizations(node, NULL);
+      node->is_authorized = TRUE;
     }else{
       /* send only this new authorization to this node */
       rc = send_authorizations(node, log);

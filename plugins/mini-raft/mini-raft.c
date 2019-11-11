@@ -2031,6 +2031,8 @@ void * plugin_init(aergolite *this_node, char *uri) {
 
   plugin->node_id = aergolite_get_node_id(this_node);
 
+  plugin->pubkey = aergolite_pubkey(this_node, &plugin->pklen);
+
 
   plugin->is_leader = FALSE;
 

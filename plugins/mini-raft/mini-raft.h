@@ -254,6 +254,8 @@ struct txn_list {
 
 struct plugin {
   int node_id;                /* Node id */
+  char *pubkey;               /* the public key for this node */
+  int pklen;                  /* public key length */
 
   aergolite *this_node;       /* Reference to the aergolite instance */
 
@@ -267,6 +269,8 @@ struct plugin {
 
   nodeauth *authorizations;   /* List of node authorizations */
   struct txn_list *special_txn; /* New special transaction */
+
+  BOOL is_authorized;         /* Whether this node is authorized on the network */
 
   BOOL is_leader;             /* True if this node is the current leader */
   node *leader_node;          /* Points to the leader node if it is connected */
