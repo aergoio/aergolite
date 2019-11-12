@@ -155,8 +155,9 @@ SQLITE_PRIVATE int  aergoliteCheckSignTransaction(Pager *pPager);
 SQLITE_PRIVATE int  sign_txn_by_user(aergolite *this_node, binn *log);
 SQLITE_PRIVATE int  sign_txn_by_node(aergolite *this_node, binn *log);
 
-SQLITE_PRIVATE int  save_local_txn(aergolite *this_node, binn *log);
 SQLITE_PRIVATE BOOL is_special_transaction(binn *log);
+SQLITE_PRIVATE int  save_local_txn(aergolite *this_node, binn *log);
+SQLITE_PRIVATE void process_new_local_transaction(aergolite *this_node, Pager *pPager);
 
 SQLITE_PRIVATE int  lock_main_db(aergolite *this_node);
 SQLITE_PRIVATE void unlock_main_db(aergolite *this_node);
