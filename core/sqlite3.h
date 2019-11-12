@@ -11796,7 +11796,12 @@ SQLITE_API int aergolite_execute_transaction(
   aergolite *this_node, int node_id, int64 nonce, void *list
 );
 
-SQLITE_API int aergolite_verify_transaction(aergolite *this_node, int node_id, void *log);
+SQLITE_API int aergolite_verify_transaction(
+  aergolite *this_node,
+  int node_id,
+  void *log,
+  BOOL check_nonce
+);
 
 
 /*
@@ -11813,6 +11818,8 @@ SQLITE_API int aergolite_rollback_block(aergolite *this_node);
 /*
 ** Allowed nodes
 */
+
+SQLITE_API int read_authorized_pubkey(void *log, char *pubkey, int *ppklen);
 
 SQLITE_API int aergolite_verify_authorization(
   aergolite *this_node,

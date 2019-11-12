@@ -415,7 +415,7 @@ SQLITE_PRIVATE int store_transaction_on_mempool(
   }
 
   /* check if this transaction is valid */
-  rc = aergolite_verify_transaction(plugin->this_node, node_id, log);
+  rc = aergolite_verify_transaction(plugin->this_node, node_id, log, TRUE);
   if( rc!=SQLITE_OK ) return rc;
 
   /* allocate a new transaction object */
@@ -675,7 +675,8 @@ SQLITE_PRIVATE void process_new_special_transaction(plugin *plugin) {
     int rc, pklen;
 
     /* is it an authorization? */
-    rc = aergolite_verify_authorization(this_node, txn->log, pubkey, &pklen);
+    //rc = aergolite_verify_authorization(this_node, txn->log, pubkey, &pklen);
+    rc = read_authorized_pubkey(txn->log, pubkey, &pklen);
     if( rc==SQLITE_OK ){
       rc = on_new_authorization(plugin, txn->log, pubkey, pklen);
       if( rc ) return;
