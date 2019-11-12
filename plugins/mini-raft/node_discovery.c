@@ -94,7 +94,7 @@ SQLITE_PRIVATE void send_peer_list(plugin *plugin, node *to_node){
   if( !list ) return;
 
   for(node = plugin->peers; node; node = node->next){
-    if( node!=to_node && node->bind_port>0 ){
+    if( node->is_authorized && node!=to_node && node->bind_port>0 ){
       binn *item = binn_list();
       binn_list_add_str(item, node->host);
       binn_list_add_int32(item, node->bind_port);

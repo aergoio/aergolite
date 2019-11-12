@@ -264,9 +264,10 @@ SQLITE_PRIVATE int broadcast_transaction(plugin *plugin, struct transaction *txn
   binn_map_set_list (map, PLUGIN_SQL_CMDS, txn->log);
 
   for( node=plugin->peers; node; node=node->next ){
-//    if( node->id!=txn->node_id ){   -- should it notify the same node?
+    //if( node->id!=txn->node_id ){   -- should it notify the same node?
+    if( node->is_authorized ){
       send_peer_message(node, map, NULL);
-//    }
+    }
   }
 
   binn_free(map);

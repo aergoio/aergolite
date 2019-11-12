@@ -8,6 +8,8 @@ SQLITE_PRIVATE int store_authorization(plugin *plugin, void *log){
   char pubkey[36];
   int rc, pklen;
 
+  SYNCTRACE("store_authorization\n");
+
   /* check if already on the list */
   for( auth=plugin->authorizations; auth; auth=auth->next ){
     if( auth->pklen==pklen && memcmp(auth->pk,pubkey,pklen)==0 ){
@@ -63,6 +65,7 @@ SQLITE_PRIVATE int load_authorizations_cb(void *arg, void *log){
 
 SQLITE_PRIVATE int load_authorizations(plugin *plugin){
   aergolite *this_node = plugin->this_node;
+  SYNCTRACE("load_authorizations\n");
   return aergolite_iterate_authorizations(this_node, load_authorizations_cb, plugin);
 }
 
@@ -176,9 +179,28 @@ loc_failed:
 
 /****************************************************************************/
 
+SQLITE_PRIVATE void on_new_accepted_node(node *node) {
+  plugin *plugin = node->plugin;
+
+  SYNCTRACE("on_new_accepted_node\n");
+
+  send_peer_list(plugin, node);
+
+  send_mempool_transactions(plugin, node);
+
+  if( plugin->is_leader ){
+    update_known_nodes(plugin);
+  }
+
+}
+
+/****************************************************************************/
+
 SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log, char *pubkey, int pklen){
-  node *node;
+  node *node, *authorized_node=NULL;
   int rc;
+
+  SYNCTRACE("on_new_authorization\n");
 
   rc = store_authorization(plugin, log);  /* keep the pointer instead of copying the data */
   if( rc ){
@@ -195,31 +217,20 @@ SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log, char *pubkey,
       /* send all the authorizations to the new node */
       rc = send_authorizations(node, NULL);
       node->is_authorized = TRUE;
-    }else{
+      authorized_node = node;
+    }else if( node->is_authorized ){
       /* send only this new authorization to this node */
       rc = send_authorizations(node, log);
     }
     if( rc ) break;
   }
 
-  return rc;
-}
-
-/****************************************************************************/
-
-SQLITE_PRIVATE void on_new_accepted_node(node *node) {
-  plugin *plugin = node->plugin;
-
-  SYNCTRACE("on_new_accepted_node\n");
-
-  send_peer_list(plugin, node);
-
-  send_mempool_transactions(plugin, node);
-
-  if( plugin->is_leader ){
-    update_known_nodes(plugin);
+  /* if the authorized node is online */
+  if( authorized_node ){
+    on_new_accepted_node(node);
   }
 
+  return rc;
 }
 
 /****************************************************************************/
