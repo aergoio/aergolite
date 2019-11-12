@@ -26,7 +26,7 @@ SQLITE_PRIVATE int store_authorization(plugin *plugin, void *log){
 
   /* add it to the list */
 
-  auth = sqlite3_malloc(sizeof(struct nodeauth));
+  auth = sqlite3_malloc_zero(sizeof(struct nodeauth));
   if( !auth ) return SQLITE_NOMEM;
 
   memcpy(auth->pk, pubkey, pklen);
@@ -227,7 +227,7 @@ SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log, char *pubkey,
 
   /* if the authorized node is online */
   if( authorized_node ){
-    on_new_accepted_node(node);
+    on_new_accepted_node(authorized_node);
   }
 
   return rc;

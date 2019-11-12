@@ -171,8 +171,8 @@ typedef struct nodeauth nodeauth;
 
 struct nodeauth {
   struct nodeauth *next;
-  char *pk;
-  int pklen;
+  char pk[36];
+  int  pklen;
   void *log;
 };
 
