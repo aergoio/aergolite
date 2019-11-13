@@ -2,11 +2,10 @@
 /*** ALLOWED NODES **********************************************************/
 /****************************************************************************/
 
-SQLITE_PRIVATE int store_authorization(plugin *plugin, void *log){
+SQLITE_PRIVATE int store_authorization(plugin *plugin, void *log, char *pubkey, int pklen){
   aergolite *this_node = plugin->this_node;
   nodeauth *auth;
-  char pubkey[36];
-  int rc, pklen;
+  int rc;
 
   SYNCTRACE("store_authorization\n");
 
@@ -17,8 +16,8 @@ SQLITE_PRIVATE int store_authorization(plugin *plugin, void *log){
     }
   }
 
-  rc = aergolite_verify_authorization(this_node, log, pubkey, &pklen);
-  if( rc ) return rc;
+//  rc = aergolite_verify_authorization(this_node, log, pubkey, &pklen);
+//  if( rc ) return rc;
 
   if( plugin->pklen==pklen && memcmp(plugin->pubkey,pubkey,pklen)==0 ){
     plugin->is_authorized = TRUE;
@@ -50,16 +49,21 @@ loc_exit:
 
 SQLITE_PRIVATE int load_authorizations_cb(void *arg, void *log){
   plugin *plugin = (struct plugin*) arg;
-  int rc;
+  char pubkey[36];
+  int rc, pklen;
+
+  rc = read_authorized_pubkey(log, pubkey, &pklen);
+  if( rc ) goto loc_exit;
 
   log = sqlite3_memdup(log, binn_size(log));
   if( !log ) return SQLITE_NOMEM;
 
-  rc = store_authorization(plugin, log);
+  rc = store_authorization(plugin, log, pubkey, pklen);
   if( rc ){
     sqlite3_free(log);
   }
 
+loc_exit:
   return SQLITE_OK;  /* discards the result, so it continues with the next auth */
 }
 
@@ -202,7 +206,7 @@ SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log, char *pubkey,
 
   SYNCTRACE("on_new_authorization\n");
 
-  rc = store_authorization(plugin, log);  /* keep the pointer instead of copying the data */
+  rc = store_authorization(plugin, log, pubkey, pklen);  /* keep the pointer instead of copying the data */
   if( rc ){
     sqlite3_free(log);
     return rc;
@@ -212,6 +216,7 @@ SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log, char *pubkey,
     plugin->is_authorized = TRUE;
   }
 
+#if 0
   for( node=plugin->peers; node; node=node->next ){
     if( node->pklen==pklen && memcmp(node->pubkey,pubkey,pklen)==0 ){
       /* send all the authorizations to the new node */
@@ -224,6 +229,28 @@ SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log, char *pubkey,
     }
     if( rc ) break;
   }
+#endif
+
+  for( node=plugin->peers; node; node=node->next ){
+    if( node->pklen==pklen && memcmp(node->pubkey,pubkey,pklen)==0 ){
+      /* send all the authorizations to the new node */
+      rc = send_authorizations(node, NULL);
+      node->is_authorized = TRUE;
+      authorized_node = node;
+    }
+    if( rc ) break;
+  }
+
+  if( !authorized_node ){
+    /* if the authorized node is not connected, send the auth to all the connected nodes */
+    for( node=plugin->peers; node; node=node->next ){
+      if( node->is_authorized ){
+        /* send only this new authorization to this node */
+        rc = send_authorizations(node, log);
+        if( rc ) break;
+      }
+    }
+  }
 
   /* if the authorized node is online */
   if( authorized_node ){
@@ -231,6 +258,42 @@ SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log, char *pubkey,
   }
 
   return rc;
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void on_authorization_received(node *node, void *msg, int size){
+  plugin *plugin = node->plugin;
+  aergolite *this_node = node->this_node;
+  binn_iter iter;
+  binn item;
+  void *list;
+  int rc;
+
+  list = binn_map_list(msg, PLUGIN_AUTHORIZATION);
+
+  SYNCTRACE("authorizations received - count=%d\n", binn_count(list));
+
+  if( !list ){
+    sqlite3_log(1, "on_authorization_received: invalid packet");
+    return;
+  }
+
+  binn_list_foreach(list, item){
+    assert( item.type==BINN_LIST );
+    void *log = item.ptr;
+    char pubkey[36];
+    int pklen;
+    /* verify the authorization */
+//    rc = aergolite_verify_authorization(this_node, log, pubkey, &pklen);
+    rc = read_authorized_pubkey(log, pubkey, &pklen);
+    if( rc==SQLITE_OK ){
+      log = sqlite3_memdup(log, binn_size(log));
+      if( !log ) return;
+      on_new_authorization(plugin, log, pubkey, pklen);
+    }
+  }
+
 }
 
 /****************************************************************************/

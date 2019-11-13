@@ -1052,6 +1052,10 @@ SQLITE_PRIVATE void worker_thread_on_peer_message(uv_msg_t *stream, void *msg, i
     SYNCTRACE("   received message: PLUGIN_CMD_ID\n");
     on_node_identification(node, msg, size);
     break;
+  case PLUGIN_AUTHORIZATION:
+    SYNCTRACE("   received message: PLUGIN_AUTHORIZATION\n");
+    on_authorization_received(node, msg, size);
+    break;
   case PLUGIN_PEERS:
     SYNCTRACE("   received message: PLUGIN_PEERS\n");
     on_peer_list_received(node, msg, size);
