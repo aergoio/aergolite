@@ -1519,6 +1519,7 @@ SQLITE_PRIVATE int send_tcp_broadcast(plugin *plugin, char *message) {
   for (node = plugin->peers; node; node = node->next) {
     BOOL ret;
 
+    if( !node->is_authorized ) continue;
     SYNCTRACE("send_tcp_broadcast [%s:%d]: %s\n", node->host, node->port, message);
 
     ret = send_text_message(node, message);

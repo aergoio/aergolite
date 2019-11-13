@@ -197,10 +197,14 @@ SQLITE_PRIVATE void start_current_leader_query(plugin *plugin) {
   reset_node_state(plugin);
 
   update_known_nodes(plugin);
+  if( plugin->total_known_nodes<=1 ) return;
 
-  count = 1;  /* this node */
+  count = 0;
+  if( plugin->is_authorized ){  /* this node */
+    count++;
+  }
   for( node=plugin->peers; node; node=node->next ){
-    if( node->id!=0 ) count++;
+    if( node->is_authorized && node->id!=0 ) count++;
   }
   if( count<majority(plugin->total_known_nodes) ){
     SYNCTRACE("start_current_leader_query - no sufficient nodes\n");
