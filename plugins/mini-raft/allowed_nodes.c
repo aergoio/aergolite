@@ -730,6 +730,7 @@ SQLITE_PRIVATE BOOL send_node_identification(plugin *plugin, node *node) {
 
   if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_CMD_ID)==FALSE ) goto loc_failed;
   if( binn_map_set_int32(map, PLUGIN_VERSION, PLUGIN_VERSION_NUMBER)==FALSE ) goto loc_failed;
+  if( binn_map_set_blob (map, PLUGIN_PUBKEY, plugin->pubkey, plugin->pklen)==FALSE ) goto loc_failed;
   if( binn_map_set_int32(map, PLUGIN_NODE_ID, plugin->node_id)==FALSE ) goto loc_failed;
   if( binn_map_set_int32(map, PLUGIN_PORT, plugin->bind->port)==FALSE ) goto loc_failed;
 
@@ -739,15 +740,6 @@ SQLITE_PRIVATE BOOL send_node_identification(plugin *plugin, node *node) {
   if( binn_map_set_str(map, PLUGIN_OS, os_info)==FALSE ) goto loc_failed;
   if( binn_map_set_str(map, PLUGIN_HOSTNAME, hostname)==FALSE ) goto loc_failed;
   if( binn_map_set_str(map, PLUGIN_APP, app_info)==FALSE ) goto loc_failed;
-
-  /* send the public key if this node was not yet authorized */
-
-  if( last_block==0 ){
-    int pklen;
-    char *pubkey = aergolite_pubkey(this_node, &pklen);
-    if( !pubkey ) goto loc_exit;
-    if( binn_map_set_blob(map, PLUGIN_PUBKEY, pubkey, pklen)==FALSE ) goto loc_failed;
-  }
 
   /* sign the message content */
 
