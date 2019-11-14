@@ -215,9 +215,12 @@ SQLITE_PRIVATE void print_allowed_node_cb(
   struct node *node;
   char hexpubkey[72];
 
-  /* check if the node is connected */
+  /* ignore if it is this node */
+  if( memcmp(data->plugin->pubkey,pubkey,pklen)==0 ) return;
+
+  /* ignore if it is from a connected node */
   for(node=data->plugin->peers; node; node=node->next){
-    if( node->id==node_id ) return;
+    if( memcmp(node->pubkey,pubkey,pklen)==0 ) return;
   }
 
   /* print the offline node */
