@@ -12,7 +12,8 @@ SQLITE_PRIVATE int store_authorization(plugin *plugin, void *log, char *pubkey, 
   /* check if already on the list */
   for( auth=plugin->authorizations; auth; auth=auth->next ){
     if( auth->pklen==pklen && memcmp(auth->pk,pubkey,pklen)==0 ){
-      goto loc_exit;
+      SYNCTRACE("store_authorization ALREADY EXISTS\n");
+      return SQLITE_EXISTS;
     }
   }
 
@@ -176,6 +177,7 @@ loc_exit:
   return rc;
 
 loc_failed:
+  SYNCTRACE("send_authorizations FAILED\n");
   rc = SQLITE_NOMEM;
   goto loc_exit;
 
@@ -233,10 +235,10 @@ SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log, char *pubkey,
 
   for( node=plugin->peers; node; node=node->next ){
     if( node->pklen==pklen && memcmp(node->pubkey,pubkey,pklen)==0 ){
-      /* send all the authorizations to the new node */
-      rc = send_authorizations(node, NULL);
       node->is_authorized = TRUE;
       authorized_node = node;
+      /* send all the authorizations to the new node */
+      rc = send_authorizations(node, NULL);
     }
     if( rc ) break;
   }
