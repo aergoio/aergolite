@@ -489,14 +489,14 @@ SQLITE_PRIVATE void get_this_device_info(char *hostname, char *cpu_info, char *o
 
   /* get OS info */
   uv_os_uname(&os);
-  snprintf(os_info, sizeof os_info, "%s %s %s", os.sysname, os.release, os.machine);  // os.version
+  snprintf(os_info, 256, "%s %s %s", os.sysname, os.release, os.machine);  // os.version
 
   /* get hostname */
-  size = sizeof hostname;
+  size = 256;
   uv_os_gethostname(hostname, &size);
 
   /* get executable path and name */
-  size = sizeof app_info;
+  size = 256;
   uv_exepath(app_info, &size);
 
 }
