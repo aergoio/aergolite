@@ -452,27 +452,42 @@ loc_failed2:
 
 }
 
-SQLITE_PRIVATE void check_new_node_id(node *node) {
-  plugin *plugin = node->plugin;
-  aergolite *this_node = node->this_node;
-  struct node *tnode;
+SQLITE_PRIVATE void check_new_identified_node(node *new_node) {
+  plugin *plugin = new_node->plugin;
+  aergolite *this_node = new_node->this_node;
+  struct node *node;
+
+  if( memcmp(new_node->pubkey,plugin->pubkey,33)==0 ){
+    SYNCTRACE("connection from this same node!!!\n");
+    disconnect_peer(new_node);
+    return;
+  }
 
   /* check for node id conflict with this node */
-  if (node->id == plugin->node_id) {
+  if( new_node->id==plugin->node_id ){
     sqlite3_log(1, "new connected node has the same node id as this node");
     goto loc_invalid_peer;
   }
 
+  /* check if this node has a previous connection */
+  for( node=plugin->peers; node; node=node->next ){
+    if( node!=new_node && memcmp(node->pubkey,new_node->pubkey,33)==0 ){
+      SYNCTRACE("discarding previous connection from remote node\n");
+      disconnect_peer(node);
+      return;
+    }
+  }
+
   /* check for node id conflict with other node */
-  for (tnode = plugin->peers; tnode; tnode = tnode->next) {
-    if (tnode!=node && tnode->id == node->id) {
-      on_new_node_with_same_id(tnode, node);
+  for( node=plugin->peers; node; node=node->next ){
+    if( node!=new_node && node->id==new_node->id ){
+      on_new_node_with_same_id(node, new_node);
       return;
     }
   }
 
   /* start the db sync */
-  on_valid_node_id(node);
+  on_valid_node_id(new_node);
 
   return;
 
@@ -672,7 +687,7 @@ SQLITE_PRIVATE void on_node_identification(node *node, void *msg, int size) {
   }
 
   /* xxx */
-  check_new_node_id(node);
+  check_new_identified_node(node);
 
 
 //   3 possible cases:
