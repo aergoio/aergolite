@@ -415,7 +415,7 @@ SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
 
   /* start the block creation */
   rc = aergolite_begin_block(this_node);
-  if( rc ) goto loc_failed;
+  if( rc ) goto loc_failed2;
 
   /* execute the transactions from the local mempool */
   count = 0;
@@ -442,13 +442,15 @@ loc_again:
 
   /* finalize the block creation */
   rc = aergolite_create_block(this_node, &block->height, &block->header, &block->body);
-  if( rc ) goto loc_failed;
+  if( rc ) goto loc_failed2;
 
   array_free(&plugin->nonces);
   return block;
 
 loc_failed:
-
+  aergolite_rollback_block(this_node);
+loc_failed2:
+  SYNCTRACE("create_new_block FAILED\n");
   if( block ) sqlite3_free(block);
   array_free(&plugin->nonces);
   return NULL;
@@ -513,6 +515,7 @@ SQLITE_PRIVATE void new_block_timer_cb(uv_timer_t* handle) {
 
 SQLITE_PRIVATE void start_new_block_timer(plugin *plugin) {
   if( !uv_is_active((uv_handle_t*)&plugin->new_block_timer) ){
+    SYNCTRACE("start_new_block_timer\n");
     uv_timer_start(&plugin->new_block_timer, new_block_timer_cb, NEW_BLOCK_WAIT_INTERVAL, 0);
   }
 }
