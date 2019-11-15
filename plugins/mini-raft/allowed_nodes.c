@@ -194,9 +194,7 @@ SQLITE_PRIVATE void on_new_accepted_node(node *node) {
 
   send_mempool_transactions(plugin, node);
 
-  if( plugin->is_leader ){
-    update_known_nodes(plugin);
-  }
+  check_current_leader(plugin);
 
 }
 

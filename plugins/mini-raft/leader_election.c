@@ -7,6 +7,30 @@ SQLITE_PRIVATE void on_leader_vote(plugin *plugin, node *node, char *arg);
 
 /****************************************************************************/
 
+BOOL has_nodes_for_election(plugin *plugin){
+  node *node;
+  int count;
+
+  update_known_nodes(plugin);
+  if( plugin->total_known_nodes<=1 ) return FALSE;
+
+  count = 0;
+  if( plugin->is_authorized ){  /* this node */
+    count++;
+  }
+  for( node=plugin->peers; node; node=node->next ){
+    if( node->is_authorized && node->id!=0 ) count++;
+  }
+
+  if( count<majority(plugin->total_known_nodes) ){
+    return FALSE;
+  }
+
+  return TRUE;
+}
+
+/****************************************************************************/
+
 SQLITE_PRIVATE void clear_leader_votes(plugin *plugin) {
 
   while( plugin->leader_votes ){
@@ -35,6 +59,7 @@ SQLITE_PRIVATE void new_leader_election(plugin *plugin) {
   SYNCTRACE("new_leader_election\n");
 
   if( plugin->in_election ) return;
+
   plugin->in_election = TRUE;
   plugin->in_leader_query = FALSE;
 
@@ -43,9 +68,6 @@ SQLITE_PRIVATE void new_leader_election(plugin *plugin) {
 
   reset_node_state(plugin);
 
-  update_known_nodes(plugin);
-
-  //! what if a (s)election is already taking place?
   clear_leader_votes(plugin);
 
   uv_timer_start(&plugin->leader_check_timer, on_leader_check_timeout, 5000, 0);
@@ -189,24 +211,12 @@ SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle) {
 /****************************************************************************/
 
 SQLITE_PRIVATE void start_current_leader_query(plugin *plugin) {
-  node *node;
-  int count;
 
   SYNCTRACE("start_current_leader_query\n");
 
   reset_node_state(plugin);
 
-  update_known_nodes(plugin);
-  if( plugin->total_known_nodes<=1 ) return;
-
-  count = 0;
-  if( plugin->is_authorized ){  /* this node */
-    count++;
-  }
-  for( node=plugin->peers; node; node=node->next ){
-    if( node->is_authorized && node->id!=0 ) count++;
-  }
-  if( count<majority(plugin->total_known_nodes) ){
+  if( !has_nodes_for_election(plugin) ){
     SYNCTRACE("start_current_leader_query - no sufficient nodes\n");
     // it could have a timer here to recall this fn again. now it is using
     // the aergolite timer to make the check regularly.
@@ -361,6 +371,11 @@ SQLITE_PRIVATE void on_new_election_request(
   int interval;
 
   if( plugin->in_election ) return;
+
+  if( !has_nodes_for_election(plugin) ){
+    SYNCTRACE("on_new_election_request - no sufficient nodes\n");
+    return;
+  }
 
   if( plugin->leader_node ){
     /* check if the current leader is still alive */
