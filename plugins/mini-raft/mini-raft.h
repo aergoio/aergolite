@@ -88,6 +88,7 @@
 #define PLUGIN_ERROR               0xc0de002  /*  */
 
 #define PLUGIN_NODE_ID             0xc0de003  /*  */
+#define PLUGIN_NODE_INFO           0xc0de009  /*  */
 #define PLUGIN_PORT                0xc0de004  /*  */
 
 #define PLUGIN_SEQ                 0xc0de005  /*  */
@@ -203,6 +204,8 @@ struct node {
   char  os[256];         /* OS information */
   char  hostname[256];   /* node's hostname */
   char  app[256];        /* application path and name */
+
+  char  *info;           /* Dynamic information set by this peer */
 
   char  pubkey[36];      /* node's public key */
   int   pklen;           /* node's public key length */

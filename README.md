@@ -375,3 +375,90 @@ In this case the returned data will contain the list of connected nodes:
 "sync_up_state": "in sync"
 }
 ```
+
+
+### Application defined node information
+
+Your application can set node specific information using this command:
+
+```
+PRAGMA node_info=<text>
+```
+
+The text value can be a single node identifier or it can contain many information serialized in any text format. Only your applications will use it.
+
+This information is kept on memory locally and also sent to the connected peers. It is not saved on the database and it is dynamic: the next time this command is executed with a different value it will replace the previous one.
+
+The last set value can be retrieved locally using the `PRAGMA node_info` command.
+
+It will also appear in the result of the `PRAGMA protocol_status(1)` command on its peer nodes.
+
+
+### Last nonce
+
+It is possible to retrieve the node's last nonce with the command:
+
+```
+PRAGMA last_nonce
+```
+
+If the returned number is zero it means that this node has not generated any transaction yet.
+
+
+### Transaction Status
+
+To retrieve the status of a local transaction:
+
+```
+PRAGMA transaction_status(<nonce>)
+```
+
+Where `<nonce>` should be replaced by the transaction's nonce. eg: `PRAGMA transaction_status(3)`
+
+It will return
+
+On full nodes: (not yet implemented)
+
+* `unprocessed`: the transaction was not yet processed by the network
+* `included`: a consensus was reached and the transaction was included on a block
+* `rejected`: a consensus was reached and the transaction was rejected
+
+On pruned nodes:
+
+* `unprocessed`: the transaction was not yet processed by the network
+* `processed`: the transaction was processed by the network and a consensus was reached on its result
+
+Pruned nodes do not keep information about specific transactions.
+
+To be informed whether a specific transaction was included on a block or rejected the application must use a callback function. It is set up as an user defined function:
+
+> **Note:** the callback is not yet implemented
+
+Example in Python:
+
+```python
+def on_processed_transaction(nonce, status):
+  print "transaction " + str(nonce) + ": " + status
+  return None
+
+con.create_function("on_processed_transaction", 2, on_processed_transaction)
+```
+
+Example in C:
+
+```C
+static void on_processed_transaction(sqlite3_context *context, int argc, sqlite3_value **argv){
+  long long int nonce = sqlite3_value_int64(argv[0]);
+  char *status = sqlite3_value_text(argv[1]);
+
+  printf("transaction %lld: %s\n", nonce, status);
+
+  sqlite3_result_null(context);
+}
+
+sqlite3_create_function(db, "on_processed_transaction", 2, SQLITE_UTF8 | SQLITE_DETERMINISTIC,
+  NULL, &on_processed_transaction, NULL, NULL);
+```
+
+> **ATTENTION:** The callback function is called by the **worker thread**!!
+> Your application should not use the db connection there and it must return as fast as possible!

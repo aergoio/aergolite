@@ -106,6 +106,9 @@ SQLITE_API char * get_protocol_status(void *arg, BOOL extended) {
       sqlite3_str_appendall(str, "{\n");
 
       sqlite3_str_appendf(str, "  \"node_id\": %d,\n", node->id);
+      if( node->info ){
+        sqlite3_str_appendf(str, "  \"node_info\": \"%s\",\n", node->info);
+      }
       sqlite3_str_appendf(str, "  \"is_leader\": %s,\n", (node==plugin->leader_node) ? "true" : "false");
       sqlite3_str_appendf(str, "  \"conn_type\": \"%s\",\n", getConnType(node->conn_type));
       sqlite3_str_appendf(str, "  \"address\": \"%s:%d\"\n", node->host, node->port);
@@ -356,6 +359,44 @@ SQLITE_PRIVATE void on_node_info_request(
 
 }
 
+/*****************************************************************************/
+
+/*
+** This app changed the node info.
+** Sends the updated information to all the connected peers.
+*/
+SQLITE_API void on_local_node_info_changed(void *arg, char *node_info) {
+  plugin *plugin = (struct plugin *) arg;
+  char *msg;
+
+  msg = sqlite3_mprintf("node_info:%s", node_info);
+  if( !msg ) return;
+
+  send_tcp_broadcast(plugin, msg);
+
+  sqlite3_free(msg);
+
+}
+
+/****************************************************************************/
+
+/* node info */
+SQLITE_PRIVATE void on_peer_info_changed(
+  plugin *plugin,
+  node *node,
+  char *arg
+){
+
+  sqlite3_free(node->info);
+
+  if( arg ){
+    node->info = sqlite3_strdup(arg);
+  }else{
+    node->info = NULL;
+  }
+
+}
+
 /***************************************************************************/
 /****************************************************************************/
 
@@ -599,6 +640,7 @@ SQLITE_PRIVATE node * new_node(uv_loop_t *loop) {
   /* initialize the socket */
   if ((rc = uv_msg_init(loop, &node->socket, UV_TCP))) {
     sqlite3_log(SQLITE_ERROR, "worker thread: could not initialize TCP socket: (%d) %s", rc, uv_strerror(rc));
+    sqlite3_free(node->info);
     sqlite3_free(node);
     return NULL;
   }
@@ -981,6 +1023,7 @@ SQLITE_PRIVATE void worker_thread_on_close(uv_handle_t *handle) {
       if( node->id_conflict ){
         stop_id_conflict_timer(node->id_conflict);
       }
+      sqlite3_free(node->info);
       sqlite3_free(node);
 
       //enable_node_reconnect_timer(node); //! it can activate a timer when there is no more peers
@@ -1622,6 +1665,9 @@ SQLITE_PRIVATE void node_thread(void *arg) {
   /* a broadcast message requesting node info */
   register_udp_message("node_info", on_node_info_request);
 
+  /* new node info from peer */
+  register_tcp_message("node_info", on_peer_info_changed);
+
 
 #if TARGET_OS_IPHONE
   /* initialize a callback to receive notifications from the main thread */
@@ -2148,6 +2194,7 @@ int register_miniraft_plugin(){
     plugin_end,
     on_new_local_transaction,
     get_protocol_status,
+    on_local_node_info_changed,
     print_node_list
   );
 

@@ -603,6 +603,7 @@ SQLITE_PRIVATE void on_node_identification(node *node, void *msg, int size) {
   }
 
   node->id = binn_map_int32(msg, PLUGIN_NODE_ID);
+  node->info = binn_map_str(msg, PLUGIN_NODE_INFO);
   node->bind_port = binn_map_int32(msg, PLUGIN_PORT);
   cpu = binn_map_str(msg, PLUGIN_CPU);
   os = binn_map_str(msg, PLUGIN_OS);
@@ -615,6 +616,11 @@ SQLITE_PRIVATE void on_node_identification(node *node, void *msg, int size) {
             node->id, node->bind_port, node->port);
   SYNCTRACE("on_node_identification - hostname=[%s] app=[%s]\n", host, app);
 
+  if( node->info ){
+    node->info = sqlite3_strdup(node->info);
+  }
+
+  /* if the node id was not supplied */
   if( plugin->node_id==0 ){
     sqlite3_log(1, "on_node_identification: empty node id!");
     goto loc_failed;
@@ -714,7 +720,7 @@ SQLITE_PRIVATE void on_id_msg_sent(send_message_t *req, int status) {
 SQLITE_PRIVATE BOOL send_node_identification(plugin *plugin, node *node) {
   aergolite *this_node = plugin->this_node;
   int64 last_block = plugin->current_block ? plugin->current_block->height : 0;
-  char hostname[256], cpu_info[256], os_info[256], app_info[256];
+  char hostname[256], cpu_info[256], os_info[256], app_info[256], *node_info;
   char msg[2048], signature[72];
   binn *map;
   BOOL ret=FALSE;
@@ -737,6 +743,12 @@ SQLITE_PRIVATE BOOL send_node_identification(plugin *plugin, node *node) {
   if( binn_map_set_str(map, PLUGIN_OS, os_info)==FALSE ) goto loc_failed;
   if( binn_map_set_str(map, PLUGIN_HOSTNAME, hostname)==FALSE ) goto loc_failed;
   if( binn_map_set_str(map, PLUGIN_APP, app_info)==FALSE ) goto loc_failed;
+
+  node_info = aergolite_get_node_info(this_node);
+  if( node_info ){
+    if (binn_map_set_str(map, PLUGIN_NODE_INFO, node_info) == FALSE) goto loc_failed;
+    sqlite3_free(node_info);
+  }
 
   /* sign the message content */
 
