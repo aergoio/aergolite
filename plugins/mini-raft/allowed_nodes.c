@@ -96,7 +96,7 @@ SQLITE_PRIVATE int is_node_authorized(plugin *plugin, char *pubkey, int pklen, B
   //if( rc==SQLITE_OK && count>0 ){
 
   count = 0;
-  sql = "SELECT count(*) FROM aergolite_allowed_nodes WHERE pubkey = ?";
+  sql = "SELECT count(*) FROM aergolite_nodes WHERE pubkey = ?";
   rc = aergolite_consensus_db_query_int32(this_node, &count, sql, "b", pubkey, pklen);
   if( rc ) return rc;
 
@@ -125,7 +125,7 @@ SQLITE_PRIVATE void count_authorized_nodes(plugin *plugin) {
   }
 
   /* the leader must know the number of total known nodes, including those that are off-line */
-  //aergolite_consensus_db_query_int32(this_node, &plugin->total_authorized_nodes, "SELECT count(*) FROM aergolite_allowed_nodes");
+  //aergolite_consensus_db_query_int32(this_node, &plugin->total_authorized_nodes, "SELECT count(*) FROM aergolite_nodes");
 
   SYNCTRACE("count_authorized_nodes total_authorized_nodes=%d\n", plugin->total_authorized_nodes);
 
