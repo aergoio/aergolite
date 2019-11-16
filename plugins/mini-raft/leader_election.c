@@ -268,7 +268,9 @@ SQLITE_PRIVATE int calculate_new_leader(plugin *plugin){
   /* check the highest number of transactions */
   max_blocks = last_block;
   for( node=plugin->peers; node; node=node->next ){
-    if( node->last_block>max_blocks ) max_blocks = node->last_block;
+    if( node->is_authorized ){
+      if( node->last_block>max_blocks ) max_blocks = node->last_block;
+    }
   }
 
   SYNCTRACE("calculate_new_leader max_blocks=%" INT64_FORMAT "\n", max_blocks);
@@ -281,16 +283,20 @@ SQLITE_PRIVATE int calculate_new_leader(plugin *plugin){
 
   for( node=plugin->peers; node; node=node->next ){
     SYNCTRACE("calculate_new_leader node_id=%d last_block=%" INT64_FORMAT "\n", node->id, node->last_block);
-    if( node->last_block==max_blocks && node!=plugin->last_leader ){
-      number = max_blocks ^ (uint64)node->id;
-      if( number>biggest ) biggest = number;
+    if( node->is_authorized ){
+      if( node->last_block==max_blocks && node!=plugin->last_leader ){
+        number = max_blocks ^ (uint64)node->id;
+        if( number>biggest ) biggest = number;
+      }
     }
   }
 
   for( node=plugin->peers; node; node=node->next ){
-    if( node->last_block==max_blocks && node!=plugin->last_leader ){
-      number = max_blocks ^ (uint64)node->id;
-      if( number==biggest ) return node->id;
+    if( node->is_authorized ){
+      if( node->last_block==max_blocks && node!=plugin->last_leader ){
+        number = max_blocks ^ (uint64)node->id;
+        if( number==biggest ) return node->id;
+      }
     }
   }
 
