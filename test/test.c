@@ -367,15 +367,13 @@ loc_again1:
     assert( rc==SQLITE_OK );
     assert( stmt!=NULL );
 
-    // node_id | pubkey | address | CPU | OS | hostname | app | external |
-
     // node_id | pubkey | address | CPU | OS | hostname | app | node_info | external |
 
-    assert( sqlite3_column_count(stmt)==8 );
+    assert( sqlite3_column_count(stmt)==9 );
     nrows = 0;
 
     while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
-      char *external = (char*)sqlite3_column_text(stmt, 7);
+      char *external = (char*)sqlite3_column_text(stmt, 8);
       assert( external && strcmp(external,"yes")==0 );
 
       /* count how many peers this node is connected to */
@@ -450,14 +448,14 @@ loc_again2:
       assert( rc==SQLITE_OK );
       assert( stmt!=NULL );
 
-      // node_id | pubkey | address | CPU | OS | hostname | app | external |
+      // node_id | pubkey | address | CPU | OS | hostname | app | node_info | external |
 
-      assert( sqlite3_column_count(stmt)==8 );
+      assert( sqlite3_column_count(stmt)==9 );
       nrows = 0;
 
       while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
         char *nodepk = (char*)sqlite3_column_text(stmt, 1);
-        char *external = (char*)sqlite3_column_text(stmt, 7);
+        char *external = (char*)sqlite3_column_text(stmt, 8);
         assert( nodepk && external );
         /* identify the node by the public key */
         for(int j=1; j<=n; j++){
@@ -475,7 +473,7 @@ loc_again2:
           }
         }
 #if 0
-        for(int j=0; j<8; j++){
+        for(int j=0; j<9; j++){
           printf("%s=%s\n", sqlite3_column_name(stmt,j), sqlite3_column_text(stmt,j));
         }
         puts("");

@@ -228,7 +228,7 @@ SQLITE_PRIVATE void print_allowed_node_cb(
 
   /* print the offline node */
   to_hex(pubkey, pklen, hexpubkey);
-  node_list_add(data->vdbe, node_id, hexpubkey, "", "", "", "", "", "");
+  node_list_add(data->vdbe, node_id, hexpubkey, "", "", "", "", "", "", "");
 
 }
 
@@ -241,7 +241,7 @@ SQLITE_API void print_node_list(void *arg, void *vdbe) {
   aergolite *this_node = plugin->this_node;
   struct node *node;
   int64 last_block = plugin->current_block ? plugin->current_block->height : 0;
-  char hostname[256], cpu[256], os[256], app[256];
+  char hostname[256], cpu[256], os[256], app[256], *node_info;
   char *pubkey, hexpubkey[72], address[32];
   int pklen;
 
@@ -254,6 +254,7 @@ SQLITE_API void print_node_list(void *arg, void *vdbe) {
     hexpubkey[0] = 0;
   sprintf(address, "%s:%d", plugin->bind->host, plugin->bind->port);
   get_this_device_info(hostname, cpu, os, app);
+  node_info = aergolite_get_node_info(this_node);
 
   node_list_add(vdbe,
      plugin->node_id,
@@ -263,6 +264,7 @@ SQLITE_API void print_node_list(void *arg, void *vdbe) {
      os,
      hostname,
      app,
+     node_info ? node_info : "",
      last_block==0 ? "yes" : "");
 
   /* iterate over the connected nodes */
@@ -280,6 +282,7 @@ SQLITE_API void print_node_list(void *arg, void *vdbe) {
        node->os,
        node->hostname,
        node->app,
+       node->info ? node->info : "",
        node->is_authorized ? "" : "yes");
 
   }

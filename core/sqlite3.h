@@ -11888,6 +11888,7 @@ SQLITE_API void node_list_add(void *vdbe,
   char *os,
   char *hostname,
   char *app,
+  char *extra,
   char *external
 );
 
