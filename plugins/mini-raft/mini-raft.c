@@ -98,8 +98,10 @@ SQLITE_API char * get_protocol_status(void *arg, BOOL extended) {
 
     sqlite3_str_appendf(str, "\"peers\": [");
 
-    for (node = plugin->peers; node; node = node->next) {
-      if (node->conn_state != CONN_STATE_CONNECTED) continue;
+    for( node=plugin->peers; node; node=node->next ){
+      if( node->conn_state!=CONN_STATE_CONNECTED ) continue;
+      if( !node->is_authorized ) continue;
+
       if( node != plugin->peers ){
         sqlite3_str_appendchar(str,1, ',');
       }
@@ -234,7 +236,7 @@ SQLITE_PRIVATE void print_allowed_node_cb(
 
 /****************************************************************************/
 
-// node_id | pubkey | address | CPU | OS | hostname | app | external |
+// node_id | pubkey | address | CPU | OS | hostname | app | extra_info | external |
 
 SQLITE_API void print_node_list(void *arg, void *vdbe) {
   plugin *plugin = (struct plugin *) arg;
