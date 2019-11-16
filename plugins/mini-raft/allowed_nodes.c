@@ -747,7 +747,6 @@ SQLITE_PRIVATE BOOL send_node_identification(plugin *plugin, node *node) {
   node_info = aergolite_get_node_info(this_node);
   if( node_info ){
     if (binn_map_set_str(map, PLUGIN_NODE_INFO, node_info) == FALSE) goto loc_failed;
-    sqlite3_free(node_info);
   }
 
   /* sign the message content */

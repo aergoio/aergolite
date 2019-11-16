@@ -88,14 +88,14 @@
 #define PLUGIN_ERROR               0xc0de002  /*  */
 
 #define PLUGIN_NODE_ID             0xc0de003  /*  */
-#define PLUGIN_NODE_INFO           0xc0de009  /*  */
-#define PLUGIN_PORT                0xc0de004  /*  */
+#define PLUGIN_NODE_INFO           0xc0de004  /*  */
+#define PLUGIN_PORT                0xc0de005  /*  */
 
-#define PLUGIN_SEQ                 0xc0de005  /*  */
-#define PLUGIN_TID                 0xc0de006  /*  */
-#define PLUGIN_NONCE               0xc0de007  /*  */
-#define PLUGIN_SQL_CMDS            0xc0de008  /*  */
-//#define PLUGIN_HASH                0xc0de009  /*  */
+#define PLUGIN_SEQ                 0xc0de006  /*  */
+#define PLUGIN_TID                 0xc0de007  /*  */
+#define PLUGIN_NONCE               0xc0de008  /*  */
+#define PLUGIN_SQL_CMDS            0xc0de009  /*  */
+//#define PLUGIN_HASH                0xc0de010  /*  */
 
 
 //#define BLOCK_HEIGHT    0x34

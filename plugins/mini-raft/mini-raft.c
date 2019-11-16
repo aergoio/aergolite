@@ -352,7 +352,6 @@ SQLITE_PRIVATE void on_node_info_request(
 
   if( info ){
     send_udp_message(plugin, sender, info);
-    sqlite3_free(info);
   }else{
     send_udp_message(plugin, sender, "");
   }
