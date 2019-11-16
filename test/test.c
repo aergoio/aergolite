@@ -309,7 +309,7 @@ void test_5_nodes(int bind_to_random_ports){
 
 /****************************************************************************/
 
-void test_add_nodes(int n, int n_each_time, bool bind_to_random_ports){
+void test_add_nodes(int n, int n_each_time, int add_from_node, bool bind_to_random_ports){
   sqlite3 *db[512];
   char uri[256];
   char node_pubkey[n][72];
@@ -317,8 +317,8 @@ void test_add_nodes(int n, int n_each_time, bool bind_to_random_ports){
   sqlite3_stmt *stmt=NULL;
   int rc, i, count, done;
 
-  printf("test_add_nodes(nodes=%d, n_each_time=%d, random_ports=%s)...",
-         n, n_each_time, bind_to_random_ports ? "yes" : "no"); fflush(stdout);
+  printf("test_add_nodes(nodes=%d, n_each_time=%d, add_from_node=%d, random_ports=%s)...",
+         n, n_each_time, add_from_node, bind_to_random_ports ? "yes" : "no"); fflush(stdout);
 
   assert(n>2 && n<512);
 
@@ -416,7 +416,6 @@ loc_again1:
   /* add nodes to the network.
   ** the command is signed in the callback function, using the network admin's private key */
 
-  int add_from_node = 1;
   int included_nodes[512] = {0};
 
   while( len_array_list(included_nodes)<n ){
@@ -520,7 +519,7 @@ loc_again2:
   db_execute(db[exec_from_node], "insert into t1 values ('aa1')");
   db_execute(db[exec_from_node], "insert into t1 values ('aa2')");
 
-  last_nonce[exec_from_node] = 3;
+  last_nonce[exec_from_node] += 3;
 
   for(i=1; i<=n; i++){
     db_check_int(db[i], "PRAGMA last_nonce", last_nonce[i]);
@@ -1851,9 +1850,23 @@ int main(){
 //  test_n_nodes(50, true);
 //  test_n_nodes(100, true);
 
-  test_add_nodes(12, 3, true);
-  test_add_nodes(12, 4, true);
-  test_add_nodes(12, 12, true);
+  test_add_nodes(
+    /* total nodes         */ 12,
+    /* added at each time  */ 3,
+    /* add from this node  */ 1,
+    /* bind to random port */ true);
+
+  test_add_nodes(
+    /* total nodes         */ 12,
+    /* added at each time  */ 4,
+    /* add from this node  */ 2,
+    /* bind to random port */ true);
+
+  test_add_nodes(
+    /* total nodes         */ 12,
+    /* added at each time  */ 12,
+    /* add from this node  */ 1,
+    /* bind to random port */ true);
 
 goto loc_exit;
 
