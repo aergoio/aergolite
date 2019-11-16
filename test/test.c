@@ -1,4 +1,8 @@
+
 #include "db_functions.c"
+#include "secp256k1.h"
+
+#include "../common/sha256.c"
 
 #define majority(X)  X / 2 + 1
 
@@ -232,54 +236,275 @@ void test_5_nodes(int bind_to_random_ports){
 
 /****************************************************************************/
 
-void test_n_nodes(int n, bool bind_to_random_ports){
+unsigned char privkey[32], pubkey[36];
+secp256k1_pubkey pubkey_obj;
+secp256k1_context *ecdsa_ctx;
+size_t pklen;
+char pkhex[76];
+
+/*
+def on_sign_transaction(data):
+  print "txn to be signed: " + data
+  signature = sign(data, privkey)
+  return hex(pubkey) + ":" + hex(signature)
+*/
+
+static void on_sign_transaction(sqlite3_context *context, int argc, sqlite3_value **argv){
+  secp256k1_ecdsa_signature sig;
+  char *data, result[256], sighex[160];
+  unsigned char hash[32], signature[76];
+  size_t siglen;
+
+  data = (char*) sqlite3_value_text(argv[0]);
+
+  printf("transaction to sign: [%s]\n", data);
+
+  sha256(hash, data, strlen(data));
+
+  assert(secp256k1_ecdsa_sign(ecdsa_ctx, &sig, hash, privkey, NULL, NULL)==1);
+  assert(secp256k1_ecdsa_signature_serialize_compact(ecdsa_ctx, signature, &sig)==1);
+
+  siglen = 64;  /* size of the compact signature format */
+
+  to_hex((char*)signature, siglen, sighex);
+  sprintf(result, "%s:%s", pkhex, sighex);
+  sqlite3_result_text(context, result, -1, SQLITE_TRANSIENT);
+}
+
+/****************************************************************************/
+
+void test_add_nodes(int n, int n_each_time, bool bind_to_random_ports){
   sqlite3 *db[512];
   char uri[256];
+  char node_pubkey[n][72];
+  int last_nonce[512];
+  sqlite3_stmt *stmt=NULL;
   int rc, i, count, done;
 
-  printf("test_n_nodes(nodes=%d, random_ports=%d)...", n, bind_to_random_ports); fflush(stdout);
+  printf("test_add_nodes(nodes=%d, n_each_time=%d, random_ports=%s)...",
+         n, n_each_time, bind_to_random_ports ? "yes" : "no"); fflush(stdout);
 
   assert(n>2 && n<512);
 
   /* delete the db files if they exist */
-
   delete_files(n);
 
-  /* open the connections to the databases */
 
-#if 0
-  assert( sqlite3_open("file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302", &db[1])==SQLITE_OK );
-  assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
-#endif
+  /* generate a private key to manage the network */
+  sqlite3_randomness(32, privkey);
 
-  sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&num_nodes=%d", n);
+  /* create an ECDSA context for signing and verification */
+  ecdsa_ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY);
+
+  /* get the public key from the private one */
+  rc = secp256k1_ec_pubkey_create(ecdsa_ctx, &pubkey_obj, privkey);
+  assert( rc==1 );
+  pklen = 33;
+  rc = secp256k1_ec_pubkey_serialize(ecdsa_ctx, pubkey, &pklen,
+                                     &pubkey_obj, SECP256K1_EC_COMPRESSED);
+  assert( rc==1 );
+
+  /* get the hexadecimal representation of the public key */
+  to_hex((char*)pubkey, pklen, pkhex);
+
+
+  /* open the connections to the databases using the admin public key */
+
+  sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&admin=%s&password=test", pkhex);
   assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
 
-  sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&num_nodes=%d", n);
+  sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&admin=%s&password=test", pkhex);
   assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
 
   for(i=3; i<=n; i++){
     if( bind_to_random_ports ){
-      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&num_nodes=%d", i, n);
+      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&admin=%s&password=test", i, pkhex);
     }else{
-      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&num_nodes=%d", i, 4300 + i, n);
+      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&admin=%s&password=test", i, 4300 + i, pkhex);
     }
     //puts(uri);
     assert( sqlite3_open(uri, &db[i])==SQLITE_OK );
   }
 
 
+  /* set the initial nonce value for each node */
+
+  for(i=1; i<=n; i++){
+    last_nonce[i] = 0;
+  }
+
+  for(i=1; i<=n; i++){
+    db_check_int(db[i], "PRAGMA last_nonce", last_nonce[i]);
+  }
+
+
+  /* check the list of nodes connected to each of them */
+
+  for(i=1; i<=n; i++){
+    int nrows;
+loc_again1:
+    rc = sqlite3_prepare_v2(db[i], "pragma nodes", -1, &stmt, NULL);
+    assert( rc==SQLITE_OK );
+    assert( stmt!=NULL );
+
+    // node_id | pubkey | address | CPU | OS | hostname | app | external |
+
+    // node_id | pubkey | address | CPU | OS | hostname | app | node_info | external |
+
+    assert( sqlite3_column_count(stmt)==8 );
+    nrows = 0;
+
+    while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
+      char *external = (char*)sqlite3_column_text(stmt, 7);
+      assert( external && strcmp(external,"yes")==0 );
+
+      /* count how many peers this node is connected to */
+      nrows++;
+
+      /* the first item has info about the requester node */
+      if( nrows==1 ){
+        char *p = (char*)sqlite3_column_text(stmt, 1);
+        assert( p && strlen(p)<sizeof(node_pubkey[1]) );
+        strcpy(node_pubkey[i], p);
+      }
+    }
+    assert( rc==SQLITE_DONE || rc==SQLITE_OK );
+    sqlite3_finalize(stmt); stmt = NULL;
+
+    if( (i<=2 && nrows<n) ||
+        (i>2  && nrows<3) ){
+      printf("."); fflush(stdout);
+      usleep(wait_time);
+      goto loc_again1;
+    }
+  }
+
+  puts("");
+
+
+  /* check the protocol status */
+
+
+  /* register the callback function used to sign the admin transactions */
+
+  for(i=1; i<=n; i++){
+    sqlite3_create_function(db[i], "sign_transaction", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC,
+      NULL, &on_sign_transaction, NULL, NULL);
+  }
+
+
+  /* add nodes to the network.
+  ** the command is signed in the callback function, using the network admin's private key */
+
+  int add_from_node = 1;
+  int included_nodes[512] = {0};
+
+  while( len_array_list(included_nodes)<n ){
+
+    /* include some nodes on the network */
+    for(count=0; count<n_each_time && len_array_list(included_nodes)<n ; count++){
+      char cmd[128];
+      int node;
+      if( len_array_list(included_nodes)==0 ){
+        node = add_from_node;
+      }else{
+        do{
+          node = random_number(1, n);
+        } while( in_array_list(node,included_nodes) );
+      }
+      //
+      printf("adding node %d to the network\n", node);
+      sprintf(cmd, "pragma add_node='%s'", node_pubkey[node]);
+      db_execute(db[add_from_node], cmd);
+      add_to_array_list(included_nodes, node);
+    }
+
+    /* ensure that the nodes are included on the blockchain network */
+
+    for(i=0; i<len_array_list(included_nodes); i++){
+      int nrows;
+      int node = included_nodes[i];
+      printf("checking node %d", node);
+loc_again2:
+      sqlite3_finalize(stmt); stmt = NULL;
+      rc = sqlite3_prepare_v2(db[node], "pragma nodes", -1, &stmt, NULL);
+      assert( rc==SQLITE_OK );
+      assert( stmt!=NULL );
+
+      // node_id | pubkey | address | CPU | OS | hostname | app | external |
+
+      assert( sqlite3_column_count(stmt)==8 );
+      nrows = 0;
+
+      while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
+        char *nodepk = (char*)sqlite3_column_text(stmt, 1);
+        char *external = (char*)sqlite3_column_text(stmt, 7);
+        assert( nodepk && external );
+        /* identify the node by the public key */
+        for(int j=1; j<=n; j++){
+          if( strcmp(node_pubkey[j], nodepk)==0 ){
+            if( in_array_list(j,included_nodes) ){
+              //assert( external[0]==0 ); /* internal node */
+              if( external[0]=='y' ){     /* "yes" */
+                printf("."); fflush(stdout);
+                usleep(wait_time);
+                goto loc_again2;
+              }
+            }else{
+              assert( external[0]=='y' );  /* external node */
+            }
+          }
+        }
+#if 0
+        for(int j=0; j<8; j++){
+          printf("%s=%s\n", sqlite3_column_name(stmt,j), sqlite3_column_text(stmt,j));
+        }
+        puts("");
+#endif
+        /* count how many peers this node is connected to */
+        nrows++;
+      }
+      puts("");
+
+      assert( rc==SQLITE_DONE || rc==SQLITE_OK );
+      sqlite3_finalize(stmt); stmt = NULL;
+
+      printf("connected to %d nodes\n", nrows);
+      if( node<=2 ){
+        assert( nrows==n );
+      }else{
+        //assert( nrows>=len_array_list(included_nodes) );
+        if( nrows<len_array_list(included_nodes) ) goto loc_again2;
+      }
+    }
+    //puts("");
+
+  }
+
+
+
+  last_nonce[add_from_node] = n;
+
+  for(i=1; i<=n; i++){
+    db_check_int(db[i], "PRAGMA last_nonce", last_nonce[i]);
+  }
+
+
   /* execute 3 db transactions on one of the databases */
 
-  db_check_int(db[1], "PRAGMA last_nonce", 1);
+  printf("executing transactions on nodes...");
 
-  db_execute(db[1], "create table t1 (name)");
-  db_execute(db[1], "insert into t1 values ('aa1')");
-  db_execute(db[1], "insert into t1 values ('aa2')");
+  int exec_from_node = 3;
 
-  db_check_int(db[1], "PRAGMA last_nonce", 4);
-  db_check_int(db[2], "PRAGMA last_nonce", 1);
-  db_check_int(db[3], "PRAGMA last_nonce", 1);
+  db_execute(db[exec_from_node], "create table t1 (name)");
+  db_execute(db[exec_from_node], "insert into t1 values ('aa1')");
+  db_execute(db[exec_from_node], "insert into t1 values ('aa2')");
+
+  last_nonce[exec_from_node] = 3;
+
+  for(i=1; i<=n; i++){
+    db_check_int(db[i], "PRAGMA last_nonce", last_nonce[i]);
+  }
 
 
   /* wait until the transactions are processed in a new block */
@@ -288,7 +513,7 @@ void test_n_nodes(int n, bool bind_to_random_ports){
   for(count=0; !done && count<100; count++){
     char *result;
     usleep(wait_time);
-    rc = db_query_str(&result, db[1], "PRAGMA transaction_status(4)");
+    rc = db_query_str(&result, db[exec_from_node], "PRAGMA transaction_status(3)");
     assert(rc==SQLITE_OK);
     done = (strcmp(result,"processed")==0);
     sqlite3_free(result);
@@ -348,11 +573,17 @@ void test_n_nodes(int n, bool bind_to_random_ports){
   db_execute(db[3], "insert into t1 values ('aa4')");
   db_execute(db[5], "insert into t1 values ('aa5')");
   db_execute(db[2], "create table t2 (name)");
+  db_execute(db[2], "insert into t2 values ('aa1')");
 
-  db_check_int(db[4], "PRAGMA last_nonce", 2);
-  db_check_int(db[3], "PRAGMA last_nonce", 2);
-  db_check_int(db[5], "PRAGMA last_nonce", 2);
-  db_check_int(db[2], "PRAGMA last_nonce", 2);
+  last_nonce[4]++;
+  last_nonce[3]++;
+  last_nonce[5]++;
+  last_nonce[2]++;
+  last_nonce[2]++;
+
+  for(i=1; i<=n; i++){
+    db_check_int(db[i], "PRAGMA last_nonce", last_nonce[i]);
+  }
 
 
   /* wait until the transactions are processed in a new block */
@@ -363,9 +594,10 @@ void test_n_nodes(int n, bool bind_to_random_ports){
 
     done = 0;
     for(count=0; !done && count<100; count++){
-      char *result;
+      char query[64], *result;
       usleep(wait_time);
-      rc = db_query_str(&result, db[i], "PRAGMA transaction_status(2)");
+      sprintf(query, "PRAGMA transaction_status(%d)", last_nonce[i]);
+      rc = db_query_str(&result, db[i], query);
       assert(rc==SQLITE_OK);
       done = (strcmp(result,"processed")==0);
       sqlite3_free(result);
@@ -417,6 +649,8 @@ void test_n_nodes(int n, bool bind_to_random_ports){
   for(i=1; i<=n; i++){
     sqlite3_close(db[i]);
   }
+
+  secp256k1_context_destroy(ecdsa_ctx);
 
   puts("done");
 
@@ -470,17 +704,17 @@ void test_reconnection(
   assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
 #endif
 
-  sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&num_nodes=%d", n);
+  sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s", pkhex);
   assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
 
-  sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&num_nodes=%d", n);
+  sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s", pkhex);
   assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
 
   for(i=3; i<=n; i++){
     if( bind_to_random_ports ){
-      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&num_nodes=%d", i, n);
+      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s", i, pkhex);
     }else{
-      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&num_nodes=%d", i, 4300 + i, n);
+      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s", i, 4300 + i, pkhex);
     }
     //puts(uri);
     assert( sqlite3_open(uri, &db[i])==SQLITE_OK );
@@ -671,7 +905,7 @@ void test_reconnection(
     for(i=0; active_offline_nodes[i]; i++){
       int node = active_offline_nodes[i];
       printf("reopening node %d in offline mode\n", node);
-      sprintf(uri, "file:db%d.db?blockchain=on&num_nodes=%d", node, n);
+      sprintf(uri, "file:db%d.db?blockchain=on&password=test&admin=%s", node, pkhex);
       assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
     }
 
@@ -714,17 +948,17 @@ void test_reconnection(
     printf("reconnecting node %d\n", node);
     if( node==1 ){
       //assert( sqlite3_open("file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302", &db[1])==SQLITE_OK );
-      sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&num_nodes=%d", n);
+      sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s", pkhex);
       assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
     }else if( node==2 ){
       //assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
-      sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&num_nodes=%d", n);
+      sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s", pkhex);
       assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
     }else{
       if( bind_to_random_ports ){
-        sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&num_nodes=%d", node, n);
+        sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s", node, pkhex);
       }else{
-        sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&num_nodes=%d", node, 4300 + node, n);
+        sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s", node, 4300 + node, pkhex);
       }
       assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
     }
@@ -939,17 +1173,17 @@ void test_new_nodes(
   assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
 #endif
 
-  sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&num_nodes=%d", n);
+  sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s", pkhex);
   assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
 
-  sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&num_nodes=%d", n);
+  sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s", pkhex);
   assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
 
   for(i=3; i<=n_before; i++){
     if( bind_to_random_ports ){
-      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&num_nodes=%d", i, n);
+      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s", i, pkhex);
     }else{
-      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&num_nodes=%d", i, 4300 + i, n);
+      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s", i, 4300 + i, pkhex);
     }
     //puts(uri);
     assert( sqlite3_open(uri, &db[i])==SQLITE_OK );
@@ -1141,7 +1375,7 @@ void test_new_nodes(
     for(i=0; i<n_old_with_content; i++){
       int node = disconnect_nodes[i];
       printf("reopening node %d in offline mode\n", node);
-      sprintf(uri, "file:db%d.db?blockchain=on&num_nodes=%d", node, n);
+      sprintf(uri, "file:db%d.db?blockchain=on&password=test&admin=%s", node, pkhex);
       assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
     }
 
@@ -1181,7 +1415,7 @@ void test_new_nodes(
     for(i=n_before+1; i<=n_before+n_new_with_content; i++){
       int node = i;
       printf("opening new node %d in offline mode\n", node);
-      sprintf(uri, "file:db%d.db?blockchain=on&num_nodes=%d", node, n);
+      sprintf(uri, "file:db%d.db?blockchain=on&password=test&admin=%s", node, pkhex);
       assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
     }
 
@@ -1234,17 +1468,17 @@ void test_new_nodes(
     }
     if( node==1 ){
       //assert( sqlite3_open("file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302", &db[1])==SQLITE_OK );
-      sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&num_nodes=%d", n);
+      sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s", pkhex);
       assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
     }else if( node==2 ){
       //assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
-      sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&num_nodes=%d", n);
+      sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s", pkhex);
       assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
     }else{
       if( bind_to_random_ports ){
-        sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&num_nodes=%d", node, n);
+        sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s", node, pkhex);
       }else{
-        sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&num_nodes=%d", node, 4300 + node, n);
+        sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s", node, 4300 + node, pkhex);
       }
       assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
     }
@@ -1412,7 +1646,7 @@ void test_new_nodes(
     for(i=n_after+1; i<=n_after+n_new_with_content2; i++){
       int node = i;
       printf("opening new node %d in offline mode\n", node);
-      sprintf(uri, "file:db%d.db?blockchain=on&num_nodes=%d", node, n);
+      sprintf(uri, "file:db%d.db?blockchain=on&password=test&admin=%s", node, pkhex);
       assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
     }
 
@@ -1471,17 +1705,17 @@ void test_new_nodes(
     }
     if( node==1 ){
       //assert( sqlite3_open("file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302", &db[1])==SQLITE_OK );
-      sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&num_nodes=%d", n);
+      sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s", pkhex);
       assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
     }else if( node==2 ){
       //assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
-      sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&num_nodes=%d", n);
+      sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s", pkhex);
       assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
     }else{
       if( bind_to_random_ports ){
-        sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&num_nodes=%d", node, n);
+        sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s", node, pkhex);
       }else{
-        sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&num_nodes=%d", node, 4300 + node, n);
+        sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s", node, 4300 + node, pkhex);
       }
       assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
     }
@@ -1596,6 +1830,12 @@ int main(){
 //  test_n_nodes(25, false);
 //  test_n_nodes(50, true);
 //  test_n_nodes(100, true);
+
+  test_add_nodes(12, 3, true);
+  test_add_nodes(12, 4, true);
+  test_add_nodes(12, 12, true);
+
+goto loc_exit;
 
   test_reconnection(10, false,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
@@ -1768,6 +2008,11 @@ int main(){
     /* n_new_with_content2    */ 0
   );
 
+
+loc_exit:
+
+  /* release global memory - to make valgrind happy */
+  //sqlite3_shutdown();
 
   /* delete the test db files on success */
   delete_files(200);
