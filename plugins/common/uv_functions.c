@@ -173,6 +173,7 @@ SQLITE_PRIVATE void set_conn_lost(node *node) {
 
 SQLITE_PRIVATE void disconnect_peer(struct node *node) {
   if( node ){
+    SYNCTRACE("disconnect_peer node_id=%d\n", node->id);
     /* close the connection to the peer */
     uv_close2( (uv_handle_t*) &node->socket, worker_thread_on_close);
   }

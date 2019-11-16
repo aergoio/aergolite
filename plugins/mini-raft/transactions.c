@@ -331,6 +331,9 @@ SQLITE_PRIVATE void build_last_nonce_array_cb(
   struct plugin *plugin = (struct plugin *) arg;
   struct transaction *txn;
 
+  SYNCTRACE("build_last_nonce_array node_id=%d last_nonce=%" INT64_FORMAT "\n",
+            node_id, last_nonce);
+
   /* check if there are transactions from this node on the local mempool */
   for( txn=plugin->mempool; txn; txn=txn->next ){
     if( txn->node_id==node_id && txn->block_height==0 ){
