@@ -631,11 +631,11 @@ SQLITE_PRIVATE void on_node_acknowledged_block(node *source_node, void *msg, int
   /* increment the number of nodes that acknowledged the block */
   block->ack_count++;
 
-  SYNCTRACE("on_node_acknowledged_block - ack_count=%d total_known_nodes=%d\n",
-            block->ack_count, plugin->total_known_nodes);
+  SYNCTRACE("on_node_acknowledged_block - ack_count=%d total_authorized_nodes=%d\n",
+            block->ack_count, plugin->total_authorized_nodes);
 
   /* check if we reached the majority of the nodes */
-  if( block->ack_count >= majority(plugin->total_known_nodes) ){
+  if( block->ack_count >= majority(plugin->total_authorized_nodes) ){
     on_acknowledged_block(plugin, block);
   }
 

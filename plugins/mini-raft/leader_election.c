@@ -11,8 +11,8 @@ BOOL has_nodes_for_election(plugin *plugin){
   node *node;
   int count;
 
-  update_known_nodes(plugin);
-  if( plugin->total_known_nodes<=1 ) return FALSE;
+  count_authorized_nodes(plugin);
+  if( plugin->total_authorized_nodes<=1 ) return FALSE;
 
   count = 0;
   if( plugin->is_authorized ){  /* this node */
@@ -22,7 +22,7 @@ BOOL has_nodes_for_election(plugin *plugin){
     if( node->is_authorized && node->id!=0 ) count++;
   }
 
-  if( count<majority(plugin->total_known_nodes) ){
+  if( count<majority(plugin->total_authorized_nodes) ){
     return FALSE;
   }
 
@@ -97,12 +97,12 @@ SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle) {
 
   for( votes=plugin->leader_votes; votes; votes=votes->next ){
     if( plugin->in_election ){
-      if( votes->count >= majority(plugin->total_known_nodes) ){
+      if( votes->count >= majority(plugin->total_authorized_nodes) ){
         leader_id = votes->id;
         break;
       }
     }else{  /* inquirying the current leader */
-      if( votes->count >= majority(plugin->total_known_nodes)-1 ){
+      if( votes->count >= majority(plugin->total_authorized_nodes)-1 ){
         /* if it lacks one to the majority, this node assumes the same leader as them */
         leader_id = votes->id;
         break;
@@ -134,9 +134,9 @@ SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle) {
     for( votes=plugin->leader_votes; votes; votes=votes->next ){
       total += votes->count;
     }
-    if( total<majority(plugin->total_known_nodes) ){
+    if( total<majority(plugin->total_authorized_nodes) ){
       SYNCTRACE("on_leader_check_timeout: no sufficient votes (total=%d required=%d)\n",
-                total, majority(plugin->total_known_nodes));
+                total, majority(plugin->total_authorized_nodes));
     }else{
       SYNCTRACE("on_leader_check_timeout: no consensus on the current leader\n");
     }
@@ -395,7 +395,7 @@ SQLITE_PRIVATE void on_new_election_request(
 
   new_leader_election(plugin);
 
-  interval = 20 * plugin->total_known_nodes;
+  interval = 20 * plugin->total_authorized_nodes;
   if( interval<500 ) interval = 500;
   if( interval>3000 ) interval = 3000;
   uv_timer_start(&plugin->election_info_timer, election_info_timeout, interval, 0);
@@ -510,11 +510,11 @@ SQLITE_PRIVATE void on_requested_peer_leader(
     plugin->leader_votes = votes;
   }
 
-  assert( plugin->total_known_nodes>1 );
+  assert( plugin->total_authorized_nodes>1 );
 
   /* stop the election timer if the number of votes for a single node reaches the majority */
-  if( votes->count >= majority(plugin->total_known_nodes)-1 ||
-      total_votes+1==plugin->total_known_nodes ){
+  if( votes->count >= majority(plugin->total_authorized_nodes)-1 ||
+      total_votes+1==plugin->total_authorized_nodes ){
     uv_timer_stop(&plugin->leader_check_timer);
     on_leader_check_timeout(&plugin->leader_check_timer);
   }
@@ -559,11 +559,11 @@ SQLITE_PRIVATE void on_leader_vote(
     plugin->leader_votes = votes;
   }
 
-  assert( plugin->total_known_nodes>1 );
+  assert( plugin->total_authorized_nodes>1 );
 
   /* stop the election timer if the number of votes for a single node reaches the majority */
-  if( votes->count >= majority(plugin->total_known_nodes) ||
-      total_votes==plugin->total_known_nodes ){
+  if( votes->count >= majority(plugin->total_authorized_nodes) ||
+      total_votes==plugin->total_authorized_nodes ){
     uv_timer_stop(&plugin->leader_check_timer);
     on_leader_check_timeout(&plugin->leader_check_timer);
   }

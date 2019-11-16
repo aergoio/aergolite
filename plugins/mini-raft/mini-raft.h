@@ -265,7 +265,7 @@ struct plugin {
   uv_udp_t *udp_sock;         /* Socket used for UDP communication */
 
   node *peers;                /* Remote nodes connected to this one */
-  int total_known_nodes;      /* Including those that are currently off-line */
+  int total_authorized_nodes; /* Including those that are currently off-line */
 
   nodeauth *authorizations;   /* List of node authorizations */
   struct txn_list *special_txn; /* New special transaction */

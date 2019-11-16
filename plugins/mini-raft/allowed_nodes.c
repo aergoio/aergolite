@@ -113,22 +113,21 @@ SQLITE_PRIVATE int is_node_authorized(plugin *plugin, char *pubkey, int pklen, B
 ** Updates the number of allowed nodes on this network.
 ** It must also count the nodes that are off-line
 */
-SQLITE_PRIVATE void update_known_nodes(plugin *plugin) {
-  //aergolite *this_node = plugin->this_node;
+SQLITE_PRIVATE void count_authorized_nodes(plugin *plugin) {
   nodeauth *auth;
 
-  SYNCTRACE("update_known_nodes\n");
+  SYNCTRACE("count_authorized_nodes\n");
 
-  plugin->total_known_nodes = 0;
+  plugin->total_authorized_nodes = 0;
 
   for( auth=plugin->authorizations; auth; auth=auth->next ){
-    plugin->total_known_nodes++;
+    plugin->total_authorized_nodes++;
   }
 
   /* the leader must know the number of total known nodes, including those that are off-line */
-  //aergolite_consensus_db_query_int32(this_node, &plugin->total_known_nodes, "SELECT count(*) FROM aergolite_allowed_nodes");
+  //aergolite_consensus_db_query_int32(this_node, &plugin->total_authorized_nodes, "SELECT count(*) FROM aergolite_allowed_nodes");
 
-  SYNCTRACE("update_known_nodes total_known_nodes=%d\n", plugin->total_known_nodes);
+  SYNCTRACE("count_authorized_nodes total_authorized_nodes=%d\n", plugin->total_authorized_nodes);
 
 }
 
