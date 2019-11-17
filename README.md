@@ -430,7 +430,9 @@ On pruned nodes:
 
 Pruned nodes do not keep information about specific transactions.
 
-To be informed whether a specific transaction was included on a block or rejected the application must use a callback function. It is set up as an user defined function:
+#### Transaction Notification
+
+To be informed whether a specific transaction was included on a block or rejected the application must use a callback function. It is set up as an `user defined function`:
 
 Example in Python:
 
@@ -460,3 +462,37 @@ sqlite3_create_function(db, "transaction_notification", 2, SQLITE_UTF8 | SQLITE_
 
 > **ATTENTION:** The callback function is called by the **worker thread**!!
 > Your application should not use the db connection there and it must return as fast as possible!
+> It can send the notification to the main thread before returning
+
+
+### Update Notification
+
+Your application can be informed whenever an update occurred on the local db due to receiving a new block on the blockchain.
+
+The notification is made using a callback function that is set using an `user defined function`:
+
+Example in Python:
+
+```python
+def on_db_update(arg):
+  print "update received"
+  return None
+
+con.create_function("update_notification", 1, on_db_update)
+```
+
+Example in C:
+
+```C
+static void on_db_update(sqlite3_context *context, int argc, sqlite3_value **argv){
+  puts("update received");
+  sqlite3_result_null(context);
+}
+
+sqlite3_create_function(db, "update_notification", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC,
+  NULL, &on_db_update, NULL, NULL);
+```
+
+> **ATTENTION:** The callback function is called by the **worker thread**!!
+> Your application should not use the db connection there and it must return as fast as possible!
+> It can send the notification to the main thread before returning
