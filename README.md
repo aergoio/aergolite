@@ -432,8 +432,6 @@ Pruned nodes do not keep information about specific transactions.
 
 To be informed whether a specific transaction was included on a block or rejected the application must use a callback function. It is set up as an user defined function:
 
-> **Note:** the callback is not yet implemented
-
 Example in Python:
 
 ```python
@@ -441,7 +439,7 @@ def on_processed_transaction(nonce, status):
   print "transaction " + str(nonce) + ": " + status
   return None
 
-con.create_function("on_processed_transaction", 2, on_processed_transaction)
+con.create_function("transaction_notification", 2, on_processed_transaction)
 ```
 
 Example in C:
@@ -456,7 +454,7 @@ static void on_processed_transaction(sqlite3_context *context, int argc, sqlite3
   sqlite3_result_null(context);
 }
 
-sqlite3_create_function(db, "on_processed_transaction", 2, SQLITE_UTF8 | SQLITE_DETERMINISTIC,
+sqlite3_create_function(db, "transaction_notification", 2, SQLITE_UTF8 | SQLITE_DETERMINISTIC,
   NULL, &on_processed_transaction, NULL, NULL);
 ```
 

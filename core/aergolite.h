@@ -107,6 +107,8 @@ struct aergolite {
   int64 last_sent_nonce;      /* last transaction sent to the primary node */
   int   wal_consensus_empty;  /* the state of the wal-consensus file */
 
+  binn *processed_local_txns; /* local transactions processed on the blockchain */
+
   BOOL   useSqliteRowids;     /* do not use node id in the rowids */
 
   BOOL   db_is_ready;         /* if the app can read and write from/to the database */
@@ -156,6 +158,7 @@ SQLITE_PRIVATE int  aergoliteCheckSignTransaction(Pager *pPager);
 SQLITE_PRIVATE int  sign_txn_by_user(aergolite *this_node, binn *log);
 SQLITE_PRIVATE int  sign_txn_by_node(aergolite *this_node, binn *log);
 
+SQLITE_PRIVATE void add_local_txn_status(aergolite *this_node, int64 nonce, char *status);
 SQLITE_PRIVATE BOOL is_special_transaction(binn *log);
 SQLITE_PRIVATE int  save_local_txn(aergolite *this_node, binn *log);
 SQLITE_PRIVATE void process_new_local_transaction(aergolite *this_node, Pager *pPager);
