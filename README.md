@@ -274,6 +274,17 @@ Nodes without fixed address will use the local discovery and the connection to o
 If nodes on this LAN are just receiving connections from outside, then the `discovery` parameter must contain just the local discovery method.
 
 
+## Listing connected nodes
+
+You can list the nodes on your private blockchain network using the command:
+
+```
+PRAGMA nodes
+```
+
+It will list all authorized nodes, connected or not, and also connected nodes that are not yet authorized.
+
+
 ## Retrieving status
 
 There are 2 ways to retrieve status:
