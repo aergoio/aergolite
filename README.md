@@ -285,6 +285,19 @@ PRAGMA nodes
 It will list all authorized nodes, connected or not, and also connected nodes that are not yet authorized.
 
 
+## Adding nodes to the network
+
+After listing the connected nodes with the above command the blockchain network administrator can authorize nodes using the command:
+
+```
+PRAGMA add_node=<public key>
+```
+
+Only the blockchain administrator can add nodes to the network.
+
+The above command will fire the user transaction signature callback where the transaction must be signed using the blockchain administrator private key.
+
+
 ## Retrieving status
 
 There are 2 ways to retrieve status:
