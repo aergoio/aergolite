@@ -316,7 +316,13 @@ After listing the connected nodes with the above command the blockchain network 
 PRAGMA add_node=<public key>
 ```
 
+The public key must be in hex format.
+
 Only the blockchain administrator can add nodes to the network.
+
+The first node to be authorized must be the one in which the command is being executed.
+
+These authorizations must be executed on nodes that are already authorized.
 
 The above command will fire the user transaction signature callback where the transaction must be signed using the blockchain administrator private key.
 
@@ -511,7 +517,8 @@ On pruned nodes:
 
 Pruned nodes do not keep information about specific transactions.
 
-#### Transaction Notification
+
+### Transaction Notification
 
 To be informed whether a specific transaction was included on a block or rejected the application must use a callback function. It is set up as an `user defined function`:
 
