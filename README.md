@@ -298,6 +298,40 @@ Only the blockchain administrator can add nodes to the network.
 The above command will fire the user transaction signature callback where the transaction must be signed using the blockchain administrator private key.
 
 
+## Signing transactions
+
+On AergoLite the blockchain transactions are built using the SQL commands from the database transactions.
+
+Each database transaction generates one blockchain transaction.
+
+These transactions need to be signed to be accepted by the network and included on the blockchain.
+
+Two entities can sign transactions:
+
+* the administrator
+* each authorized node
+
+If the transaction requires special rights, the AergoLite library will fire the user sign callback. Otherwise it will automatically sign it using the node's private key.
+
+Your application needs to register a function that will be used to sign transactions from the administrator
+
+Example in Python:
+
+```python
+def on_sign_transaction(data):
+  print "txn to be signed: " + data
+  signature = sign(data, privkey)
+  return hex(pubkey) + ":" + hex(signature)
+
+con.create_function("sign_transaction", 1, on_sign_transaction)
+```
+
+> **ATTENTION:** The callback function is called by the **worker thread**!!
+> Your application must sign the transaction and return as fast as possible!
+
+If a special command that requires admin privilege is executed on a node while the admin can not sign it, the transaction will be rejected.
+
+
 ## Retrieving status
 
 There are 2 ways to retrieve status:
