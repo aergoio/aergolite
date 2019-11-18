@@ -58,7 +58,7 @@ Supported programming languages:
 
 And probably any other that has support for SQLite.
 
-Most of these languages are supported via a wrapper.
+Most of these languages are supported via wrappers.
 
 
 ## Compiling and installing
@@ -89,7 +89,19 @@ sudo make install
 cd ..
 ```
 
-3. Install AergoLite
+3. Install libsecp256k1
+
+```
+git clone https://github.com/bitcoin-core/secp256k1
+cd secp256k1
+./autogen.sh
+./configure
+make
+sudo make install
+cd ..
+```
+
+4. Install AergoLite
 
 ```
 git clone https://github.com/aergoio/aergolite
@@ -121,7 +133,18 @@ make
 cd ..
 ```
 
-3. Compile AergoLite
+3. Compile libsecp256k1
+
+```
+git clone https://github.com/bitcoin-core/secp256k1
+cd secp256k1
+./autogen.sh
+./configure
+make
+cd ..
+```
+
+4. Compile AergoLite
 
 ```
 git clone https://github.com/aergoio/aergolite
