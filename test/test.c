@@ -309,7 +309,7 @@ void test_5_nodes(int bind_to_random_ports){
 
 /****************************************************************************/
 
-void test_add_nodes(int n, int n_each_time, int add_from_node, bool bind_to_random_ports){
+void test_add_nodes(int n, int n_each_time, int add_from_node, bool bind_to_random_ports, int block_interval){
   sqlite3 *db[512];
   char uri[256];
   char node_pubkey[512][72];
@@ -317,8 +317,8 @@ void test_add_nodes(int n, int n_each_time, int add_from_node, bool bind_to_rand
   sqlite3_stmt *stmt=NULL;
   int rc, i, count, done;
 
-  printf("test_add_nodes(nodes=%d, n_each_time=%d, add_from_node=%d, random_ports=%s)...",
-         n, n_each_time, add_from_node, bind_to_random_ports ? "yes" : "no"); fflush(stdout);
+  printf("test_add_nodes(nodes=%d n_each_time=%d add_from_node=%d random_ports=%s block_interval=%d)...",
+         n, n_each_time, add_from_node, bind_to_random_ports ? "yes" : "no", block_interval); fflush(stdout);
 
   assert(n>2 && n<512);
 
@@ -330,17 +330,17 @@ void test_add_nodes(int n, int n_each_time, int add_from_node, bool bind_to_rand
 
   /* open the connections to the databases using the admin public key */
 
-  sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&admin=%s&password=test", pkhex);
+  sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&admin=%s&password=test&block_interval=%d", pkhex, block_interval);
   assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
 
-  sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&admin=%s&password=test", pkhex);
+  sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&admin=%s&password=test&block_interval=%d", pkhex, block_interval);
   assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
 
   for(i=3; i<=n; i++){
     if( bind_to_random_ports ){
-      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&admin=%s&password=test", i, pkhex);
+      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&admin=%s&password=test&block_interval=%d", i, pkhex, block_interval);
     }else{
-      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&admin=%s&password=test", i, 4300 + i, pkhex);
+      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&admin=%s&password=test&block_interval=%d", i, 4300 + i, pkhex, block_interval);
     }
     //puts(uri);
     assert( sqlite3_open(uri, &db[i])==SQLITE_OK );
@@ -676,7 +676,7 @@ loc_again2:
 /****************************************************************************/
 
 void test_reconnection(
-  int n, bool bind_to_random_ports,
+  int n, bool bind_to_random_ports, int block_interval,
   /* nodes that should be disconnected */
   int disconnect_nodes[],
   /* transactions executed on disconnected nodes while in split */
@@ -720,17 +720,17 @@ void test_reconnection(
 
   /* open the connections to the databases */
 
-  sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s", pkhex);
+  sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
   assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
 
-  sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s", pkhex);
+  sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
   assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
 
   for(i=3; i<=n; i++){
     if( bind_to_random_ports ){
-      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s", i, pkhex);
+      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", i, pkhex, block_interval);
     }else{
-      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s", i, 4300 + i, pkhex);
+      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", i, 4300 + i, pkhex, block_interval);
     }
     //puts(uri);
     assert( sqlite3_open(uri, &db[i])==SQLITE_OK );
@@ -1045,7 +1045,7 @@ loc_again2:
     for(i=0; active_offline_nodes[i]; i++){
       int node = active_offline_nodes[i];
       printf("reopening node %d in offline mode\n", node);
-      sprintf(uri, "file:db%d.db?blockchain=on&password=test&admin=%s", node, pkhex);
+      sprintf(uri, "file:db%d.db?blockchain=on&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
       assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
     }
 
@@ -1088,17 +1088,17 @@ loc_again2:
     printf("reconnecting node %d\n", node);
     if( node==1 ){
       //assert( sqlite3_open("file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302", &db[1])==SQLITE_OK );
-      sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s", pkhex);
+      sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
       assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
     }else if( node==2 ){
       //assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
-      sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s", pkhex);
+      sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
       assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
     }else{
       if( bind_to_random_ports ){
-        sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s", node, pkhex);
+        sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
       }else{
-        sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s", node, 4300 + node, pkhex);
+        sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, 4300 + node, pkhex, block_interval);
       }
       assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
     }
@@ -1256,7 +1256,7 @@ loc_again2:
 /****************************************************************************/
 
 void test_new_nodes(
-  int n_before, bool bind_to_random_ports,
+  int n_before, bool bind_to_random_ports, int block_interval,
   /* which node will make the first transactions */
   int starting_node,
   /* new nodes added to the network after it is running */
@@ -1315,17 +1315,17 @@ void test_new_nodes(
   assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
 #endif
 
-  sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s", pkhex);
+  sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
   assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
 
-  sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s", pkhex);
+  sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
   assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
 
   for(i=3; i<=n_before; i++){
     if( bind_to_random_ports ){
-      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s", i, pkhex);
+      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", i, pkhex, block_interval);
     }else{
-      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s", i, 4300 + i, pkhex);
+      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", i, 4300 + i, pkhex, block_interval);
     }
     //puts(uri);
     assert( sqlite3_open(uri, &db[i])==SQLITE_OK );
@@ -1517,7 +1517,7 @@ void test_new_nodes(
     for(i=0; i<n_old_with_content; i++){
       int node = disconnect_nodes[i];
       printf("reopening node %d in offline mode\n", node);
-      sprintf(uri, "file:db%d.db?blockchain=on&password=test&admin=%s", node, pkhex);
+      sprintf(uri, "file:db%d.db?blockchain=on&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
       assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
     }
 
@@ -1557,7 +1557,7 @@ void test_new_nodes(
     for(i=n_before+1; i<=n_before+n_new_with_content; i++){
       int node = i;
       printf("opening new node %d in offline mode\n", node);
-      sprintf(uri, "file:db%d.db?blockchain=on&password=test&admin=%s", node, pkhex);
+      sprintf(uri, "file:db%d.db?blockchain=on&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
       assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
     }
 
@@ -1610,17 +1610,17 @@ void test_new_nodes(
     }
     if( node==1 ){
       //assert( sqlite3_open("file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302", &db[1])==SQLITE_OK );
-      sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s", pkhex);
+      sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
       assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
     }else if( node==2 ){
       //assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
-      sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s", pkhex);
+      sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
       assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
     }else{
       if( bind_to_random_ports ){
-        sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s", node, pkhex);
+        sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
       }else{
-        sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s", node, 4300 + node, pkhex);
+        sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, 4300 + node, pkhex, block_interval);
       }
       assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
     }
@@ -1788,7 +1788,7 @@ void test_new_nodes(
     for(i=n_after+1; i<=n_after+n_new_with_content2; i++){
       int node = i;
       printf("opening new node %d in offline mode\n", node);
-      sprintf(uri, "file:db%d.db?blockchain=on&password=test&admin=%s", node, pkhex);
+      sprintf(uri, "file:db%d.db?blockchain=on&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
       assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
     }
 
@@ -1847,17 +1847,17 @@ void test_new_nodes(
     }
     if( node==1 ){
       //assert( sqlite3_open("file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302", &db[1])==SQLITE_OK );
-      sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s", pkhex);
+      sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
       assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
     }else if( node==2 ){
       //assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
-      sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s", pkhex);
+      sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
       assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
     }else{
       if( bind_to_random_ports ){
-        sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s", node, pkhex);
+        sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
       }else{
-        sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s", node, 4300 + node, pkhex);
+        sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, 4300 + node, pkhex, block_interval);
       }
       assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
     }
@@ -1978,22 +1978,25 @@ int main(){
     /* total nodes         */ 12,
     /* added at each time  */ 3,
     /* add from this node  */ 1,
-    /* bind to random port */ true);
+    /* bind to random port */ true,
+    /* block interval      */ 500);
 
   test_add_nodes(
     /* total nodes         */ 12,
     /* added at each time  */ 4,
     /* add from this node  */ 2,
-    /* bind to random port */ true);
+    /* bind to random port */ true,
+    /* block interval      */ 500);
 
   test_add_nodes(
     /* total nodes         */ 12,
     /* added at each time  */ 12,
     /* add from this node  */ 1,
-    /* bind to random port */ true);
+    /* bind to random port */ true,
+    /* block interval      */ 500);
 
 
-  test_reconnection(10, false,
+  test_reconnection(10, false, 500,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
     /* num_txns_on_offline_nodes,  */ 0,
     /* active_offline_nodes[],     */ (int[]){0},
@@ -2003,7 +2006,7 @@ int main(){
     /* active_nodes_on_reconnect[] */ (int[]){0}
   );
 
-  test_reconnection(10, false,
+  test_reconnection(10, false, 500,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
     /* num_txns_on_offline_nodes,  */ 0,
     /* active_offline_nodes[],     */ (int[]){0},
@@ -2013,7 +2016,7 @@ int main(){
     /* active_nodes_on_reconnect[] */ (int[]){3,6,9,0}
   );
 
-  test_reconnection(10, false,
+  test_reconnection(10, false, 500,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
     /* num_txns_on_offline_nodes,  */ 0,
     /* active_offline_nodes[],     */ (int[]){0},
@@ -2023,7 +2026,7 @@ int main(){
     /* active_nodes_on_reconnect[] */ (int[]){0}
   );
 
-  test_reconnection(10, false,
+  test_reconnection(10, false, 500,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
     /* num_txns_on_offline_nodes,  */ 0,
     /* active_offline_nodes[],     */ (int[]){0},
@@ -2033,7 +2036,7 @@ int main(){
     /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,0}
   );
 
-  test_reconnection(10, false,
+  test_reconnection(10, false, 500,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
     /* num_txns_on_offline_nodes,  */ 3,
     /* active_offline_nodes[],     */ (int[]){4,10,0},
@@ -2043,7 +2046,7 @@ int main(){
     /* active_nodes_on_reconnect[] */ (int[]){0}
   );
 
-  test_reconnection(10, false,
+  test_reconnection(10, false, 500,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
     /* num_txns_on_offline_nodes,  */ 3,
     /* active_offline_nodes[],     */ (int[]){4,10,0},
@@ -2053,7 +2056,7 @@ int main(){
     /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,0}
   );
 
-  test_reconnection(25, false,
+  test_reconnection(25, false, 500,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,0},
     /* num_txns_on_offline_nodes,  */ 6,
     /* active_offline_nodes[],     */ (int[]){2,7,15,23,0},
@@ -2065,7 +2068,7 @@ int main(){
 
 goto loc_exit;
 
-  test_reconnection(50, false,
+  test_reconnection(50, false, 500,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,0},
     /* num_txns_on_offline_nodes,  */ 9,
     /* active_offline_nodes[],     */ (int[]){4,10,20,33,38,49,0},
@@ -2075,7 +2078,7 @@ goto loc_exit;
     /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,20,25,44,45,0}
   );
 
-  test_reconnection(100, false,
+  test_reconnection(100, false, 500,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,55,66,77,88,95,0},
     /* num_txns_on_offline_nodes,  */ 9,
     /* active_offline_nodes[],     */ (int[]){4,10,20,33,38,49,0},
@@ -2086,7 +2089,7 @@ goto loc_exit;
   );
 
 #if 0
-  test_reconnection(150, false,
+  test_reconnection(150, false, 500,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,55,66,77,88,95,0},
     /* num_txns_on_offline_nodes,  */ 9,
     /* active_offline_nodes[],     */ (int[]){4,10,20,33,38,49,0},
@@ -2096,7 +2099,7 @@ goto loc_exit;
     /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,20,25,44,45,0}
   );
 
-  test_reconnection(200, false,
+  test_reconnection(200, false, 500,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,55,66,77,88,95,0},
     /* num_txns_on_offline_nodes,  */ 9,
     /* active_offline_nodes[],     */ (int[]){4,10,20,33,38,49,0},
@@ -2120,6 +2123,7 @@ goto loc_exit;
   test_new_nodes(
     /* n_before,              */ 10,
     /* bind_to_random_ports,  */ true,
+    /* block interval         */ 500,
     /* starting_node,         */ 2,
     /* n_new_no_content,      */ 1,
     /* n_new_with_content,    */ 1,
@@ -2137,6 +2141,7 @@ goto loc_exit;
   test_new_nodes( /* total_nodes=14 */
     /* n_before,              */ 10,
     /* bind_to_random_ports,  */ true,
+    /* block interval         */ 500,
     /* starting_node,         */ 2,
     /* n_new_no_content,      */ 1,
     /* n_new_with_content,    */ 1,
@@ -2153,6 +2158,7 @@ goto loc_exit;
   test_new_nodes( /* total_nodes=14 */
     /* n_before,              */ 10,
     /* bind_to_random_ports,  */ true,
+    /* block interval         */ 500,
     /* starting_node,         */ 2,
     /* n_new_no_content,      */ 1,
     /* n_new_with_content,    */ 1,
