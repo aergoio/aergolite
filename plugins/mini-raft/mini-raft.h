@@ -308,6 +308,7 @@ struct plugin {
 
   uv_timer_t process_transactions_timer;
   uv_timer_t new_block_timer;
+  int block_interval;
 
   uv_timer_t reconnect_timer;
   int reconnect_timer_enabled;

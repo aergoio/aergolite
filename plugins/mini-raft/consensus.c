@@ -516,7 +516,7 @@ SQLITE_PRIVATE void new_block_timer_cb(uv_timer_t* handle) {
 SQLITE_PRIVATE void start_new_block_timer(plugin *plugin) {
   if( !uv_is_active((uv_handle_t*)&plugin->new_block_timer) ){
     SYNCTRACE("start_new_block_timer\n");
-    uv_timer_start(&plugin->new_block_timer, new_block_timer_cb, NEW_BLOCK_WAIT_INTERVAL, 0);
+    uv_timer_start(&plugin->new_block_timer, new_block_timer_cb, plugin->block_interval, 0);
   }
 }
 

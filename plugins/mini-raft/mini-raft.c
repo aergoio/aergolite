@@ -2075,7 +2075,7 @@ loc_failed:
 void * plugin_init(aergolite *this_node, char *uri) {
   struct tcp_address *addr;
   plugin *plugin;
-  char *discovery, *bind;
+  char *discovery, *bind, *block_interval;
   int64 random_no;
 
   SYNCTRACE("initializing a new instance of mini-raft plugin\n");
@@ -2134,6 +2134,18 @@ void * plugin_init(aergolite *this_node, char *uri) {
   }
   for (addr = plugin->bind; addr; addr = addr->next) {
     SYNCTRACE("  bind address: %s:%d \n", addr->host, addr->port);
+  }
+
+
+  /* parse the block interval parameter */
+
+  plugin->block_interval = -1;
+  block_interval = (char*) sqlite3_uri_parameter(uri, "block_interval");
+  if( block_interval ){
+    plugin->block_interval = atoi(block_interval);
+  }
+  if( plugin->block_interval<0 ){
+    plugin->block_interval = NEW_BLOCK_WAIT_INTERVAL;
   }
 
 
