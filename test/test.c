@@ -312,7 +312,7 @@ void test_5_nodes(int bind_to_random_ports){
 void test_add_nodes(int n, int n_each_time, int add_from_node, bool bind_to_random_ports){
   sqlite3 *db[512];
   char uri[256];
-  char node_pubkey[n][72];
+  char node_pubkey[512][72];
   int last_nonce[512];
   sqlite3_stmt *stmt=NULL;
   int rc, i, count, done;
@@ -691,7 +691,7 @@ void test_reconnection(
 ){
   sqlite3 *db[512];
   char uri[256];
-  char node_pubkey[n][72];
+  char node_pubkey[512][72];
   sqlite3_stmt *stmt=NULL;
   int rc, i, j, node, count, done;
   int last_nonce[512];
