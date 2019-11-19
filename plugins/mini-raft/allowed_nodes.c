@@ -449,6 +449,8 @@ loc_failed2:
 
 }
 
+/****************************************************************************/
+
 SQLITE_PRIVATE void check_new_identified_node(node *new_node) {
   plugin *plugin = new_node->plugin;
   aergolite *this_node = new_node->this_node;
@@ -583,10 +585,6 @@ loc_failed:
 #endif
 
 /****************************************************************************/
-
-//SQLITE_PRIVATE void on_new_node_identified(node *node, void *msg, int size) {
-
-// the node could also send the pubkey to then get a node id
 
 SQLITE_PRIVATE void on_node_identification(node *node, void *msg, int size) {
   plugin *plugin = node->plugin;
