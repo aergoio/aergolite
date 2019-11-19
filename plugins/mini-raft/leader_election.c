@@ -55,6 +55,7 @@ SQLITE_PRIVATE void exit_election(plugin *plugin) {
 //! leader election: full nodes must have the preference, between those who have the last state
 
 SQLITE_PRIVATE void new_leader_election(plugin *plugin) {
+  node *node;
 
   SYNCTRACE("new_leader_election\n");
 
@@ -69,6 +70,10 @@ SQLITE_PRIVATE void new_leader_election(plugin *plugin) {
   reset_node_state(plugin);
 
   clear_leader_votes(plugin);
+
+  for( node=plugin->peers; node; node=node->next ){
+    node->last_block = -1;
+  }
 
   uv_timer_start(&plugin->leader_check_timer, on_leader_check_timeout, 5000, 0);
 
@@ -275,15 +280,15 @@ SQLITE_PRIVATE int calculate_new_leader(plugin *plugin){
 
   SYNCTRACE("calculate_new_leader max_blocks=%" INT64_FORMAT "\n", max_blocks);
 
-  SYNCTRACE("calculate_new_leader node_id=%d\n", plugin->node_id);
+  SYNCTRACE("calculate_new_leader this_node_id=%d last_block=%" INT64_FORMAT "\n", plugin->node_id, last_block);
   if( last_block==max_blocks ){
     number = max_blocks ^ (uint64)plugin->node_id;
     if( number>biggest ) biggest = number;
   }
 
   for( node=plugin->peers; node; node=node->next ){
-    SYNCTRACE("calculate_new_leader node_id=%d last_block=%" INT64_FORMAT "\n", node->id, node->last_block);
     if( node->is_authorized ){
+      SYNCTRACE("calculate_new_leader node_id=%d last_block=%" INT64_FORMAT "\n", node->id, node->last_block);
       if( node->last_block==max_blocks && node!=plugin->last_leader ){
         number = max_blocks ^ (uint64)node->id;
         if( number>biggest ) biggest = number;
@@ -454,6 +459,15 @@ SQLITE_PRIVATE void on_peer_last_block(
   SYNCTRACE("node %d last block height: %d\n", node_id, last_block);
 
   node->last_block = last_block;
+
+  for( node=plugin->peers; node; node=node->next ){
+    /* if some node did not send the election info yet */
+    if( node->is_authorized && node->last_block==-1 ) return;
+  }
+
+  /* all nodes answered. proceed with the election */
+  election_info_timeout(&plugin->election_info_timer);
+  uv_timer_stop(&plugin->election_info_timer);
 
 }
 
