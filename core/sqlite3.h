@@ -11829,6 +11829,8 @@ SQLITE_API int aergolite_verify_authorization(
   int  *ppklen
 );
 
+SQLITE_API int aergolite_new_authorization(aergolite *this_node, void *log, char *pubkey, int *ppklen);
+
 typedef int (*auth_cb)(void *arg, void *log);
 
 SQLITE_API int aergolite_iterate_authorizations(
@@ -11836,6 +11838,10 @@ SQLITE_API int aergolite_iterate_authorizations(
   auth_cb cb,
   void *arg
 );
+
+SQLITE_API int aergolite_num_authorized_nodes(aergolite *this_node);
+
+SQLITE_API int is_node_authorized(aergolite *this_node, char *pubkey, int pklen, BOOL *is_authorized);
 
 
 SQLITE_API int aergolite_insert_allowed_node(

@@ -678,10 +678,9 @@ SQLITE_PRIVATE void process_new_special_transaction(plugin *plugin) {
     int rc, pklen;
 
     /* is it an authorization? */
-    //rc = aergolite_verify_authorization(this_node, txn->log, pubkey, &pklen);
     rc = read_authorized_pubkey(txn->log, pubkey, &pklen);
     if( rc==SQLITE_OK ){
-      rc = on_new_authorization(plugin, txn->log, pubkey, pklen);
+      rc = on_new_authorization(plugin, txn->log);
       if( rc ) return;
     }
 

@@ -168,14 +168,6 @@ typedef uint32_t Pgno;
 
 typedef struct plugin plugin;
 typedef struct node node;
-typedef struct nodeauth nodeauth;
-
-struct nodeauth {
-  struct nodeauth *next;
-  char pk[36];
-  int  pklen;
-  void *log;
-};
 
 struct node_id_conflict {
   node *existing_node;
@@ -270,9 +262,6 @@ struct plugin {
   node *peers;                /* Remote nodes connected to this one */
   int total_authorized_nodes; /* Including those that are currently off-line */
 
-  nodeauth *authorizations;   /* List of node authorizations */
-  struct txn_list *special_txn; /* New special transaction */
-
   BOOL is_authorized;         /* Whether this node is authorized on the network */
 
   BOOL is_leader;             /* True if this node is the current leader */
@@ -283,6 +272,7 @@ struct plugin {
   BOOL in_election;           /* True if in a leader election */
 
   struct transaction *mempool;
+  struct txn_list *special_txn; /* New special transaction */
 
   void *nonces;
 
@@ -402,4 +392,4 @@ SQLITE_PRIVATE void on_peer_list_received(node *node, void *msg, int size);
 
 /* node authorization */
 
-SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log, char *pubkey, int pklen);
+SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log);

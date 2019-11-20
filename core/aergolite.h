@@ -12,6 +12,18 @@ typedef struct aergolite aergolite;
 typedef struct aergolite_plugin aergolite_plugin;
 
 
+typedef struct nodeauth nodeauth;
+
+struct nodeauth {
+  struct nodeauth *next;
+  char pk[36];
+  int  pklen;
+  int  node_id;
+  int64 last_nonce;
+  void *log;
+};
+
+
 /*
 typedef struct blob blob;
 
@@ -93,6 +105,8 @@ struct aergolite {
   BOOL dbWasEmpty;            /* if the db was empty when open */
   char *extensions;           /* the SQLite extensions to be loaded */
 
+  nodeauth *authorizations;   /* List of node authorizations */
+
   int64 block_height;         /* ... */
   struct block current_block; /* ... */
   void *txn_ids;              /* The transactions on a specific block */
@@ -165,6 +179,7 @@ SQLITE_PRIVATE void process_new_local_transaction(aergolite *this_node, Pager *p
 
 SQLITE_PRIVATE int  lock_main_db(aergolite *this_node);
 SQLITE_PRIVATE void unlock_main_db(aergolite *this_node);
+SQLITE_PRIVATE int  aergolite_prepare_db(aergolite *this_node);
 
 SQLITE_PRIVATE void invalidate_loaded_schemas(aergolite *this_node, BOOL on_main_db, BOOL on_worker_db);
 SQLITE_PRIVATE int  check_for_log_rotation(aergolite *this_node);
@@ -178,6 +193,9 @@ SQLITE_PRIVATE int64 get_last_processed_nonce(aergolite *this_node);
 SQLITE_PRIVATE int  open_detached_worker_db(aergolite *this_node, sqlite3 **pworker_db);
 SQLITE_PRIVATE int  open_main_db_connection2(aergolite *this_node);
 SQLITE_PRIVATE int  open_worker_db(aergolite *this_node);
+
+
+SQLITE_API int read_authorized_pubkey(void *log, char *pubkey, int *ppklen);
 
 
 SQLITE_PRIVATE int add_node_command(

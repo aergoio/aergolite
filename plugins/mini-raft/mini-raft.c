@@ -1777,9 +1777,6 @@ SQLITE_PRIVATE void node_thread(void *arg) {
   /* load the database state */
   load_current_state(plugin);
 
-  /* load the nodes authorizations */
-  load_authorizations(plugin);
-
 
   /* mark this thread as active */
   plugin->thread_active = TRUE;
@@ -1884,12 +1881,6 @@ SQLITE_API void plugin_end(void *arg){
     struct tcp_address *next = plugin->discovery->next;
     sqlite3_free(plugin->discovery);
     plugin->discovery = next;
-  }
-
-  while( plugin->authorizations ){
-    struct nodeauth *next = plugin->authorizations->next;
-    sqlite3_free(plugin->authorizations);
-    plugin->authorizations = next;
   }
 
   discard_block(plugin->current_block);
