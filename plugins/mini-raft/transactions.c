@@ -691,6 +691,7 @@ loc_next:
       rc = on_new_authorization(plugin, txn->log);
     }
 
+    binn_free(txn->log);
     sqlite3_free(txn);
 
     if( rc ) return;
@@ -747,7 +748,7 @@ SQLITE_API void on_new_local_transaction(void *arg, void *log) {
       llist_add(&plugin->special_txn, txn);
       sqlite3_mutex_leave(plugin->mutex);
     }else{
-      sqlite3_free(log);
+      binn_free(log);
     }
   }
 
