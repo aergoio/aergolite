@@ -48,6 +48,9 @@ SQLITE_PRIVATE void exit_election(plugin *plugin) {
   plugin->in_election = FALSE;
   clear_leader_votes(plugin);
 
+  /* stop the election info timer */
+  uv_timer_stop(&plugin->election_info_timer);
+
 }
 
 /****************************************************************************/
@@ -207,6 +210,7 @@ SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle) {
 
   }
 
+
   /* activate a timer to retry the synchronization if it fails */
   SYNCTRACE("starting the process local transactions timer\n");
   uv_timer_start(&plugin->process_transactions_timer, process_transactions_timer_cb, 500, 500);
@@ -315,6 +319,8 @@ SQLITE_PRIVATE void broadcast_leader_vote(plugin *plugin){
   int leader_id;
 
   /* xxx */
+
+  if( !plugin->in_election ) return;
 
   leader_id = calculate_new_leader(plugin);
 
@@ -449,7 +455,7 @@ SQLITE_PRIVATE void on_peer_last_block(
   int last_block=0;
   char *pid, *pnum;
 
-  //check_peer_connection(plugin, sender, get_sockaddr_port(addr));
+  if( !plugin->in_election ) return;
 
   pnum = arg;
   pid = stripchr(pnum, ':');
@@ -490,7 +496,7 @@ SQLITE_PRIVATE void on_requested_peer_leader(
 
   /* if an election is taking place on other nodes, try to participate */
   if( node_id==-1 ){
-    on_new_election_request(plugin, NULL, NULL);
+    //! on_new_election_request(plugin, NULL, NULL);
     return;
   }
 
