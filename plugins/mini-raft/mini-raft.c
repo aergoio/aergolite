@@ -225,7 +225,8 @@ SQLITE_PRIVATE void print_allowed_node_cb(
 
   /* ignore if it is from a connected node */
   for(node=data->plugin->peers; node; node=node->next){
-    if( memcmp(node->pubkey,pubkey,pklen)==0 ) return;
+    if( node->conn_state==CONN_STATE_CONNECTED &&
+        memcmp(node->pubkey,pubkey,pklen)==0 ) return;
   }
 
   /* print the offline node */
@@ -272,6 +273,7 @@ SQLITE_API void print_node_list(void *arg, void *vdbe) {
   /* iterate over the connected nodes */
 
   for(node=plugin->peers; node; node=node->next){
+    if( node->conn_state!=CONN_STATE_CONNECTED ) continue;
 
     to_hex(node->pubkey, node->pklen, hexpubkey);
     sprintf(address, "%s:%d", node->host, node->port);
