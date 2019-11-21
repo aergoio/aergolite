@@ -166,7 +166,7 @@ endif
 clean:
 	rm -f *.o libaergolite.a libaergolite.dylib $(LIBRARY) $(LIBNICK1) $(LIBNICK2) $(LIBNICK3) $(LIBNICK4) $(SSHELL) test/runtest
 
-test/runtest: test/test.c
+test/runtest: test/test.c test/db_functions.c
 	$(CC) $< -o $@ -L. -lsqlite3 -lsecp256k1
 
 test: test/runtest

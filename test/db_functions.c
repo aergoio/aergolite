@@ -12,7 +12,7 @@
 //#define QUIT_TEST()  print_backtrace()
 #define QUIT_TEST()  exit(1)
 
-int bind_sql_parameters(sqlite3_stmt *stmt, const char *types, va_list ap);
+static int bind_sql_parameters(sqlite3_stmt *stmt, const char *types, va_list ap);
 
 /****************************************************************************/
 
@@ -280,7 +280,7 @@ void db_check_empty_fn(sqlite3 *db, char *sql, const char *function, int line){
 /****************************************************************************/
 /****************************************************************************/
 
-int bind_sql_parameters(sqlite3_stmt *stmt, const char *types, va_list ap){
+static int bind_sql_parameters(sqlite3_stmt *stmt, const char *types, va_list ap){
   int rc, parameter_count, iDest, i;
   char c;
 
@@ -304,7 +304,6 @@ int bind_sql_parameters(sqlite3_stmt *stmt, const char *types, va_list ap){
       char *ptr = va_arg(ap, char*);
       int size = va_arg(ap, int);
       sqlite3_bind_blob(stmt, iDest+i, ptr, size, SQLITE_TRANSIENT);
-      iDest++;
     }else{
       goto loc_invalid;
     }
@@ -318,7 +317,7 @@ loc_invalid:
 
 /****************************************************************************/
 
-int db_prepare_and_bind(sqlite3 *db, const char *sql, va_list args, sqlite3_stmt **pstmt){
+static int db_prepare_and_bind(sqlite3 *db, const char *sql, va_list args, sqlite3_stmt **pstmt){
   sqlite3_stmt *stmt=0;
   int rc;
 
@@ -349,7 +348,7 @@ loc_failed:
 
 /****************************************************************************/
 
-int db_exec_bindv(sqlite3 *db, const char *sql, va_list args){
+static int db_exec_bindv(sqlite3 *db, const char *sql, va_list args){
   sqlite3_stmt *stmt=NULL;
   int rc;
 
@@ -366,7 +365,7 @@ loc_exit:
 
 /****************************************************************************/
 
-int db_exec(sqlite3 *db, const char *sql, ...){
+static int db_exec(sqlite3 *db, const char *sql, ...){
   va_list args;
   int rc;
 
@@ -379,7 +378,7 @@ int db_exec(sqlite3 *db, const char *sql, ...){
 
 /****************************************************************************/
 
-int db_query(
+static int db_query(
   sqlite3 *db,
   int(*callback)(void*,sqlite3_stmt*),
   void *user,
@@ -426,7 +425,7 @@ struct blob_info {
   int size;
 };
 
-int db_query_value_stmt(void **pvalue, int type, sqlite3_stmt *stmt) {
+static int db_query_value_stmt(void **pvalue, int type, sqlite3_stmt *stmt) {
   int rc, ncols, nrows=0;
 
   ncols = sqlite3_column_count(stmt);
@@ -481,7 +480,7 @@ loc_failed:
 
 /****************************************************************************/
 
-int db_query_valuev(void **pvalue, int type, sqlite3 *db, const char *sql, va_list args) {
+static int db_query_valuev(void **pvalue, int type, sqlite3 *db, const char *sql, va_list args) {
   sqlite3_stmt *stmt = 0;
   int rc;
 
@@ -503,7 +502,7 @@ loc_failed:
 
 /****************************************************************************/
 
-int db_query_value(void **pvalue, int type, sqlite3 *db, const char *sql, ...) {
+static int db_query_value(void **pvalue, int type, sqlite3 *db, const char *sql, ...) {
   va_list args;
   int rc;
 
@@ -516,7 +515,7 @@ int db_query_value(void **pvalue, int type, sqlite3 *db, const char *sql, ...) {
 
 /****************************************************************************/
 
-int db_query_int64(int64 *pvalue, sqlite3 *db, char *sql, ...) {
+static int db_query_int64(int64 *pvalue, sqlite3 *db, char *sql, ...) {
   va_list args;
   int rc;
 
@@ -532,7 +531,7 @@ int db_query_int64(int64 *pvalue, sqlite3 *db, char *sql, ...) {
 
 /****************************************************************************/
 
-int db_query_int32(int *pvalue, sqlite3 *db, char *sql, ...) {
+static int db_query_int32(int *pvalue, sqlite3 *db, char *sql, ...) {
   va_list args;
   int rc;
 
@@ -548,7 +547,7 @@ int db_query_int32(int *pvalue, sqlite3 *db, char *sql, ...) {
 
 /****************************************************************************/
 
-int db_query_double(double *pvalue, sqlite3 *db, char *sql, ...) {
+static int db_query_double(double *pvalue, sqlite3 *db, char *sql, ...) {
   va_list args;
   int rc;
 
@@ -565,7 +564,7 @@ int db_query_double(double *pvalue, sqlite3 *db, char *sql, ...) {
 /****************************************************************************/
 
 /* returned memory must be released with sqlite3_free */
-int db_query_str(char **pvalue, sqlite3 *db, char *sql, ...) {
+static int db_query_str(char **pvalue, sqlite3 *db, char *sql, ...) {
   va_list args;
   int rc;
 
@@ -582,7 +581,7 @@ int db_query_str(char **pvalue, sqlite3 *db, char *sql, ...) {
 /****************************************************************************/
 
 /* returned memory must be released with sqlite3_free */
-int db_query_blob(char **pvalue, int *psize, sqlite3 *db, char *sql, ...) {
+static int db_query_blob(char **pvalue, int *psize, sqlite3 *db, char *sql, ...) {
   struct blob_info blob = {0};
   va_list args;
   int rc;
