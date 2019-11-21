@@ -209,7 +209,7 @@ SQLITE_PRIVATE int add_node_command(
 );
 SQLITE_PRIVATE int process_node_commands(aergolite *this_node, void *node_commands);
 
-SQLITE_PRIVATE void update_node_last_nonce(aergolite *this_node, int node_id, int64 nonce);
+SQLITE_PRIVATE int  update_node_last_nonce(aergolite *this_node, int node_id, int64 nonce);
 SQLITE_PRIVATE void update_auth_last_nonce(aergolite *this_node, int node_id, int64 nonce);
 
 SQLITE_PRIVATE void update_authorizations(aergolite *this_node);

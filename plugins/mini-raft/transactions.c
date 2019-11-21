@@ -418,7 +418,7 @@ SQLITE_PRIVATE int store_transaction_on_mempool(
   }
 
   /* check if this transaction is valid */
-  rc = aergolite_verify_transaction(plugin->this_node, node_id, log, TRUE);
+  rc = aergolite_verify_transaction(plugin->this_node, node_id, log);
   if( rc!=SQLITE_OK ) return rc;
 
   /* allocate a new transaction object */
