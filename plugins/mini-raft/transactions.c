@@ -668,12 +668,20 @@ SQLITE_PRIVATE void leader_node_on_local_transaction(plugin *plugin) {
 // remove_node: (later)
 
 SQLITE_PRIVATE void process_new_special_transaction(plugin *plugin) {
-  aergolite *this_node = plugin->this_node;
+  struct txn_list *txn;
 
   SYNCTRACE("process_new_special_transaction\n");
 
-  while( plugin->special_txn ){
-    struct txn_list *txn = plugin->special_txn;
+loc_next:
+
+  sqlite3_mutex_enter(plugin->mutex);
+  txn = plugin->special_txn;
+  if( txn ){
+    plugin->special_txn = txn->next;
+  }
+  sqlite3_mutex_leave(plugin->mutex);
+
+  if( txn ){
     char pubkey[36];
     int rc, pklen;
 
@@ -681,11 +689,12 @@ SQLITE_PRIVATE void process_new_special_transaction(plugin *plugin) {
     rc = read_authorized_pubkey(txn->log, pubkey, &pklen);
     if( rc==SQLITE_OK ){
       rc = on_new_authorization(plugin, txn->log);
-      if( rc ) return;
     }
 
-    plugin->special_txn = txn->next;
     sqlite3_free(txn);
+
+    if( rc ) return;
+    goto loc_next;
   }
 
 }
@@ -734,7 +743,9 @@ SQLITE_API void on_new_local_transaction(void *arg, void *log) {
     struct txn_list *txn = sqlite3_malloc_zero(sizeof(struct txn_list));
     if( txn ){
       txn->log = log;
+      sqlite3_mutex_enter(plugin->mutex);
       llist_add(&plugin->special_txn, txn);
+      sqlite3_mutex_leave(plugin->mutex);
     }else{
       sqlite3_free(log);
     }

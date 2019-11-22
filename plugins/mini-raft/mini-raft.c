@@ -1888,6 +1888,8 @@ SQLITE_API void plugin_end(void *arg){
   discard_block(plugin->current_block);
   discard_block(plugin->new_block);
 
+  sqlite3_mutex_free(plugin->mutex);
+
   sqlite3_free(plugin);
 
 }
@@ -2079,6 +2081,9 @@ void * plugin_init(aergolite *this_node, char *uri) {
   if( !plugin ) return NULL;  //SQLITE_NOMEM;
 
   plugin->this_node = this_node;
+
+  plugin->mutex = sqlite3_mutex_alloc(SQLITE_MUTEX_FAST);
+
 
   plugin->node_id = aergolite_get_node_id(this_node);
 

@@ -303,6 +303,8 @@ struct plugin {
   uv_timer_t reconnect_timer;
   int reconnect_timer_enabled;
 
+  sqlite3_mutex *mutex;
+
   bool is_updating_state;
   int sync_down_state;        /* downstream synchronization state */
   int sync_up_state;          /* upstream synchronization state */
