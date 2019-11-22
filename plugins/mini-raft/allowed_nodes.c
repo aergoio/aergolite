@@ -16,7 +16,14 @@ SQLITE_PRIVATE void count_authorized_nodes(plugin *plugin) {
 
 /****************************************************************************/
 
-SQLITE_PRIVATE int send_auth_cb(void *arg, void *log){
+SQLITE_PRIVATE int send_auth_cb(
+  void *arg,
+  int   node_id,
+  char *pubkey,
+  int   pklen,
+  void *log,
+  int64 last_nonce
+){
   binn *list = (binn*) arg;
   if( binn_list_add_list(list,log)==FALSE ) return SQLITE_NOMEM;
   return SQLITE_OK;

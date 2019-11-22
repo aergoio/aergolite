@@ -208,7 +208,7 @@ struct print_node {
   void   *vdbe;
 };
 
-SQLITE_PRIVATE void print_allowed_node_cb(
+SQLITE_PRIVATE int print_allowed_node_cb(
   void *arg,
   int node_id,
   char *pubkey,
@@ -221,18 +221,20 @@ SQLITE_PRIVATE void print_allowed_node_cb(
   char hexpubkey[72];
 
   /* ignore if it is this node */
-  if( memcmp(data->plugin->pubkey,pubkey,pklen)==0 ) return;
+  if( memcmp(data->plugin->pubkey,pubkey,pklen)==0 ) goto loc_exit;
 
   /* ignore if it is from a connected node */
   for(node=data->plugin->peers; node; node=node->next){
     if( node->conn_state==CONN_STATE_CONNECTED &&
-        memcmp(node->pubkey,pubkey,pklen)==0 ) return;
+        memcmp(node->pubkey,pubkey,pklen)==0 ) goto loc_exit;
   }
 
   /* print the offline node */
   to_hex(pubkey, pklen, hexpubkey);
   node_list_add(data->vdbe, node_id, hexpubkey, "", "", "", "", "", "", "");
 
+loc_exit:
+  return SQLITE_OK;
 }
 
 /****************************************************************************/
@@ -291,9 +293,9 @@ SQLITE_API void print_node_list(void *arg, void *vdbe) {
 
   }
 
-  /* iterate over the allowed nodes table */
+  /* iterate over the authorized nodes list */
 
-  aergolite_iterate_allowed_nodes(this_node, print_allowed_node_cb,
+  aergolite_iterate_authorizations(this_node, print_allowed_node_cb,
     &(struct print_node){ plugin, vdbe });
 
 }

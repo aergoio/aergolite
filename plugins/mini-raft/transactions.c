@@ -320,7 +320,7 @@ SQLITE_PRIVATE int update_last_nonce_array(
 
 /****************************************************************************/
 
-SQLITE_PRIVATE void build_last_nonce_array_cb(
+SQLITE_PRIVATE int build_last_nonce_array_cb(
   void *arg,
   int node_id,
   char *pubkey,
@@ -343,6 +343,7 @@ SQLITE_PRIVATE void build_last_nonce_array_cb(
     }
   }
 
+  return SQLITE_OK;
 }
 
 /****************************************************************************/
@@ -356,12 +357,12 @@ SQLITE_PRIVATE int build_last_nonce_array(plugin *plugin){
     array_free(&plugin->nonces);
   }
 
-  return aergolite_iterate_allowed_nodes(this_node, build_last_nonce_array_cb, plugin);
+  return aergolite_iterate_authorizations(this_node, build_last_nonce_array_cb, plugin);
 }
 
 /****************************************************************************/
 
-SQLITE_PRIVATE void check_mempool_transaction_cb(
+SQLITE_PRIVATE int check_mempool_transaction_cb(
   void *arg,
   int node_id,
   char *pubkey,
@@ -382,6 +383,7 @@ loc_repeat:
     }
   }
 
+  return SQLITE_OK;
 }
 
 /****************************************************************************/
@@ -391,7 +393,7 @@ SQLITE_PRIVATE int check_mempool_transactions(plugin *plugin){
 
   SYNCTRACE("check_mempool_transactions\n");
 
-  return aergolite_iterate_allowed_nodes(this_node, check_mempool_transaction_cb, plugin);
+  return aergolite_iterate_authorizations(this_node, check_mempool_transaction_cb, plugin);
 }
 
 /****************************************************************************/
