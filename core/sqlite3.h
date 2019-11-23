@@ -11823,9 +11823,7 @@ SQLITE_API int read_authorized_pubkey(void *log, char *pubkey, int *ppklen);
 
 SQLITE_API int aergolite_verify_authorization(
   aergolite *this_node,
-  void *log,
-  char *pubkey,
-  int  *ppklen
+  void *log
 );
 
 SQLITE_API int aergolite_new_authorization(aergolite *this_node, void *log, char *pubkey, int *ppklen);

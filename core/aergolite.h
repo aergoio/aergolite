@@ -217,6 +217,15 @@ SQLITE_PRIVATE void update_authorizations(aergolite *this_node);
 SQLITE_PRIVATE void save_auth_nonces(aergolite *this_node);
 SQLITE_PRIVATE void reload_auth_nonces(aergolite *this_node);
 
+SQLITE_API int aergolite_get_authorization(
+  aergolite *this_node,
+  int node_id,
+  char *pubkey,
+  int *ppklen,
+  void **pauthorization,
+  int64 *plast_nonce
+);
+
 SQLITE_API int aergolite_insert_allowed_node(
   aergolite *this_node,
   int node_id,
