@@ -87,6 +87,8 @@ struct aergolite {
   char privkey[32];           /* the private key for this node */
   char pubkey[36];            /* the public key for this node */
   size_t pklen;               /* public key length */
+  char admin_pubkey[36];      /* the blockchain admin public key */
+  size_t admin_pklen;         /* the blockchain admin public key length */
   secp256k1_context *ecdsa;   /* the ECDSA context */
 
   aergolite_plugin *plugin_functions; /* Which plugin is being used */
