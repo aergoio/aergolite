@@ -455,7 +455,7 @@ loc_again1:
 
   for(node=1; node<=n; node++){
     int nrows;
-    printf("checking node %d", node);
+    printf("checking node %d\n", node);
 loc_again2:
     sqlite3_finalize(stmt); stmt = NULL;
     rc = sqlite3_prepare_v2(db[node], "pragma nodes", -1, &stmt, NULL);
@@ -465,29 +465,12 @@ loc_again2:
     // node_id | pubkey | address | CPU | OS | hostname | app | node_info | external |
 
     assert( sqlite3_column_count(stmt)==9 );
-    nrows = 0;
 
+    nrows = 0;
     while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
-      char *nodepk = (char*)sqlite3_column_text(stmt, 1);
-      char *external = (char*)sqlite3_column_text(stmt, 8);
-      assert( nodepk && external );
-#if 0
-      /* identify the node by the public key */
-      for(int j=1; j<=n; j++){
-        if( strcmp(node_pubkey[j], nodepk)==0 ){
-          //assert( external[0]==0 ); /* internal node */
-          if( external[0]=='y' ){     /* "yes" */
-            printf("."); fflush(stdout);
-            usleep(wait_time);
-            goto loc_again2;
-          }
-        }
-      }
-#endif
       /* count how many peers this node is connected to */
       nrows++;
     }
-    puts("");
 
     assert( rc==SQLITE_DONE || rc==SQLITE_OK );
     sqlite3_finalize(stmt); stmt = NULL;
@@ -496,7 +479,7 @@ loc_again2:
     if( node<=2 ){
       assert( nrows==n );
     }else if( node%2==0 ){
-//      assert( nrows==2 );
+      assert( nrows==3 );  /* itself + 2 known nodes */
     }else{
       if( nrows<n/2 ) goto loc_again2;
     }
