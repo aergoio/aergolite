@@ -48,10 +48,11 @@ void db_catch_fn(sqlite3 *db, char *sql, const char *function, int line){
   rc = sqlite3_exec(db, sql, 0, 0, &zErrMsg);
   if( rc==SQLITE_OK ){
     print_error(rc, "expected error was not generated", sql, function, line);
-    sqlite3_free(zErrMsg);
     QUIT_TEST();
   }
 
+  assert(zErrMsg);
+  sqlite3_free(zErrMsg);
 }
 
 #define db_catch(db,sql) db_catch_fn(db, sql, __FUNCTION__, __LINE__)
