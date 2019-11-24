@@ -451,6 +451,10 @@ loc_again1:
     }
   }
 
+  /* restore the blockchain admin keys */
+  memcpy(privkey, admin_privkey, 32);
+  strcpy(pkhex, admin_pkhex);
+
   /* ensure that the nodes are included on the blockchain network */
 
   for(node=1; node<=n; node++){
