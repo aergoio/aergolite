@@ -80,7 +80,7 @@ void process_file(char* path, char *infile, char *outfile) {
 
   printf("Processing file %s...\n", infile);
 
-  fpwrite = fopen(outfile, "w");
+  fpwrite = fopen(outfile, "a+");
   if (fpwrite == 0) {
     printf("Failed: could not open file: %s\n", outfile);
     exit(1);
@@ -103,6 +103,8 @@ int main() {
 
   system("mkdir -p amalgamation");
   system("rm amalgamation/*");
+
+  system("echo \"#define AERGOLITE_AMALGAMATION  1\" > amalgamation/sqlite3.c");
 
   process_file("core", "sqlite3.h", "amalgamation/sqlite3.h");
   process_file("core", "sqlite3.c", "amalgamation/sqlite3.c");

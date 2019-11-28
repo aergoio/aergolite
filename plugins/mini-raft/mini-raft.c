@@ -17,8 +17,10 @@
 
 #include "mini-raft.h"
 
+#ifndef AERGOLITE_AMALGAMATION
 #include "../../common/array.c"
 #include "../../common/linked_list.c"
+#endif
 
 #include "../common/uv_functions.c"
 

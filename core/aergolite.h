@@ -52,6 +52,11 @@ struct block {
   void *header;
   void *body;
   void *signatures;
+#ifdef AERGOLITE_AMALGAMATION
+  int  ack_count;
+  BOOL commit_sent;
+  int  downloading_txns;
+#endif
 };
 
 

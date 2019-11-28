@@ -231,6 +231,7 @@ struct transaction {
   int64 block_height;
 };
 
+#ifndef AERGOLITE_AMALGAMATION
 struct block {
   struct block *next;
   int64 height;
@@ -241,6 +242,7 @@ struct block {
   BOOL commit_sent;
   int  downloading_txns;
 };
+#endif
 
 struct txn_list {
   struct txn_list *next;
