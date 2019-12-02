@@ -195,35 +195,24 @@ make valgrind
 ```
 
 
-## Manual Testing
-
-You can test it using the SQLite shell.
-
-Open an empty local database on each device:
-
-```
-sqlite3
-.log stdout
-.open "file:test.db?blockchain=on&discovery=local:4329"
-```
-
-
 ## Using
 
 The compiled library has support for both native SQLite database files and for SQLite databases with blockchain support, so the application can open native SQLite databases and ones with blockchain at the same time.
 
 The library works exactly the same way for a normal SQLite database.
 
-For opening a database with blockchain support we inform the library using a URI parameter: `blockchain=on`
+For opening a database with blockchain support we use a URI parameter: `blockchain`
 
 Example:
 
 ```
-"file:test.db?blockchain=on&discovery=local:4329"
+"file:test.db?blockchain=on"
 ```
 
 
 ## Node discovery
+
+A node needs to discover its peers on the blockchain network.
 
 We specify the node discovery method using the `discovery` URI parameter.
 
