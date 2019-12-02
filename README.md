@@ -65,11 +65,16 @@ Most of these languages are supported via wrappers.
 
 ### On Linux and Mac
 
-1. Install libuv
+Copy and paste this on a terminal:
 
 ```
-sudo apt-get install automake libtool libreadline-dev -y
-git clone https://github.com/libuv/libuv --depth=1
+# Install tools
+
+sudo apt-get install git gcc make automake libtool libreadline-dev -y
+
+# Install libuv
+
+git clone --depth=1 https://github.com/libuv/libuv
 cd libuv
 ./autogen.sh
 ./configure
@@ -77,34 +82,28 @@ make
 sudo make install
 sudo ldconfig
 cd ..
-```
 
-2. Install binn
+# Install binn
 
-```
-git clone https://github.com/liteserver/binn
+git clone --depth=1 https://github.com/liteserver/binn
 cd binn
 make
 sudo make install
 cd ..
-```
 
-3. Install libsecp256k1
+# Install libsecp256k1
 
-```
-git clone https://github.com/bitcoin-core/secp256k1
+git clone --depth=1 https://github.com/bitcoin-core/secp256k1
 cd secp256k1
 ./autogen.sh
 ./configure
 make
 sudo make install
 cd ..
-```
 
-4. Install AergoLite
+# Install AergoLite
 
-```
-git clone https://github.com/aergoio/aergolite
+git clone --depth=1 https://github.com/aergoio/aergolite
 cd aergolite
 make
 sudo make install
@@ -113,41 +112,37 @@ cd -
 
 ### On Windows using MinGW
 
-1. Compile libuv
+Copy and paste this on a MinGW terminal:
 
 ```
-git clone https://github.com/libuv/libuv --depth=1
+# Compile libuv
+
+git clone --depth=1 https://github.com/libuv/libuv
 cd libuv
 sh autogen.sh
 ./configure
 make
 cd ..
-```
 
-2. Compile binn
+# Compile binn
 
-```
-git clone https://github.com/liteserver/binn
+git clone --depth=1 https://github.com/liteserver/binn
 cd binn
 make
 cd ..
-```
 
-3. Compile libsecp256k1
+# Compile libsecp256k1
 
-```
-git clone https://github.com/bitcoin-core/secp256k1
+git clone --depth=1 https://github.com/bitcoin-core/secp256k1
 cd secp256k1
 ./autogen.sh
 ./configure
 make
 cd ..
-```
 
-4. Compile AergoLite
+# Compile AergoLite
 
-```
-git clone https://github.com/aergoio/aergolite
+git clone --depth=1 https://github.com/aergoio/aergolite
 cd aergolite
 make
 cd -
