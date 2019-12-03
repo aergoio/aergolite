@@ -210,6 +210,63 @@ Example:
 ```
 
 
+## Private Blockchain Administrator
+
+AergoLite implements a private blockchain. This means that you or your organization can have
+your own private blockchain(s) in which you have control of what can happen.
+
+The entity who has the control over the blockchain is called the blockchain administrator.
+
+It is an user that is identified by a private + public key pair.
+
+The blockchain administrator can:
+
+* Add nodes to the blockchain network
+* Remove nodes from the blockchain network
+* Execute special SQL commands
+
+In future versions it will also be able to:
+
+* Authorize nodes to execute blocked SQL commands
+* Add users to the network
+* Authorize users to execute specific SQL commands
+* Create smart contracts
+
+You will need to inform the public key of the blockchain administrator on each participating node.
+
+This ensures that:
+
+1. The nodes can verify that the received commands come from the blockchain administrator
+2. A node will not join a network that is not owned by you
+
+This is done via the `admin` parameter, where the public key must be in hex format.
+
+Example:
+
+```
+"file:test.db?blockchain=on&admin=95F9AB75CA1..."
+```
+
+
+## Private key protection
+
+Each node generates a distinct private + public key pair.
+
+They are identified and authorized via their public key.
+
+For now the private key for each node is stored encrypted on the device. Future versions may support hardware based private key protection.
+
+We need to inform the password used for decrypting the private key using the `password` URI parameter.
+
+Example:
+
+```
+"file:test.db?blockchain=on&admin=95F9AB75CA1...&password=testing"
+```
+
+The password can be different on each node.
+
+
 ## Node discovery
 
 A node needs to discover its peers on the blockchain network.
@@ -258,7 +315,7 @@ We can also specify the addresses of more known nodes:
 
 Once a connection is established and the node is accepted they exchange a list of active nodes addresses. 
 
-### Mixing
+### Mixing both methods
 
 We can also use the 2 above methods at the same time. This can be useful when we have some nodes on the LAN and others that are outside.
 
