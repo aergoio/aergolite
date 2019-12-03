@@ -210,20 +210,19 @@ Example:
 ```
 
 
-## Private Blockchain Administrator
+## Blockchain Administrator
 
 AergoLite implements a private blockchain. This means that you or your organization can have
 your own private blockchain(s) in which you have control of what can happen.
 
-The entity who has the control over the blockchain is called the blockchain administrator.
-
-It is an user that is identified by a private + public key pair.
+The entity who has the control over the blockchain is called the blockchain administrator. It
+is an user that is identified by a private + public key pair.
 
 The blockchain administrator can:
 
 * Add nodes to the blockchain network
 * Remove nodes from the blockchain network
-* Execute special SQL commands
+* Execute all SQL commands
 
 In future versions it will also be able to:
 
@@ -246,6 +245,19 @@ Example:
 ```
 "file:test.db?blockchain=on&admin=95F9AB75CA1..."
 ```
+
+
+## Immutability
+
+Trust based solutions are not secure as an attacker having control of a single node can delete and
+overwrite data on the database.
+
+A real trustless and immutable blockchain should control what nodes can do.
+
+AergoLite is by default append-only for nodes. They can only execute `INSERT INTO` SQL commands.
+Only the administrator is able to execute all the SQL commands.
+
+Future versions may allow nodes to execute smart contracts that can include any SQL command.
 
 
 ## Private key protection
@@ -351,7 +363,7 @@ It will list all authorized nodes, connected or not, and also connected nodes th
 
 ## Adding nodes to the network
 
-After listing the connected nodes with the above command the blockchain network administrator can authorize nodes using the command:
+After listing the connected nodes with the above command the blockchain administrator can authorize nodes using the command:
 
 ```
 PRAGMA add_node=<public key>
@@ -363,7 +375,7 @@ Only the blockchain administrator can add nodes to the network.
 
 The first node to be authorized must be the one in which the command is being executed.
 
-These authorizations must be executed on nodes that are already authorized.
+The authorizations for new nodes must be executed on nodes that are already authorized.
 
 The above command will fire the user transaction signature callback where the transaction must be signed using the blockchain administrator private key.
 
@@ -381,9 +393,9 @@ Two entities can sign transactions:
 * the administrator
 * each authorized node
 
-If the transaction requires special rights, the AergoLite library will fire the user sign callback. Otherwise it will automatically sign it using the node's private key.
+If the transaction requires special rights, the AergoLite library will fire the user transaction sign callback function. Otherwise it will automatically sign it using the node's private key.
 
-Your application needs to register a function that will be used to sign transactions from the administrator
+At least one node on your network need to register a function that will be used to sign transactions from the administrator
 
 Example in Python:
 
@@ -399,7 +411,7 @@ con.create_function("sign_transaction", 1, on_sign_transaction)
 > **ATTENTION:** The callback function is called by the **worker thread**!!
 > Your application must sign the transaction and return as fast as possible!
 
-If a special command that requires admin privilege is executed on a node while the admin can not sign it, the transaction will be rejected.
+If a special command that requires admin privilege is executed on a node but not signed by him then the transaction will be rejected.
 
 
 ## Retrieving status
