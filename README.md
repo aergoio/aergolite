@@ -257,14 +257,13 @@ A real trustless and immutable blockchain should control what nodes can do.
 AergoLite is by default append-only for nodes. They can only execute `INSERT INTO` SQL commands.
 Only the administrator is able to execute all the SQL commands.
 
-Future versions may allow nodes to execute smart contracts that can include any SQL command.
+Future versions may allow nodes to execute smart contracts created by the administrator that can
+include any SQL command.
 
 
 ## Private key protection
 
-Each node generates a distinct private + public key pair.
-
-They are identified and authorized via their public key.
+Each node generates a distinct private + public key pair. They are identified and authorized via their public key.
 
 For now the private key for each node is stored encrypted on the device. Future versions may support hardware based private key protection.
 
@@ -277,6 +276,10 @@ Example:
 ```
 
 The password can be different on each node.
+
+The blockchain administrator is responsible for storing its private key in a secure way. We recommend not storing it on one of the blockchain nodes and not in plain format. It should be encrypted and stored on an external device or media. A paper wallet is also a good idea.
+
+Future versions will include support for signing admin transactions using a hardware wallet.
 
 
 ## Node discovery
@@ -536,7 +539,9 @@ It will also appear in the result of the `PRAGMA protocol_status(1)` command on 
 
 ### Last nonce
 
-It is possible to retrieve the node's last nonce with the command:
+Each generated transaction on a specific node has an unique incremental nonce.
+
+It is possible to retrieve the current node's last nonce with the command:
 
 ```
 PRAGMA last_nonce
@@ -637,3 +642,33 @@ sqlite3_create_function(db, "update_notification", 1, SQLITE_UTF8 | SQLITE_DETER
 > **ATTENTION:** The callback function is called by the **worker thread**!!
 > Your application should not use the db connection there and it must return as fast as possible!
 > It can send the notification to the main thread before returning
+
+
+## Block interval
+
+Blocks are created by the leader node when using the mini-raft consensus protocol (default).
+
+AergoLite does not produce empty blocks. If there is no transaction to be processed, then no block is created.
+
+A timer for creating a new block is activated when a transaction arrives on the leader node (and the timer is not yet active).
+
+This timeout interval can be configured via URI using the `block_interval` parameter.
+
+The value is interpreted as milliseconds.
+
+```
+"file:test.db?blockchain=on&block_interval=1000"
+```
+
+If the block interval is not specified then the library will use a default value of 3 seconds.
+
+
+## Limitations
+
+This first version uses a modified version of Raft for communication and consensus between the nodes.
+
+It works with up to 100 nodes on the automated tests.
+
+Future versions will contain also a gossip based protocol to support thousands of nodes.
+
+Each node can create 2^32 rows on each rowid table.
