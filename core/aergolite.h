@@ -52,6 +52,7 @@ struct block {
   void *header;
   void *body;
   void *signatures;
+  BOOL verify_ok;
 #ifdef AERGOLITE_AMALGAMATION
   int  ack_count;
   BOOL commit_sent;
@@ -116,7 +117,7 @@ struct aergolite {
   nodeauth *authorizations;   /* List of node authorizations */
 
   int64 block_height;         /* ... */
-  struct block current_block; /* ... */
+  struct block active_block;  /* ... */
   void *txn_ids;              /* The transactions on a specific block */
   void *mod_pages;            /* The modified pages on a specific block */
   void *pages_hashes;         /* The list of pages hashes */
@@ -286,7 +287,6 @@ SQLITE_PRIVATE int read_block_header(
 
 SQLITE_PRIVATE int save_block(
   aergolite *this_node,
-  int64 block_height,
   struct block *block
 );
 
