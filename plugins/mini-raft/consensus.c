@@ -134,7 +134,7 @@ SQLITE_PRIVATE void on_requested_block(node *node, void *msg, int size){
 // when they arrive, call fn to check if it can apply
 // execute txns from the payload
 
-SQLITE_PRIVATE int apply_block(plugin *plugin, struct block *block){
+SQLITE_PRIVATE int verify_block(plugin *plugin, struct block *block){
   aergolite *this_node = plugin->this_node;
   struct transaction *txn;
   BOOL all_present = TRUE;
@@ -143,7 +143,7 @@ SQLITE_PRIVATE int apply_block(plugin *plugin, struct block *block){
   void *list;
   int rc;
 
-  SYNCTRACE("apply_block\n");
+  SYNCTRACE("verify_block\n");
 
   /* if this node is in a state update, return */
   if( plugin->sync_down_state!=DB_STATE_IN_SYNC ) return SQLITE_ERROR;
@@ -204,9 +204,40 @@ SQLITE_PRIVATE int apply_block(plugin *plugin, struct block *block){
     }
   }
 
-  rc = aergolite_apply_block(this_node, block->header, block->body, block->signatures);
-  //rc = aergolite_apply_new_state(this_node, state->header, state->payload);
+  rc = aergolite_verify_block(this_node, block->header, block->body);
   if( rc ) goto loc_failed;
+
+  return SQLITE_OK;
+
+loc_failed:
+  SYNCTRACE("verify_block FAILED\n");
+// close connection?
+// or try again? use a timer?
+  if( rc!=SQLITE_BUSY ){
+    plugin->sync_down_state = DB_STATE_OUTDATED; /* it may download this block later */
+    discard_block(block);
+    plugin->new_block = NULL;
+  }
+  return rc;
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE int commit_block(plugin *plugin, struct block *block){
+  aergolite *this_node = plugin->this_node;
+  struct transaction *txn;
+  binn_iter iter;
+  binn value;
+  void *list;
+  int rc;
+
+  SYNCTRACE("commit_block\n");
+
+  rc = aergolite_commit_block(this_node, block->header, block->body, block->signatures);
+  if( rc ) goto loc_failed;
+
+  /* get the list of transactions ids */
+  list = binn_map_list(block->body, BODY_TXN_IDS);  //  BLOCK_TRANSACTIONS);
 
   /* mark the used transactions on the mempool */
   binn_list_foreach(list, value) {
@@ -238,13 +269,24 @@ SQLITE_PRIVATE int apply_block(plugin *plugin, struct block *block){
   return SQLITE_OK;
 
 loc_failed:
-  SYNCTRACE("apply_last_block FAILED\n");
+  SYNCTRACE("commit_block FAILED\n");
 // close connection?
 // or try again? use a timer?
   if( rc!=SQLITE_BUSY ){
     plugin->sync_down_state = DB_STATE_OUTDATED; /* it may download this block later */
     discard_block(block);
     plugin->new_block = NULL;
+  }
+  return rc;
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE int apply_block(plugin *plugin, struct block *block){
+  int rc;
+  rc = verify_block(plugin, block);
+  if( rc==SQLITE_OK ){
+    rc = commit_block(plugin, block);
   }
   return rc;
 }
