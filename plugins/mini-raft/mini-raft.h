@@ -238,6 +238,8 @@ struct block {
   void *header;
   void *body;
   void *signatures;
+
+  node *sender;
   int  ack_count;
   BOOL commit_sent;
   int  downloading_txns;

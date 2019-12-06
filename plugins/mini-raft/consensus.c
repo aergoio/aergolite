@@ -1,5 +1,5 @@
 
-SQLITE_PRIVATE int apply_last_block(plugin *plugin);
+SQLITE_PRIVATE int verify_last_block(plugin *plugin);
 
 /****************************************************************************/
 
@@ -55,7 +55,7 @@ SQLITE_PRIVATE void on_requested_remote_transaction(node *node, void *msg, int s
   rc = on_new_remote_transaction(node, msg, size);
 
   if( rc==SQLITE_OK ){
-    apply_last_block(plugin);
+    verify_last_block(plugin);
   }
 
 }
@@ -207,6 +207,16 @@ SQLITE_PRIVATE int verify_block(plugin *plugin, struct block *block){
   rc = aergolite_verify_block(this_node, block->header, block->body);
   if( rc ) goto loc_failed;
 
+  if( block->sender ){
+    /* inform the sender that this node approved the block */
+    //! it must be signed (?) - later
+    binn *map = binn_map();
+    binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_NEW_BLOCK_ACK);
+    binn_map_set_int64(map, PLUGIN_HEIGHT, block->height);
+    send_peer_message(block->sender, map, NULL);
+    binn_free(map);
+  }
+
   return SQLITE_OK;
 
 loc_failed:
@@ -293,9 +303,9 @@ SQLITE_PRIVATE int apply_block(plugin *plugin, struct block *block){
 
 /****************************************************************************/
 
-SQLITE_PRIVATE int apply_last_block(plugin *plugin) {
+SQLITE_PRIVATE int verify_last_block(plugin *plugin) {
 
-  return apply_block(plugin, plugin->new_block);
+  return verify_block(plugin, plugin->new_block);
 
 }
 
@@ -307,7 +317,6 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
   struct block *block;
   int64 height;
   void *header, *body;
-  binn *map;
 
   height = binn_map_int64(msg, PLUGIN_HEIGHT);
   header = binn_map_blob(msg, PLUGIN_HEADER, NULL);
@@ -334,6 +343,8 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
   block->header = sqlite3_memdup(header, binn_size(header));
   block->body   = sqlite3_memdup(body,   binn_size(body));
 
+  block->sender = node; //! DANGEROUS! it can point to released memory
+
   if( !block->header || !block->body ){
     SYNCTRACE("on_new_block FAILED header=%p body=%p\n", block->header, block->body);
     discard_block(block);
@@ -344,12 +355,8 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
   if( plugin->new_block ) discard_block(plugin->new_block);
   plugin->new_block = block;
 
-  /* inform the sender that this node acknowledged the block */
-  map = binn_map();
-  binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_NEW_BLOCK_ACK);
-  binn_map_set_int64(map, PLUGIN_HEIGHT, block->height);
-  send_peer_message(node, map, NULL);
-  binn_free(map);
+  /* verify if the block is correct */
+  verify_block(plugin, block);
 
 }
 
@@ -386,8 +393,9 @@ SQLITE_PRIVATE void on_commit_block(node *node, void *msg, int size) {
     return;
   }
 
-  /* apply the new block on this node */
-  apply_block(plugin, block);
+  /* commit the new block on this node */
+  commit_block(plugin, block);
+  //if( rc ) ...
 
 }
 
