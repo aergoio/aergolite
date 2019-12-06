@@ -139,8 +139,9 @@ SQLITE_PRIVATE int verify_block(plugin *plugin, struct block *block){
   struct transaction *txn;
   BOOL all_present = TRUE;
   binn_iter iter;
-  binn value;
+  binn value, *map;
   void *list;
+  node *node;
   int rc;
 
   SYNCTRACE("verify_block\n");
@@ -207,15 +208,18 @@ SQLITE_PRIVATE int verify_block(plugin *plugin, struct block *block){
   rc = aergolite_verify_block(this_node, block->header, block->body);
   if( rc ) goto loc_failed;
 
-  if( block->sender ){
-    /* inform the sender that this node approved the block */
-    //! it must be signed (?) - later
-    binn *map = binn_map();
-    binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_NEW_BLOCK_ACK);
-    binn_map_set_int64(map, PLUGIN_HEIGHT, block->height);
-    send_peer_message(block->sender, map, NULL);
-    binn_free(map);
+  /* approved by this node */
+  block->ack_count++;
+
+  /* broadcast the approved block message */
+  //! it must be signed (?) - later
+  map = binn_map();
+  binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_BLOCK_APPROVED);
+  binn_map_set_int64(map, PLUGIN_HEIGHT, block->height);  // maybe add more info, as hash/id/sign..
+  for( node=plugin->peers; node; node=node->next ){
+    send_peer_message(node, map, NULL);
   }
+  binn_free(map);
 
   return SQLITE_OK;
 
@@ -343,8 +347,6 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
   block->header = sqlite3_memdup(header, binn_size(header));
   block->body   = sqlite3_memdup(body,   binn_size(body));
 
-  block->sender = node; //! DANGEROUS! it can point to released memory
-
   if( !block->header || !block->body ){
     SYNCTRACE("on_new_block FAILED header=%p body=%p\n", block->header, block->body);
     discard_block(block);
@@ -362,9 +364,8 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
 
 /****************************************************************************/
 
-SQLITE_PRIVATE void on_commit_block(node *node, void *msg, int size) {
-  aergolite *this_node = node->this_node;
-  plugin *plugin = node->plugin;
+SQLITE_PRIVATE void on_node_approved_block(node *source_node, void *msg, int size) {
+  plugin *plugin = source_node->plugin;
   struct block *block;
   int64 height;
   //uchar *hash;
@@ -372,33 +373,52 @@ SQLITE_PRIVATE void on_commit_block(node *node, void *msg, int size) {
   height = binn_map_int64(msg, PLUGIN_HEIGHT);
   //hash = binn_map_blob (msg, PLUGIN_HASH, NULL);  //&hash_size);
 
-  SYNCTRACE("on_commit_block - height=%" INT64_FORMAT "\n", height);
+  SYNCTRACE("on_node_approved_block - height=%" INT64_FORMAT "\n", height);
 
-  /* if this node is in a state update, ignore the block commit command */
-  if( plugin->sync_down_state!=DB_STATE_IN_SYNC ) return;
+  if( !plugin->is_leader ){
+    /* if this node is in a state update, ignore the block commit command */
+    if( plugin->sync_down_state!=DB_STATE_IN_SYNC ) return;
+  }
 
   /* check if we have some block to be committed */
   block = plugin->new_block;
   if( !block ){
-    /* the block is not on memory. request it */
-    //request_block(plugin, block->height);  //! if it fails, start a state update
-    request_state_update(plugin);
+    if( !plugin->is_leader && ( !plugin->current_block || height>plugin->current_block->height ) ){
+      /* the block is not on memory. request it */
+      //request_block(plugin, height);  //! if it fails, start a state update
+      request_state_update(plugin);
+    }
     return;
   }
 
   /* check if the local block is the expected one */
   if( block->height!=height ){
-    SYNCTRACE("on_commit_block - unexpected block height - cached block height: %d\n", block->height);
-    request_state_update(plugin);
+    SYNCTRACE("on_node_approved_block - unexpected block height - cached block height: %d\n", block->height);
+    if( !plugin->is_leader ){
+      request_state_update(plugin);
+    }
     return;
   }
 
-  /* commit the new block on this node */
-  commit_block(plugin, block);
-  //if( rc ) ...
+  /* increment the number of nodes that approved the block */
+  block->ack_count++;
+
+  SYNCTRACE("on_node_approved_block - ack_count=%d total_authorized_nodes=%d\n",
+            block->ack_count, plugin->total_authorized_nodes);
+
+  /* check if we reached the majority of the nodes */
+  if( block->ack_count >= majority(plugin->total_authorized_nodes) ){
+    /* commit the new block on this node */
+    if( plugin->is_leader ){
+      apply_block(plugin, block);
+    }else{
+      commit_block(plugin, block);
+    }
+  }
 
 }
 
+/****************************************************************************/
 /****************************************************************************/
 
 SQLITE_PRIVATE bool is_next_nonce(plugin *plugin, int node_id, int64 nonce){
@@ -597,96 +617,4 @@ SQLITE_PRIVATE int broadcast_new_block(plugin *plugin, struct block *block) {
 
   binn_free(map);
   return SQLITE_OK;
-}
-
-/****************************************************************************/
-
-/*
-** Used by the leader.
-*/
-// signed block, signed state, state commit
-SQLITE_PRIVATE int broadcast_block_commit(plugin *plugin, struct block *block) {
-  struct node *node;
-  binn *map;
-
-  SYNCTRACE("broadcast_block_commit - height=%" INT64_FORMAT "\n",
-            block->height);
-
-  /* signal other peers that there is a new transaction */
-  map = binn_map();
-  if( !map ) return SQLITE_BUSY;  /* flag to retry the command later */
-
-  binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_COMMIT_BLOCK);
-  binn_map_set_int64(map, PLUGIN_HEIGHT, block->height);
-  //binn_map_set_blob(map, PLUGIN_HASH, block->hash, SHA256_BLOCK_SIZE);
-
-  for( node=plugin->peers; node; node=node->next ){
-    send_peer_message(node, map, NULL);
-  }
-
-  binn_free(map);
-  return SQLITE_OK;
-}
-
-/****************************************************************************/
-/****************************************************************************/
-
-SQLITE_PRIVATE void on_acknowledged_block(plugin *plugin, struct block *block) {
-  int rc;
-
-  SYNCTRACE("on_acknowledged_block - height=%" INT64_FORMAT "\n", block->height);
-
-  /* send command to apply the new block */  //! -- is this needed?  it depends on enough signatures
-  rc = broadcast_block_commit(plugin, block);
-  if( rc ){
-    /* discard the block */
-    discard_block(block);
-    plugin->new_block = NULL;
-    return;
-  }
-
-  /* mark that the commit command for this block was already sent */
-  block->commit_sent = TRUE;
-
-  /* apply the new block on this node */
-  apply_block(plugin, block);
-
-}
-
-/****************************************************************************/
-
-//! ack or signed?
-
-SQLITE_PRIVATE void on_node_acknowledged_block(node *source_node, void *msg, int size) {
-  plugin *plugin = source_node->plugin;
-  aergolite *this_node = source_node->this_node;
-  struct block *block;
-  int64 height;
-
-  height = binn_map_int64(msg, PLUGIN_HEIGHT);
-
-  SYNCTRACE("on_node_acknowledged_block - height=%" INT64_FORMAT "\n", height);
-
-  block = plugin->new_block; //! ??
-  if( !block ) return;  /* already committed */
-
-  if( block->height!=height ){
-    SYNCTRACE("on_node_acknowledged_block - NOT FOUND\n");
-    return;
-  }
-
-  /* if the commit command for this block was already sent */
-  if( block->commit_sent ) return;
-
-  /* increment the number of nodes that acknowledged the block */
-  block->ack_count++;
-
-  SYNCTRACE("on_node_acknowledged_block - ack_count=%d total_authorized_nodes=%d\n",
-            block->ack_count, plugin->total_authorized_nodes);
-
-  /* check if we reached the majority of the nodes */
-  if( block->ack_count >= majority(plugin->total_authorized_nodes) ){
-    on_acknowledged_block(plugin, block);
-  }
-
 }

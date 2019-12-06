@@ -1169,10 +1169,11 @@ SQLITE_PRIVATE void worker_thread_on_peer_message(uv_msg_t *stream, void *msg, i
     SYNCTRACE("   received message: PLUGIN_NEW_BLOCK\n");
     on_new_block(node, msg, size);
     break;
-  case PLUGIN_COMMIT_BLOCK:
-    SYNCTRACE("   received message: PLUGIN_COMMIT_BLOCK\n");
-    on_commit_block(node, msg, size);
+  case PLUGIN_BLOCK_APPROVED:
+    SYNCTRACE("   received message: PLUGIN_BLOCK_APPROVED\n");
+    on_node_approved_block(node, msg, size);
     break;
+
 /*
   case PLUGIN_LOG_EXISTS:
     SYNCTRACE("   received message: PLUGIN_LOG_EXISTS\n");
@@ -1211,10 +1212,6 @@ SQLITE_PRIVATE void worker_thread_on_peer_message(uv_msg_t *stream, void *msg, i
   case PLUGIN_INSERT_TRANSACTION:
     SYNCTRACE("   received message: PLUGIN_INSERT_TRANSACTION\n");
     on_insert_transaction(node, msg, size);
-    break;
-  case PLUGIN_NEW_BLOCK_ACK:
-    SYNCTRACE("   received message: PLUGIN_NEW_BLOCK_ACK\n");
-    on_node_acknowledged_block(node, msg, size);
     break;
 
   default:
