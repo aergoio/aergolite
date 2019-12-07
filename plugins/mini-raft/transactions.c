@@ -690,7 +690,7 @@ loc_next:
     /* is it an authorization? */
     rc = read_authorized_pubkey(txn->log, pubkey, &pklen);
     if( rc==SQLITE_OK ){
-      rc = on_new_authorization(plugin, txn->log);
+      rc = on_new_authorization(plugin, txn->log, FALSE);
     }
 
     binn_free(txn->log);
