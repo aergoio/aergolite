@@ -110,40 +110,18 @@ SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log){
     plugin->is_authorized = TRUE;
   }
 
-#if 0
+  /* send the authorization to all the connected nodes */
   for( node=plugin->peers; node; node=node->next ){
     if( node->pklen==pklen && memcmp(node->pubkey,pubkey,pklen)==0 ){
-      /* send all the authorizations to the new node */
-      rc = send_authorizations(node, NULL);
       node->is_authorized = TRUE;
       authorized_node = node;
+      /* send all the authorizations to the new node */
+      rc = send_authorizations(node, NULL);
     }else if( node->is_authorized ){
       /* send only this new authorization to this node */
       rc = send_authorizations(node, log);
     }
     if( rc ) break;
-  }
-#endif
-
-  for( node=plugin->peers; node; node=node->next ){
-    if( node->pklen==pklen && memcmp(node->pubkey,pubkey,pklen)==0 ){
-      node->is_authorized = TRUE;
-      authorized_node = node;
-      /* send all the authorizations to the new node */
-      rc = send_authorizations(node, NULL);
-    }
-    if( rc ) break;
-  }
-
-  if( !authorized_node ){
-    /* if the authorized node is not connected, send the auth to all the connected nodes */
-    for( node=plugin->peers; node; node=node->next ){
-      if( node->is_authorized ){
-        /* send only this new authorization to this node */
-        rc = send_authorizations(node, log);
-        if( rc ) break;
-      }
-    }
   }
 
   /* if the authorized node is online */
