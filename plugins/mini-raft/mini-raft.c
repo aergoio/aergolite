@@ -608,7 +608,7 @@ SQLITE_PRIVATE void on_node_disconnected(node *node) {
   plugin *plugin;
   aergolite *this_node;
 
-  if (node == NULL) return;
+  if( node==NULL ) return;
   plugin = node->plugin;
   this_node = node->this_node;
 
@@ -627,6 +627,10 @@ SQLITE_PRIVATE void on_node_disconnected(node *node) {
       check_current_leader(plugin);
       //start_leader_election(plugin);
     }
+  }
+
+  if( plugin->new_block && plugin->new_block->sender==node ){
+    plugin->new_block->sender = NULL;
   }
 
   //enable_reconnect_timer(plugin);

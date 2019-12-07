@@ -130,7 +130,7 @@ SQLITE_PRIVATE void on_requested_block(node *node, void *msg, int size){
 
 /****************************************************************************/
 
-SQLITE_PRIVATE int rollback_block(plugin *plugin){
+SQLITE_PRIVATE void rollback_block(plugin *plugin){
   aergolite *this_node = plugin->this_node;
 
   aergolite_rollback_block(this_node);
@@ -361,7 +361,7 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
   block->header = sqlite3_memdup(header, binn_size(header));
   block->body   = sqlite3_memdup(body,   binn_size(body));
 
-  block->sender = node; //! DANGEROUS! it can point to released memory
+  block->sender = node;
 
   if( !block->header || !block->body ){
     SYNCTRACE("on_new_block FAILED header=%p body=%p\n", block->header, block->body);
