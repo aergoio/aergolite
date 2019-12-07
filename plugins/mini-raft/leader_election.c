@@ -277,7 +277,7 @@ SQLITE_PRIVATE int calculate_new_leader(plugin *plugin){
   /* check the highest number of transactions */
   max_blocks = last_block;
   for( node=plugin->peers; node; node=node->next ){
-    if( node->is_authorized ){
+    if( node->is_authorized && node->last_block!=-1 ){
       if( node->last_block>max_blocks ) max_blocks = node->last_block;
     }
   }
@@ -459,7 +459,7 @@ SQLITE_PRIVATE void on_peer_last_block(
 
   pnum = arg;
   pid = stripchr(pnum, ':');
-  last_block = atoi(pnum);
+  last_block = atoi(pnum);  //! change to unsigned 64 bit
   node_id = atoi(pid);
 
   SYNCTRACE("node %d last block height: %d\n", node_id, last_block);
