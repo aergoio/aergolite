@@ -446,7 +446,7 @@ SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
   for( txn=plugin->mempool; txn; txn=txn->next ){
     if( txn->block_height==0 ) count++;
   }
-  if( count==0 ) return NULL;
+  if( count==0 ) return (struct block *) -1;
 
   /* get the list of last_nonce for each node */
   build_last_nonce_array(plugin);
@@ -541,12 +541,19 @@ SQLITE_PRIVATE void new_block_timer_cb(uv_timer_t* handle) {
 
   SYNCTRACE("new_block_timer_cb\n");
 
+  if( !plugin->is_leader ){
+    SYNCTRACE("new_block_timer_cb not longer the leader node\n");
+    return;
+  }
+
   block = create_new_block(plugin);
   if( !block ){
+    SYNCTRACE("create_new_block FAILED. restarting the timer\n");
     /* restart the timer */
     uv_timer_start(&plugin->new_block_timer, new_block_timer_cb, NEW_BLOCK_WAIT_INTERVAL, 0);
     return;
   }
+  if( block==(struct block *)-1 ) return;
 
   /* store the new block */
   //llist_add(&plugin->blocks, block);
