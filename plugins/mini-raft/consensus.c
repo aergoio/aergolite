@@ -127,6 +127,19 @@ SQLITE_PRIVATE void on_requested_block(node *node, void *msg, int size){
 
 }
 #endif
+
+/****************************************************************************/
+
+SQLITE_PRIVATE int rollback_block(plugin *plugin){
+  aergolite *this_node = plugin->this_node;
+
+  aergolite_rollback_block(this_node);
+
+  discard_block(plugin->new_block);
+  plugin->new_block = NULL;
+
+}
+
 /****************************************************************************/
 
 // iterate the payload to check the transactions
@@ -334,6 +347,11 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
     return;
   }
 
+  /* if another block is open, discard it */
+  if( plugin->new_block ){
+    rollback_block(plugin);
+  }
+
   /* allocate a new block structure */
   block = sqlite3_malloc_zero(sizeof(struct block));
   if( !block ) return;  // SQLITE_NOMEM;
@@ -447,6 +465,11 @@ SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
     if( txn->block_height==0 ) count++;
   }
   if( count==0 ) return (struct block *) -1;
+
+  /* if another block is open, discard it */
+  if( plugin->new_block ){
+    rollback_block(plugin);
+  }
 
   /* get the list of last_nonce for each node */
   build_last_nonce_array(plugin);
