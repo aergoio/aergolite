@@ -1302,7 +1302,7 @@ loc_again2:
         if( count>0 ) usleep(wait_time);
         rc = db_query_int32(&result, db[i], "select count(*) from t1");
         assert(rc==SQLITE_OK);
-        done = (result>2);
+        done = (result >= 2 + num_txns_on_online_nodes);
       }
       assert(done);
 
