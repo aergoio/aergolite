@@ -106,6 +106,9 @@ SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log, BOOL from_net
   rc = aergolite_new_authorization(this_node, log, pubkey, &pklen);
   if( rc ) return rc;
 
+  /* update the number of authorized nodes */
+  count_authorized_nodes(plugin);
+
   if( plugin->pklen==pklen && memcmp(plugin->pubkey,pubkey,pklen)==0 ){
     plugin->is_authorized = TRUE;
   }
