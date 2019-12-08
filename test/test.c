@@ -680,9 +680,6 @@ loc_again1:
   puts("");
 
 
-  /* check the protocol status */
-
-
   /* register the callback function used to sign the admin transactions */
 
   for(i=1; i<=n; i++){
@@ -1096,7 +1093,7 @@ loc_again1:
 
   for(node=1; node<=n; node++){
     int nrows;
-    printf("checking node %d", node);
+    printf("checking node %d\n", node);
 loc_again2:
     sqlite3_finalize(stmt); stmt = NULL;
     rc = sqlite3_prepare_v2(db[node], "pragma nodes", -1, &stmt, NULL);
@@ -1117,7 +1114,7 @@ loc_again2:
         if( strcmp(node_pubkey[j], nodepk)==0 ){
           //assert( external[0]==0 ); /* internal node */
           if( external[0]=='y' ){     /* "yes" */
-            printf("."); fflush(stdout);
+            printf("authorization for node %d has not arrived\n", j); fflush(stdout);
             usleep(wait_time);
             goto loc_again2;
           }
@@ -1126,12 +1123,11 @@ loc_again2:
       /* count how many peers this node is connected to */
       nrows++;
     }
-    puts("");
 
     assert( rc==SQLITE_DONE || rc==SQLITE_OK );
     sqlite3_finalize(stmt); stmt = NULL;
 
-    printf("connected to %d nodes\n", nrows);
+    printf("connected to %d nodes\n", nrows); fflush(stdout);
     if( node<=2 ){
       assert( nrows==n );
     }else{
@@ -1558,11 +1554,13 @@ void test_new_nodes(
 ){
   sqlite3 *db[512] = {0};
   char uri[256];
+  char node_pubkey[512][72];
   int last_nonce[512];
   int disconnect_nodes[512] = {0};
   int active_online_nodes[512] = {0};
   int connecting_nodes[512] = {0};
-  int rc, i, j, n, count, done;
+  sqlite3_stmt *stmt=NULL;
+  int rc, i, j, n, node, count, done;
 
   printf("----------------------------------------------------------\n"
          "test_new_nodes(\n"
@@ -1586,15 +1584,12 @@ void test_new_nodes(
   assert(n>=5 && n<512);
 
   /* delete the db files if they exist */
-
   delete_files(n);
 
-  /* open the connections to the databases */
+  /* generate private and public keys to manage the network */
+  prepare_blockchain_admin_keys();
 
-#if 0
-  assert( sqlite3_open("file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302", &db[1])==SQLITE_OK );
-  assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
-#endif
+  /* open the connections to the databases */
 
   sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
   assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
@@ -1616,8 +1611,99 @@ void test_new_nodes(
   /* set the initial nonce value for each node */
 
   for(i=1; i<=n; i++){
-    last_nonce[i] = 1;
+    last_nonce[i] = 0;
   }
+
+  for(i=1; i<=n_before; i++){
+    db_check_int(db[i], "PRAGMA last_nonce", last_nonce[i]);
+  }
+
+
+  /* get the public key for the new added nodes */
+  for(i=1; i<=n_before; i++){
+    rc = sqlite3_prepare_v2(db[i], "pragma nodes", -1, &stmt, NULL);
+    assert( rc==SQLITE_OK );
+    assert( stmt!=NULL );
+    assert( sqlite3_column_count(stmt)==9 );
+    assert( sqlite3_step(stmt)==SQLITE_ROW );
+    /* the first item has info about the requester node */
+    char *p = (char*)sqlite3_column_text(stmt, 1);
+    assert( p && strlen(p)<sizeof(node_pubkey[1]) );
+    strcpy(node_pubkey[i], p);
+    sqlite3_finalize(stmt); stmt = NULL;
+  }
+
+
+  /* register the callback function used to sign the admin transactions */
+
+  for(i=1; i<=n_before; i++){
+    sqlite3_create_function(db[i], "sign_transaction", 1, SQLITE_UTF8,
+      NULL, &on_sign_transaction, NULL, NULL);
+  }
+
+
+  /* add nodes to the network.
+  ** the command is signed in the callback function, using the network admin's private key */
+
+  int add_from_node = 2;
+
+  /* include some nodes on the network */
+  for(node=1; node<=n_before; node++){
+    char cmd[128];
+    printf("adding node %d to the network\n", node);
+    sprintf(cmd, "pragma add_node='%s'", node_pubkey[node]);
+    db_execute(db[add_from_node], cmd);
+  }
+
+  /* ensure that the nodes are included on the blockchain network */
+
+  for(node=1; node<=n_before; node++){
+    int nrows;
+    printf("checking node %d\n", node);
+loc_again2:
+    sqlite3_finalize(stmt); stmt = NULL;
+    rc = sqlite3_prepare_v2(db[node], "pragma nodes", -1, &stmt, NULL);
+    assert( rc==SQLITE_OK );
+    assert( stmt!=NULL );
+
+    // node_id | pubkey | address | CPU | OS | hostname | app | node_info | external |
+
+    assert( sqlite3_column_count(stmt)==9 );
+    nrows = 0;
+
+    while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
+      char *nodepk = (char*)sqlite3_column_text(stmt, 1);
+      char *external = (char*)sqlite3_column_text(stmt, 8);
+      assert( nodepk && external );
+      /* identify the node by the public key */
+      for(int j=1; j<=n_before; j++){
+        if( strcmp(node_pubkey[j], nodepk)==0 ){
+          //assert( external[0]==0 ); /* internal node */
+          if( external[0]=='y' ){     /* "yes" */
+            printf("authorization for node %d has not arrived\n", j); fflush(stdout);
+            usleep(wait_time);
+            goto loc_again2;
+          }
+        }
+      }
+      /* count how many peers this node is connected to */
+      nrows++;
+    }
+
+    assert( rc==SQLITE_DONE || rc==SQLITE_OK );
+    sqlite3_finalize(stmt); stmt = NULL;
+
+    printf("connected to %d nodes\n", nrows); fflush(stdout);
+    if( node<=2 ){
+      assert( nrows==n_before );
+    }else{
+      if( nrows<n_before ) goto loc_again2;
+    }
+  }
+
+
+
+  last_nonce[add_from_node] = n_before;
 
   for(i=1; i<=n_before; i++){
     db_check_int(db[i], "PRAGMA last_nonce", last_nonce[i]);
@@ -1626,13 +1712,14 @@ void test_new_nodes(
 
   /* execute 3 db transactions on one of the databases */
 
+  printf("executing transactions on nodes...");
+
   db_execute(db[starting_node], "create table t1 (name)");
   db_execute(db[starting_node], "insert into t1 values ('aa1')");
   db_execute(db[starting_node], "insert into t1 values ('aa2')");
 
-  last_nonce[starting_node] = 4;
+  last_nonce[starting_node] += 3;
 
-  db_check_int(db[starting_node], "PRAGMA last_nonce", 4);
   for(i=1; i<=n_before; i++){
     db_check_int(db[i], "PRAGMA last_nonce", last_nonce[i]);
   }
@@ -1642,9 +1729,10 @@ void test_new_nodes(
 
   done = 0;
   for(count=0; !done && count<100; count++){
-    char *result;
+    char query[64], *result;
     usleep(wait_time);
-    rc = db_query_str(&result, db[starting_node], "PRAGMA transaction_status(4)");
+    sprintf(query, "PRAGMA transaction_status(%d)", last_nonce[starting_node]);
+    rc = db_query_str(&result, db[starting_node], query);
     assert(rc==SQLITE_OK);
     done = (strcmp(result,"processed")==0);
     sqlite3_free(result);
@@ -1685,9 +1773,11 @@ void test_new_nodes(
     db_check_int(db[i], "select count(*) from t1 where name='aa1'", 1);
     db_check_int(db[i], "select count(*) from t1 where name='aa2'", 1);
 
-    char sql[128];
-    sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[i]);
-    db_check_str(db[i], sql, "processed");
+    if( last_nonce[i] > 0 ){
+      char sql[128];
+      sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[i]);
+      db_check_str(db[i], sql, "processed");
+    }
 
   }
 
@@ -1743,6 +1833,7 @@ void test_new_nodes(
 
     for(i=0; active_online_nodes[i]; i++){
       int node = active_online_nodes[i];
+      if( last_nonce[node]==0 ) continue;
 
       done = 0;
       for(count=0; !done && count<200; count++){
@@ -1840,6 +1931,9 @@ void test_new_nodes(
       printf("opening new node %d in offline mode\n", node);
       sprintf(uri, "file:db%d.db?blockchain=on&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
       assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
+      /* register the callback function used to sign the admin transactions */
+      sqlite3_create_function(db[node], "sign_transaction", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC,
+        NULL, &on_sign_transaction, NULL, NULL);
     }
 
     puts("executing offline transactions on new nodes...");
@@ -1892,28 +1986,66 @@ void test_new_nodes(
     if( node==1 ){
       //assert( sqlite3_open("file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302", &db[1])==SQLITE_OK );
       sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
-      assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
     }else if( node==2 ){
       //assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
       sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
-      assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
     }else{
       if( bind_to_random_ports ){
         sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
       }else{
         sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, 4300 + node, pkhex, block_interval);
       }
-      assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
+    }
+    assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
+  }
+
+  /* check the last nonce */
+  for(i=0; connecting_nodes[i]; i++){
+    int node = connecting_nodes[i];
+    db_check_int(db[node], "PRAGMA last_nonce", last_nonce[node]);
+  }
+
+  /* register the callback function used to sign the admin transactions */
+  sqlite3_create_function(db[add_from_node], "sign_transaction", 1, SQLITE_UTF8,
+    NULL, &on_sign_transaction, NULL, NULL);
+
+  /* get the public key for the new added nodes */
+  for(i=0; connecting_nodes[i]; i++){
+    int node = connecting_nodes[i];
+    if( node<=n_before ) continue;
+    rc = sqlite3_prepare_v2(db[node], "pragma nodes", -1, &stmt, NULL);
+    assert( rc==SQLITE_OK );
+    assert( stmt!=NULL );
+    assert( sqlite3_column_count(stmt)==9 );
+    assert( sqlite3_step(stmt)==SQLITE_ROW );
+    /* the first item has info about the requester node */
+    char *p = (char*)sqlite3_column_text(stmt, 1);
+    assert( p && strlen(p)<sizeof(node_pubkey[1]) );
+    strcpy(node_pubkey[node], p);
+    sqlite3_finalize(stmt); stmt = NULL;
+  }
+
+  /* authorize the new nodes on the network */
+  for(i=0; connecting_nodes[i]; i++){
+    int node = connecting_nodes[i];
+    if( node>n_before ){
+      char cmd[128];
+      printf("authorizing node %d on the network\n", node);
+      sprintf(cmd, "pragma add_node='%s'", node_pubkey[node]);
+      db_execute(db[add_from_node], cmd);
+      last_nonce[add_from_node]++;
     }
   }
 
 
-  /* check if they are up-to-date */
+  /* wait until the transactions are processed in a new block */
+
+  printf("waiting for new block\n"); fflush(stdout);
 
   for(i=0; connecting_nodes[i]; i++){
     int node = connecting_nodes[i];
 
-    printf("checking node %d\n", node); fflush(stdout);
+    printf("checking node %d", node); fflush(stdout);
 
     done = 0;
     for(count=0; !done && count<100; count++){
@@ -1925,6 +2057,34 @@ void test_new_nodes(
       sqlite3_free(result);
     }
     assert(done);
+
+    if( last_nonce[node]==0 ){ puts(""); continue; }
+
+    done = 0;
+    for(count=0; !done && count<200; count++){
+      char *result, sql[128];
+      if( count>0 ) usleep(150000);
+      sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[node]);
+      rc = db_query_str(&result, db[node], sql);
+      assert(rc==SQLITE_OK);
+      done = (strcmp(result,"processed")==0);
+      sqlite3_free(result);
+      printf("."); fflush(stdout);
+    }
+    assert(done);
+
+    puts("");
+  }
+
+
+  /* check if they are up-to-date */
+
+  puts("checking content"); fflush(stdout);
+
+  for(i=0; connecting_nodes[i]; i++){
+    int node = connecting_nodes[i];
+
+    printf("checking node %d\n", node); fflush(stdout);
 
     int total_rows = 2 + new_blocks_on_net * num_txns_per_block + n_old_with_content * num_offline_txns;
 
@@ -2071,6 +2231,9 @@ void test_new_nodes(
       printf("opening new node %d in offline mode\n", node);
       sprintf(uri, "file:db%d.db?blockchain=on&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
       assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
+      /* register the callback function used to sign the admin transactions */
+      sqlite3_create_function(db[node], "sign_transaction", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC,
+        NULL, &on_sign_transaction, NULL, NULL);
     }
 
     puts("executing offline transactions on new nodes...");
@@ -2121,7 +2284,7 @@ void test_new_nodes(
 
   for(i=0; connecting_nodes[i]; i++){
     int node = connecting_nodes[i];
-    if( node>n_before ){
+    if( node>n_after ){
       printf("connecting new node %d\n", node);
     }else{
       printf("reconnecting node %d\n", node);
@@ -2129,21 +2292,56 @@ void test_new_nodes(
     if( node==1 ){
       //assert( sqlite3_open("file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302", &db[1])==SQLITE_OK );
       sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
-      assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
     }else if( node==2 ){
       //assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
       sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
-      assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
     }else{
       if( bind_to_random_ports ){
         sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
       }else{
         sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, 4300 + node, pkhex, block_interval);
       }
-      assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
     }
+    assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
   }
 
+  /* check the last nonce */
+  for(i=0; connecting_nodes[i]; i++){
+    int node = connecting_nodes[i];
+    db_check_int(db[node], "PRAGMA last_nonce", last_nonce[node]);
+  }
+
+  /* register the callback function used to sign the admin transactions */
+  sqlite3_create_function(db[add_from_node], "sign_transaction", 1, SQLITE_UTF8,
+    NULL, &on_sign_transaction, NULL, NULL);
+
+  /* get the public key for the new added nodes */
+  for(i=0; connecting_nodes[i]; i++){
+    int node = connecting_nodes[i];
+    if( node<=n_after ) continue;
+    rc = sqlite3_prepare_v2(db[node], "pragma nodes", -1, &stmt, NULL);
+    assert( rc==SQLITE_OK );
+    assert( stmt!=NULL );
+    assert( sqlite3_column_count(stmt)==9 );
+    assert( sqlite3_step(stmt)==SQLITE_ROW );
+    /* the first item has info about the requester node */
+    char *p = (char*)sqlite3_column_text(stmt, 1);
+    assert( p && strlen(p)<sizeof(node_pubkey[1]) );
+    strcpy(node_pubkey[node], p);
+    sqlite3_finalize(stmt); stmt = NULL;
+  }
+
+  /* authorize the new nodes on the network */
+  for(i=0; connecting_nodes[i]; i++){
+    int node = connecting_nodes[i];
+    if( node>n_after ){
+      char cmd[128];
+      printf("authorizing node %d on the network\n", node);
+      sprintf(cmd, "pragma add_node='%s'", node_pubkey[node]);
+      db_execute(db[add_from_node], cmd);
+      last_nonce[add_from_node]++;
+    }
+  }
 
 
   /* check if the transactions are processed in a new block */
@@ -2236,6 +2434,8 @@ loc_exit:
   for(i=1; i<=n; i++){
     sqlite3_close(db[i]);
   }
+
+  secp256k1_context_destroy(ecdsa_ctx);
 
   puts("done");
 
@@ -2434,7 +2634,7 @@ goto loc_exit;
     /* new_blocks_on_net,     */ 1,
     /* num_offline_txns,      */ 3,
 
-    /* n_remaining_online,    */ 7,
+    /* n_remaining_online,    */ 6,
     /* n_new_no_content2,     */ 1,
     /* n_new_with_content2    */ 1
   );
@@ -2451,7 +2651,7 @@ goto loc_exit;
     /* new_blocks_on_net,     */ 1,
     /* num_offline_txns,      */ 3,
 
-    /* n_remaining_online,    */ 7,
+    /* n_remaining_online,    */ 6,
     /* n_new_no_content2,     */ 2,
     /* n_new_with_content2    */ 0
   );
