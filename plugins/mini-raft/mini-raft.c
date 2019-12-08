@@ -247,7 +247,6 @@ SQLITE_API void print_node_list(void *arg, void *vdbe) {
   plugin *plugin = (struct plugin *) arg;
   aergolite *this_node = plugin->this_node;
   struct node *node;
-  int64 last_block = plugin->current_block ? plugin->current_block->height : 0;
   char hostname[256], cpu[256], os[256], app[256], *node_info;
   char *pubkey, hexpubkey[72], address[32];
   int pklen;
@@ -272,7 +271,7 @@ SQLITE_API void print_node_list(void *arg, void *vdbe) {
      hostname,
      app,
      node_info ? node_info : "",
-     last_block==0 ? "yes" : "");
+     plugin->is_authorized ? "" : "yes");
 
   /* iterate over the connected nodes */
 
