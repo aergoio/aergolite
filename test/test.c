@@ -1364,21 +1364,17 @@ loc_again2:
     int node = disconnect_nodes[i];
     printf("reconnecting node %d\n", node);
     if( node==1 ){
-      //assert( sqlite3_open("file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302", &db[1])==SQLITE_OK );
       sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
-      assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
     }else if( node==2 ){
-      //assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
       sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
-      assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
     }else{
       if( bind_to_random_ports ){
         sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
       }else{
         sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, 4300 + node, pkhex, block_interval);
       }
-      assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
     }
+    assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
   }
 
 
@@ -1984,10 +1980,8 @@ loc_again2:
       printf("reconnecting node %d\n", node);
     }
     if( node==1 ){
-      //assert( sqlite3_open("file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302", &db[1])==SQLITE_OK );
       sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
     }else if( node==2 ){
-      //assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
       sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
     }else{
       if( bind_to_random_ports ){
@@ -2232,7 +2226,7 @@ loc_again2:
       sprintf(uri, "file:db%d.db?blockchain=on&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
       assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
       /* register the callback function used to sign the admin transactions */
-      sqlite3_create_function(db[node], "sign_transaction", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC,
+      sqlite3_create_function(db[node], "sign_transaction", 1, SQLITE_UTF8,
         NULL, &on_sign_transaction, NULL, NULL);
     }
 
@@ -2290,10 +2284,8 @@ loc_again2:
       printf("reconnecting node %d\n", node);
     }
     if( node==1 ){
-      //assert( sqlite3_open("file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302", &db[1])==SQLITE_OK );
       sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
     }else if( node==2 ){
-      //assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
       sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
     }else{
       if( bind_to_random_ports ){
@@ -2312,6 +2304,7 @@ loc_again2:
   }
 
   /* register the callback function used to sign the admin transactions */
+  assert( db[add_from_node] );
   sqlite3_create_function(db[add_from_node], "sign_transaction", 1, SQLITE_UTF8,
     NULL, &on_sign_transaction, NULL, NULL);
 
@@ -2348,10 +2341,30 @@ loc_again2:
 
   if( n_after2 >= majority(n) ){
 
+    printf("waiting for leader election"); fflush(stdout);
+
+    for(i=0; active_online_nodes[i]; i++){
+      int node = active_online_nodes[i];
+      done = 0;
+      for(count=0; !done && count<100; count++){
+        char *result;
+        if( count>0 ) usleep(wait_time);
+        rc = db_query_str(&result, db[node], "pragma protocol_status");
+        assert(rc==SQLITE_OK);
+        done = strstr(result,"\"is_leader\": true")>0 || strstr(result,"\"leader\": null")==0;
+        sqlite3_free(result);
+        printf("."); fflush(stdout);
+      }
+      assert(done);
+    }
+    puts("");
+
+
     printf("waiting for new block"); fflush(stdout);
 
     for(i=0; active_online_nodes[i]; i++){
       int node = active_online_nodes[i];
+      if( last_nonce[node]==0 ) continue;
       done = 0;
       for(count=0; !done && count<200; count++){
         char *result, sql[128];
@@ -2366,6 +2379,7 @@ loc_again2:
       assert(done);
     }
     puts("");
+
 
     /* check if the data was replicated to the other nodes */
 
@@ -2550,8 +2564,7 @@ int main(){
     /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,20,21,0}
   );
 
-goto loc_exit;
-
+#if 0
   test_reconnection(50, false, 500,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,0},
     /* num_txns_on_offline_nodes,  */ 9,
@@ -2572,7 +2585,6 @@ goto loc_exit;
     /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,20,25,44,45,0}
   );
 
-#if 0
   test_reconnection(150, false, 500,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,55,66,77,88,95,0},
     /* num_txns_on_offline_nodes,  */ 9,
