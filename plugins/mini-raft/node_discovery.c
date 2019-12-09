@@ -122,8 +122,6 @@ SQLITE_PRIVATE void send_peer_list(plugin *plugin, node *to_node){
 
 /****************************************************************************/
 
-#if 0
-
 SQLITE_PRIVATE void on_peer_list_request(node *node, void *msg, int size) {
   plugin *plugin = node->plugin;
 
@@ -135,13 +133,17 @@ SQLITE_PRIVATE void on_peer_list_request(node *node, void *msg, int size) {
 
 /****************************************************************************/
 
-SQLITE_PRIVATE void request_connected_nodes(plugin *plugin, node *node){
+SQLITE_PRIVATE void request_peer_list(plugin *plugin, node *node){
+  binn *map;
 
-  //TODO if required
+  SYNCTRACE("request_peer_list\n");
+
+  map = binn_map();
+  binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_GET_PEERS);
+  send_peer_message(node, map, NULL);
+  binn_free(map);
 
 }
-
-#endif
 
 /****************************************************************************/
 

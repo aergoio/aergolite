@@ -22,6 +22,8 @@ BOOL has_nodes_for_election(plugin *plugin){
     if( node->is_authorized && node->id!=0 ) count++;
   }
 
+  SYNCTRACE("has_nodes_for_election connected=%d\n", count);
+
   if( count<majority(plugin->total_authorized_nodes) ){
     return FALSE;
   }
@@ -391,7 +393,11 @@ SQLITE_PRIVATE void on_new_election_request(
 
   if( !has_nodes_for_election(plugin) ){
     SYNCTRACE("on_new_election_request - no sufficient nodes\n");
-    return;
+    if( node ){
+      request_peer_list(plugin, node);
+    }else{
+      return;
+    }
   }
 
   if( plugin->leader_node ){

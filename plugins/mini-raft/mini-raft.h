@@ -27,8 +27,9 @@
 #define PLUGIN_CMD_ID              0xcd01     /* peer identification */
 //#define PLUGIN_REQUEST_NODE_ID     0xcd02     /* request a node id */
 //#define PLUGIN_NEW_NODE_ID         0xcd03     /* send the new node id */
-#define PLUGIN_ID_CONFLICT         0xcd04     /* there is another node with the same id */
+#define PLUGIN_ID_CONFLICT         0xcd03     /* there is another node with the same id */
 
+#define PLUGIN_GET_PEERS           0xcd04     /* request the list of peers */
 #define PLUGIN_PEERS               0xcd05     /* list of peers */
 
 #define PLUGIN_CMD_PING            0xcd06     /* check if alive */
@@ -393,7 +394,9 @@ SQLITE_PRIVATE void register_tcp_message(char *name, tcp_message_callback callba
 
 SQLITE_PRIVATE void start_node_discovery(plugin *plugin);
 
+SQLITE_PRIVATE void request_peer_list(plugin *plugin, node *node);
 SQLITE_PRIVATE void send_peer_list(plugin *plugin, node *to_node);
+SQLITE_PRIVATE void on_peer_list_request(node *node, void *msg, int size);
 SQLITE_PRIVATE void on_peer_list_received(node *node, void *msg, int size);
 
 /* node authorization */

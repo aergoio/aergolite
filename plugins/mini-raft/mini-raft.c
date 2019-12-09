@@ -1117,6 +1117,10 @@ SQLITE_PRIVATE void worker_thread_on_peer_message(uv_msg_t *stream, void *msg, i
     SYNCTRACE("   received message: PLUGIN_PEERS\n");
     on_peer_list_received(node, msg, size);
     break;
+  case PLUGIN_GET_PEERS:
+    SYNCTRACE("   received message: PLUGIN_GET_PEERS\n");
+    on_peer_list_request(node, msg, size);
+    break;
 
   case PLUGIN_TEXT: {
     char *text = binn_map_str(msg, PLUGIN_TEXT);
