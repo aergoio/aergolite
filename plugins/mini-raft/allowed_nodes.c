@@ -88,7 +88,7 @@ SQLITE_PRIVATE void on_new_accepted_node(node *node) {
 
   send_mempool_transactions(plugin, node);
 
-  check_current_leader(plugin);
+  //check_current_leader(plugin);
 
 }
 
