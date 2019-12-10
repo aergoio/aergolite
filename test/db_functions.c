@@ -655,6 +655,7 @@ void add_to_array_list(int list[], int item){
   int i;
   for(i=0; list[i]; i++){}
   list[i] = item;
+  list[i+1] = 0;
 }
 
 /****************************************************************************/
