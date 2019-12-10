@@ -445,11 +445,6 @@ SQLITE_PRIVATE bool is_next_nonce(plugin *plugin, int node_id, int64 nonce){
 
 /****************************************************************************/
 
-
-//! ---> it can only create it if the previous state is applied on the db!!!
-//!      it must check this
-
-
 SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
   aergolite *this_node = plugin->this_node;
   struct transaction *txn;
@@ -527,22 +522,6 @@ loc_failed2:
   if( block ) sqlite3_free(block);
   array_free(&plugin->nonces);
   return NULL;
-
-#if 0
-
-  // --- or if having the mempool implemented on the core:
-
-  binn *block = NULL;
-  binn *payload = NULL;
-
-  rc = aergolite_create_block(this_node, &block, &payload);
-
-
-  // first check if all txns are in the mempool, download those that aren't, and then:
-  rc = aergolite_apply_block(this_node, block, payload);  // apply_new_state
-
-#endif
-
 }
 
 /****************************************************************************/
@@ -551,7 +530,7 @@ loc_failed2:
 ** Used by the leader.
 ** -start a db transaction
 ** -execute the transactions from the local mempool (without the BEGIN and COMMIT)
-** LATER: -track which db pages were modified and their hashes
+** -track which db pages were modified and their hashes
 ** -create a "block" with the transactions ids (and page hashes)
 ** -roll back the database transaction
 ** -reset the block ack_count
@@ -582,12 +561,11 @@ SQLITE_PRIVATE void new_block_timer_cb(uv_timer_t* handle) {
   //llist_add(&plugin->blocks, block);
   plugin->new_block = block;
 
-  /* broadcast the block to the peers */
+  /* reset the block ack_count */
   block->ack_count = 1;  /* ack by this node */
-  broadcast_new_block(plugin, block);
 
-// if it fails, it can use a timer to try later
-// but if the connection is down probably it will have to discard the block
+  /* broadcast the block to the peers */
+  broadcast_new_block(plugin);
 
 }
 
@@ -602,24 +580,58 @@ SQLITE_PRIVATE void start_new_block_timer(plugin *plugin) {
 
 /****************************************************************************/
 
+SQLITE_PRIVATE binn* encode_new_block(plugin *plugin) {
+  struct block *block;
+  binn *map;
+  if( !plugin->new_block ) return NULL;
+  block = plugin->new_block;
+  map = binn_map();
+  if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_NEW_BLOCK)==FALSE ) goto loc_failed;
+  if( binn_map_set_int64(map, PLUGIN_HEIGHT, block->height)==FALSE ) goto loc_failed;
+  if( binn_map_set_blob(map, PLUGIN_HEADER, block->header, binn_size(block->header))==FALSE ) goto loc_failed;
+  if( binn_map_set_blob(map, PLUGIN_BODY, block->body, binn_size(block->body))==FALSE ) goto loc_failed;
+  return map;
+loc_failed:
+  if( map ) binn_free(map);
+  return NULL;
+}
+
+/****************************************************************************/
+
 /*
 ** Used by the leader.
 */
-SQLITE_PRIVATE int broadcast_new_block(plugin *plugin, struct block *block) {
+SQLITE_PRIVATE void send_new_block(plugin *plugin, node *node) {
+  binn *map;
+
+  if( !plugin->new_block ) return;
+
+  SYNCTRACE("send_new_block - height=%" INT64_FORMAT "\n",
+            plugin->new_block->height);
+
+  map = encode_new_block(plugin);
+  if( map ){
+    send_peer_message(node, map, NULL);
+    binn_free(map);
+  }
+
+}
+
+/****************************************************************************/
+
+/*
+** Used by the leader.
+*/
+SQLITE_PRIVATE int broadcast_new_block(plugin *plugin) {
   struct node *node;
   binn *map;
 
   SYNCTRACE("broadcast_new_block - height=%" INT64_FORMAT "\n",
-            block->height);
+            plugin->new_block->height);
 
   /* signal other peers that there is a new transaction */
-  map = binn_map();
+  map = encode_new_block(plugin);
   if( !map ) return SQLITE_BUSY;  /* flag to retry the command later */
-
-  binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_NEW_BLOCK);
-  binn_map_set_int64(map, PLUGIN_HEIGHT, block->height);
-  binn_map_set_blob(map, PLUGIN_HEADER, block->header, binn_size(block->header));
-  binn_map_set_blob(map, PLUGIN_BODY, block->body, binn_size(block->body));
 
   for( node=plugin->peers; node; node=node->next ){
     if( node->is_authorized ){

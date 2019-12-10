@@ -414,6 +414,9 @@ SQLITE_PRIVATE void on_request_state_update(node *node, void *msg, int size) {
 
   binn_free(list); list = NULL;
 
+  /* if there is an open uncommitted block, send it to the peer */
+  send_new_block(plugin, node);
+
   return;
 loc_failed:
   SYNCTRACE("on_request_state_update - FAILED\n");
