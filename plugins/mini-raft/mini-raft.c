@@ -624,7 +624,6 @@ SQLITE_PRIVATE void on_node_disconnected(node *node) {
     uv_timer_stop(&plugin->process_transactions_timer);
     if( plugin->thread_active ){
       check_current_leader(plugin);
-      //start_leader_election(plugin);
     }
   }
 

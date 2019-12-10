@@ -90,6 +90,12 @@ SQLITE_PRIVATE void on_new_accepted_node(node *node) {
 
   //check_current_leader(plugin);
 
+  if( plugin->is_leader ){
+    /* it will check whether there are transactions to be processed and
+    ** enough connected nodes */
+    start_new_block_timer(plugin);
+  }
+
 }
 
 /****************************************************************************/

@@ -419,6 +419,17 @@ SQLITE_PRIVATE void on_commit_block(node *node, void *msg, int size) {
 
 /****************************************************************************/
 
+SQLITE_PRIVATE int count_mempool_unused_txns(plugin *plugin){
+  struct transaction *txn;
+  int count = 0;
+  for( txn=plugin->mempool; txn; txn=txn->next ){
+    if( txn->block_height==0 ) count++;
+  }
+  return count;
+}
+
+/****************************************************************************/
+
 SQLITE_PRIVATE bool is_next_nonce(plugin *plugin, int node_id, int64 nonce){
   struct node_nonce *item;
   int count, i;
@@ -455,11 +466,11 @@ SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
   SYNCTRACE("create_new_block\n");
 
   /* are there unused transactions on mempool? */
-  count = 0;
-  for( txn=plugin->mempool; txn; txn=txn->next ){
-    if( txn->block_height==0 ) count++;
+  if( count_mempool_unused_txns(plugin)==0 ||
+      !has_nodes_for_consensus(plugin)
+  ){
+    return (struct block *) -1;
   }
-  if( count==0 ) return (struct block *) -1;
 
   /* if another block is open, discard it */
   if( plugin->new_block ){
@@ -572,6 +583,9 @@ SQLITE_PRIVATE void new_block_timer_cb(uv_timer_t* handle) {
 /****************************************************************************/
 
 SQLITE_PRIVATE void start_new_block_timer(plugin *plugin) {
+  //if( plugin->new_block ) return;
+  if( count_mempool_unused_txns(plugin)==0 ) return;
+  if( !has_nodes_for_consensus(plugin) ) return;
   if( !uv_is_active((uv_handle_t*)&plugin->new_block_timer) ){
     SYNCTRACE("start_new_block_timer\n");
     uv_timer_start(&plugin->new_block_timer, new_block_timer_cb, plugin->block_interval, 0);

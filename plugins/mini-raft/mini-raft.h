@@ -326,6 +326,8 @@ SQLITE_PRIVATE int send_udp_message(plugin *plugin, const struct sockaddr *addre
 
 SQLITE_PRIVATE void on_text_command_received(node *node, char *message);
 
+SQLITE_PRIVATE BOOL has_nodes_for_consensus(plugin *plugin);
+
 /* leader checking and election */
 
 SQLITE_PRIVATE void on_new_election_request(plugin *plugin, node *node, char *arg);
@@ -356,7 +358,6 @@ SQLITE_PRIVATE void request_state_update(plugin *plugin);
 SQLITE_PRIVATE void start_new_block_timer(plugin *plugin);
 SQLITE_PRIVATE int  broadcast_new_block(plugin *plugin);
 SQLITE_PRIVATE void send_new_block(plugin *plugin, node *node);
-
 
 /* event loop and timers */
 
