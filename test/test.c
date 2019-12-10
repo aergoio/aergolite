@@ -2324,6 +2324,23 @@ loc_again2:
     sqlite3_finalize(stmt); stmt = NULL;
   }
 
+  /* count how many peers each node is connected to */
+  for(i=0; active_online_nodes[i]; i++){
+    int node = active_online_nodes[i];
+    int nauths = 0, npeers = 0;
+    rc = sqlite3_prepare_v2(db[node], "pragma nodes", -1, &stmt, NULL);
+    assert( rc==SQLITE_OK );
+    assert( stmt!=NULL );
+    while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
+      char *address = (char*)sqlite3_column_text(stmt, 2);
+      if( address[0] ) npeers++;
+      nauths++;
+    }
+    assert( rc==SQLITE_DONE || rc==SQLITE_OK );
+    sqlite3_finalize(stmt); stmt = NULL;
+    printf("node %d connected to %d nodes. total of %d authorizations\n", node, npeers-1, nauths);
+  }
+
   /* authorize the new nodes on the network */
   for(i=0; connecting_nodes[i]; i++){
     int node = connecting_nodes[i];
@@ -2359,6 +2376,22 @@ loc_again2:
     }
     puts("");
 
+    /* count how many peers each node is connected to */
+    for(i=0; active_online_nodes[i]; i++){
+      int node = active_online_nodes[i];
+      int nauths = 0, npeers = 0;
+      rc = sqlite3_prepare_v2(db[node], "pragma nodes", -1, &stmt, NULL);
+      assert( rc==SQLITE_OK );
+      assert( stmt!=NULL );
+      while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
+        char *address = (char*)sqlite3_column_text(stmt, 2);
+        if( address[0] ) npeers++;
+        nauths++;
+      }
+      assert( rc==SQLITE_DONE || rc==SQLITE_OK );
+      sqlite3_finalize(stmt); stmt = NULL;
+      printf("node %d connected to %d nodes. total of %d authorizations\n", node, npeers-1, nauths);
+    }
 
     printf("waiting for new block"); fflush(stdout);
 
