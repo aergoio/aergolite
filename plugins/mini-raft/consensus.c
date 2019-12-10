@@ -622,7 +622,9 @@ SQLITE_PRIVATE int broadcast_new_block(plugin *plugin, struct block *block) {
   binn_map_set_blob(map, PLUGIN_BODY, block->body, binn_size(block->body));
 
   for( node=plugin->peers; node; node=node->next ){
-    send_peer_message(node, map, NULL);
+    if( node->is_authorized ){
+      send_peer_message(node, map, NULL);
+    }
   }
 
   binn_free(map);
