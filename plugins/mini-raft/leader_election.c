@@ -7,7 +7,7 @@ SQLITE_PRIVATE void on_leader_vote(plugin *plugin, node *node, char *arg);
 
 /****************************************************************************/
 
-BOOL has_nodes_for_election(plugin *plugin){
+SQLITE_PRIVATE BOOL has_nodes_for_consensus(plugin *plugin){
   node *node;
   int count;
 
@@ -21,6 +21,8 @@ BOOL has_nodes_for_election(plugin *plugin){
   for( node=plugin->peers; node; node=node->next ){
     if( node->is_authorized && node->id!=0 ) count++;
   }
+
+  SYNCTRACE("has_nodes_for_consensus connected=%d\n", count);
 
   if( count<majority(plugin->total_authorized_nodes) ){
     return FALSE;
@@ -225,7 +227,7 @@ SQLITE_PRIVATE void start_current_leader_query(plugin *plugin) {
 
   reset_node_state(plugin);
 
-  if( !has_nodes_for_election(plugin) ){
+  if( !has_nodes_for_consensus(plugin) ){
     SYNCTRACE("start_current_leader_query - no sufficient nodes\n");
     // it could have a timer here to recall this fn again. now it is using
     // the aergolite timer to make the check regularly.
@@ -389,9 +391,13 @@ SQLITE_PRIVATE void on_new_election_request(
 
   if( plugin->in_election ) return;
 
-  if( !has_nodes_for_election(plugin) ){
+  if( !has_nodes_for_consensus(plugin) ){
     SYNCTRACE("on_new_election_request - no sufficient nodes\n");
-    return;
+    if( node ){
+      request_peer_list(plugin, node);
+    }else{
+      return;
+    }
   }
 
   if( plugin->leader_node ){

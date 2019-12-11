@@ -247,7 +247,6 @@ SQLITE_API void print_node_list(void *arg, void *vdbe) {
   plugin *plugin = (struct plugin *) arg;
   aergolite *this_node = plugin->this_node;
   struct node *node;
-  int64 last_block = plugin->current_block ? plugin->current_block->height : 0;
   char hostname[256], cpu[256], os[256], app[256], *node_info;
   char *pubkey, hexpubkey[72], address[32];
   int pklen;
@@ -272,7 +271,7 @@ SQLITE_API void print_node_list(void *arg, void *vdbe) {
      hostname,
      app,
      node_info ? node_info : "",
-     last_block==0 ? "yes" : "");
+     plugin->is_authorized ? "" : "yes");
 
   /* iterate over the connected nodes */
 
@@ -625,7 +624,6 @@ SQLITE_PRIVATE void on_node_disconnected(node *node) {
     uv_timer_stop(&plugin->process_transactions_timer);
     if( plugin->thread_active ){
       check_current_leader(plugin);
-      //start_leader_election(plugin);
     }
   }
 
@@ -933,13 +931,14 @@ SQLITE_PRIVATE void reconnect_timer_cb(uv_timer_t* handle) {
 /*
 ** Do not call this function with the remote connected port in case of incoming
 ** TCP connections. Use the remote bind port.
+** Returns true if starting a connetion, false otherwise.
 */
-SQLITE_PRIVATE void check_peer_connection(plugin *plugin, char *ip_address, int port) {
+SQLITE_PRIVATE BOOL check_peer_connection(plugin *plugin, char *ip_address, int port) {
   node *node;
 
   SYNCTRACE("check_peer_connection %s:%d\n", ip_address, port);
 
-  if( is_local_ip_address(ip_address) && port==plugin->bind->port ) return;
+  if( is_local_ip_address(ip_address) && port==plugin->bind->port ) return FALSE;
 
   /* check if already connected to this peer */
 
@@ -947,7 +946,7 @@ SQLITE_PRIVATE void check_peer_connection(plugin *plugin, char *ip_address, int 
     if( strcmp(node->host,ip_address)==0 && node->bind_port==port ){
       if( node->conn_state==CONN_STATE_CONNECTING || node->conn_state==CONN_STATE_CONNECTED ){
         SYNCTRACE("check_peer_connection: %s:%d already connected\n", ip_address, port);
-        return;
+        return FALSE;
       }else{
         SYNCTRACE("check_peer_connection: reconnecting to %s:%d\n", ip_address, port);
         goto loc_reconnect;
@@ -960,7 +959,7 @@ SQLITE_PRIVATE void check_peer_connection(plugin *plugin, char *ip_address, int 
   SYNCTRACE("check_peer_connection: connecting to %s:%d\n", ip_address, port);
 
   node = new_node(plugin->loop);
-  if( !node ) return;
+  if( !node ) return FALSE;  //! error
 
   strcpy(node->host, ip_address);
   node->port = port;
@@ -970,6 +969,7 @@ loc_reconnect:
   node->conn_type = CONN_OUTGOING;
   connect_to_peer(node);
 
+  return TRUE;
 }
 
 /****************************************************************************/
@@ -1119,6 +1119,10 @@ SQLITE_PRIVATE void worker_thread_on_peer_message(uv_msg_t *stream, void *msg, i
   case PLUGIN_PEERS:
     SYNCTRACE("   received message: PLUGIN_PEERS\n");
     on_peer_list_received(node, msg, size);
+    break;
+  case PLUGIN_GET_PEERS:
+    SYNCTRACE("   received message: PLUGIN_GET_PEERS\n");
+    on_peer_list_request(node, msg, size);
     break;
 
   case PLUGIN_TEXT: {

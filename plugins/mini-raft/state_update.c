@@ -351,6 +351,8 @@ SQLITE_PRIVATE void on_request_state_update(node *node, void *msg, int size) {
     }
     if( send_peer_message(node, map, NULL)==FALSE ) goto loc_failed;
     binn_free(map); map = NULL;
+    /* if there is an open uncommitted block, send it to the peer */
+    send_new_block(plugin, node);
     return;
   }
 
@@ -413,6 +415,9 @@ SQLITE_PRIVATE void on_request_state_update(node *node, void *msg, int size) {
   binn_free(map); map = NULL;
 
   binn_free(list); list = NULL;
+
+  /* if there is an open uncommitted block, send it to the peer */
+  send_new_block(plugin, node);
 
   return;
 loc_failed:

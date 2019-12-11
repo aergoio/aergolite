@@ -88,7 +88,13 @@ SQLITE_PRIVATE void on_new_accepted_node(node *node) {
 
   send_mempool_transactions(plugin, node);
 
-  check_current_leader(plugin);
+  //check_current_leader(plugin);
+
+  if( plugin->is_leader ){
+    /* it will check whether there are transactions to be processed and
+    ** enough connected nodes */
+    start_new_block_timer(plugin);
+  }
 
 }
 
@@ -105,6 +111,9 @@ SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log, BOOL from_net
   /* verify and store the authorization */
   rc = aergolite_new_authorization(this_node, log, pubkey, &pklen);
   if( rc ) return rc;
+
+  /* update the number of authorized nodes */
+  count_authorized_nodes(plugin);
 
   if( plugin->pklen==pklen && memcmp(plugin->pubkey,pubkey,pklen)==0 ){
     plugin->is_authorized = TRUE;

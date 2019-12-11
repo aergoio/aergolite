@@ -67,6 +67,7 @@ SQLITE_PRIVATE void on_peer_list_received(node *node, void *msg, int size) {
   plugin *plugin = node->plugin;
   binn_iter iter;
   binn *list, item;
+  BOOL some_is_connecting=FALSE;
 
   list = binn_map_list(msg, PLUGIN_PEERS);
 
@@ -76,7 +77,13 @@ SQLITE_PRIVATE void on_peer_list_received(node *node, void *msg, int size) {
     char *host = binn_list_str(&item, 1);
     int   port = binn_list_int32(&item, 2);
     SYNCTRACE("\t node at %s:%d\n", host, port);
-    check_peer_connection(plugin, host, port);
+    if( check_peer_connection(plugin,host,port)==TRUE ){
+      some_is_connecting = TRUE;
+    }
+  }
+
+  if( !some_is_connecting ){
+    check_current_leader(plugin);
   }
 
 }
@@ -115,8 +122,6 @@ SQLITE_PRIVATE void send_peer_list(plugin *plugin, node *to_node){
 
 /****************************************************************************/
 
-#if 0
-
 SQLITE_PRIVATE void on_peer_list_request(node *node, void *msg, int size) {
   plugin *plugin = node->plugin;
 
@@ -128,13 +133,17 @@ SQLITE_PRIVATE void on_peer_list_request(node *node, void *msg, int size) {
 
 /****************************************************************************/
 
-SQLITE_PRIVATE void request_connected_nodes(plugin *plugin, node *node){
+SQLITE_PRIVATE void request_peer_list(plugin *plugin, node *node){
+  binn *map;
 
-  //TODO if required
+  SYNCTRACE("request_peer_list\n");
+
+  map = binn_map();
+  binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_GET_PEERS);
+  send_peer_message(node, map, NULL);
+  binn_free(map);
 
 }
-
-#endif
 
 /****************************************************************************/
 
