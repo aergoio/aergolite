@@ -274,9 +274,11 @@ struct plugin {
   BOOL is_leader;             /* True if this node is the current leader */
   node *leader_node;          /* Points to the leader node if it is connected */
   node *last_leader;          /* Points to the previous leader node */
+  void *leader_query;
   struct leader_votes *leader_votes;
   BOOL in_leader_query;       /* True if in a leader query */
   BOOL in_election;           /* True if in a leader election */
+  BOOL some_nodes_in_election;/* True if any node is in a leader election during leader query */
 
   struct transaction *mempool;
   struct txn_list *special_txn; /* New special transaction */
