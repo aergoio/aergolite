@@ -322,6 +322,44 @@ loc_failed2:
 }
 
 /****************************************************************************/
+/****************************************************************************/
+
+SQLITE_PRIVATE void add_node_connection_identifier(
+  node *node,
+  int node_id,
+  uint64 random_no
+){
+
+  if( !node->conn_id ){
+    node->conn_id = binn_map();
+  }
+
+  binn_map_set_uint64(node->conn_id, node_id, random_no);
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE node* choose_duplicate_connection(node *node1, node *node2){
+  plugin *plugin = node1->plugin;
+  uint64 value1, value2;
+  int id;
+
+  id = MIN(plugin->node_id, node1->id);
+  value1 = binn_map_uint64(node1->conn_id, id);
+
+  id = MIN(plugin->node_id, node2->id);
+  value2 = binn_map_uint64(node2->conn_id, id);
+
+  if( value1 < value2 ){
+    return node1;
+  }else{
+    return node2;
+  }
+
+}
+
+/****************************************************************************/
 
 SQLITE_PRIVATE void check_new_identified_node(node *new_node) {
   plugin *plugin = new_node->plugin;
@@ -343,6 +381,7 @@ SQLITE_PRIVATE void check_new_identified_node(node *new_node) {
   for( node=plugin->peers; node; node=node->next ){
     if( node!=new_node && memcmp(node->pubkey,new_node->pubkey,33)==0 ){
       SYNCTRACE("discarding previous connection from remote node\n");
+      node = choose_duplicate_connection(node, new_node);
       disconnect_peer(node);
       return;
     }
@@ -456,6 +495,7 @@ loc_failed:
 #endif
 
 /****************************************************************************/
+/****************************************************************************/
 
 SQLITE_PRIVATE void on_node_identification(node *node, void *msg, int size) {
   plugin *plugin = node->plugin;
@@ -558,6 +598,11 @@ SQLITE_PRIVATE void on_node_identification(node *node, void *msg, int size) {
     node->authorization_sent = TRUE;
   }
 
+  {
+    uint64 random_no = binn_map_uint64(msg, PLUGIN_RANDOM);
+    add_node_connection_identifier(node, node->id, random_no);
+  }
+
   /* xxx */
   check_new_identified_node(node);
 
@@ -628,6 +673,13 @@ SQLITE_PRIVATE BOOL send_node_identification(plugin *plugin, node *node) {
     goto loc_exit;
   }
   if( binn_map_set_blob(map, PLUGIN_SIGNATURE, signature, siglen)==FALSE ) goto loc_failed;
+
+  {
+    uint64 random_no;
+    sqlite3_randomness(sizeof(int64), &random_no);
+    if( binn_map_set_uint64(map, PLUGIN_RANDOM, random_no)==FALSE ) goto loc_failed;
+    add_node_connection_identifier(node, plugin->node_id, random_no);
+  }
 
   /* send the message to the peer */
 

@@ -1033,6 +1033,7 @@ SQLITE_PRIVATE void worker_thread_on_close(uv_handle_t *handle) {
       if( node->id_conflict ){
         stop_id_conflict_timer(node->id_conflict);
       }
+      binn_free(node->conn_id);
       sqlite3_free(node->info);
       sqlite3_free(node);
 

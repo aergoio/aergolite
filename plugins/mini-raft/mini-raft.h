@@ -27,6 +27,7 @@
 #define PLUGIN_CMD_ID              0xcd01     /* peer identification */
 //#define PLUGIN_REQUEST_NODE_ID     0xcd02     /* request a node id */
 //#define PLUGIN_NEW_NODE_ID         0xcd03     /* send the new node id */
+#define PLUGIN_RANDOM              0xcd02
 #define PLUGIN_ID_CONFLICT         0xcd03     /* there is another node with the same id */
 
 #define PLUGIN_GET_PEERS           0xcd04     /* request the list of peers */
@@ -186,6 +187,7 @@ struct node {
   node *next;            /* Next item in the list */
   int   id;              /* Node id */
 
+  binn *conn_id;
   struct node_id_conflict *id_conflict;
 
   int   conn_type;       /* outgoing or incoming connection */
