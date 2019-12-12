@@ -27,6 +27,7 @@
 #define PLUGIN_CMD_ID              0xcd01     /* peer identification */
 //#define PLUGIN_REQUEST_NODE_ID     0xcd02     /* request a node id */
 //#define PLUGIN_NEW_NODE_ID         0xcd03     /* send the new node id */
+#define PLUGIN_RANDOM              0xcd02
 #define PLUGIN_ID_CONFLICT         0xcd03     /* there is another node with the same id */
 
 #define PLUGIN_GET_PEERS           0xcd04     /* request the list of peers */
@@ -186,6 +187,7 @@ struct node {
   node *next;            /* Next item in the list */
   int   id;              /* Node id */
 
+  binn *conn_id;
   struct node_id_conflict *id_conflict;
 
   int   conn_type;       /* outgoing or incoming connection */
@@ -272,9 +274,11 @@ struct plugin {
   BOOL is_leader;             /* True if this node is the current leader */
   node *leader_node;          /* Points to the leader node if it is connected */
   node *last_leader;          /* Points to the previous leader node */
+  void *leader_query;
   struct leader_votes *leader_votes;
   BOOL in_leader_query;       /* True if in a leader query */
   BOOL in_election;           /* True if in a leader election */
+  BOOL some_nodes_in_election;/* True if any node is in a leader election during leader query */
 
   struct transaction *mempool;
   struct txn_list *special_txn; /* New special transaction */

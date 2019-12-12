@@ -1037,6 +1037,7 @@ SQLITE_PRIVATE void worker_thread_on_close(uv_handle_t *handle) {
       if( node->id_conflict ){
         stop_id_conflict_timer(node->id_conflict);
       }
+      binn_free(node->conn_id);
       sqlite3_free(node->info);
       sqlite3_free(node);
 
@@ -2084,6 +2085,7 @@ void * plugin_init(aergolite *this_node, char *uri) {
   plugin *plugin;
   char *discovery, *bind, *block_interval;
   int64 random_no;
+  int rc;
 
   SYNCTRACE("initializing a new instance of mini-raft plugin\n");
 
@@ -2101,6 +2103,9 @@ void * plugin_init(aergolite *this_node, char *uri) {
 
   plugin->pubkey = aergolite_pubkey(this_node, &plugin->pklen);
 
+  /* is this an authorizated node? */
+  rc = is_node_authorized(this_node, plugin->pubkey, plugin->pklen, &plugin->is_authorized);
+  if( rc ) goto loc_failed;
 
   plugin->is_leader = FALSE;
 

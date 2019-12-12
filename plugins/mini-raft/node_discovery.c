@@ -67,7 +67,7 @@ SQLITE_PRIVATE void on_peer_list_received(node *node, void *msg, int size) {
   plugin *plugin = node->plugin;
   binn_iter iter;
   binn *list, item;
-  BOOL some_is_connecting=FALSE;
+  BOOL is_connecting=FALSE;
 
   list = binn_map_list(msg, PLUGIN_PEERS);
 
@@ -78,11 +78,11 @@ SQLITE_PRIVATE void on_peer_list_received(node *node, void *msg, int size) {
     int   port = binn_list_int32(&item, 2);
     SYNCTRACE("\t node at %s:%d\n", host, port);
     if( check_peer_connection(plugin,host,port)==TRUE ){
-      some_is_connecting = TRUE;
+      is_connecting = TRUE;
     }
   }
 
-  if( !some_is_connecting ){
+  if( !is_connecting ){
     check_current_leader(plugin);
   }
 
@@ -90,34 +90,55 @@ SQLITE_PRIVATE void on_peer_list_received(node *node, void *msg, int size) {
 
 /****************************************************************************/
 
+SQLITE_PRIVATE void send_peer_list_to_node(node *node, binn *list){
+  /* create and send the packet */
+  binn *map = binn_map();
+  binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_PEERS);
+  binn_map_set_list (map, PLUGIN_PEERS, list);
+  send_peer_message(node, map, NULL);
+  binn_free(map);
+}
+
+/****************************************************************************/
+
 SQLITE_PRIVATE void send_peer_list(plugin *plugin, node *to_node){
   binn *list = binn_list();
+  binn *list2 = binn_list();
+  binn *item;
   node *node;
 
   SYNCTRACE("send_peer_list\n");
 
-  if( !list ) return;
+  if( !list || !list2 ) return;
+
+  item = binn_list();
+  binn_list_add_str(item, to_node->host);
+  binn_list_add_int32(item, to_node->bind_port);
+  binn_list_add_list(list2, item);
+  binn_free(item);
 
   for(node = plugin->peers; node; node = node->next){
     if( node->is_authorized && node!=to_node && node->bind_port>0 ){
-      binn *item = binn_list();
-      binn_list_add_str(item, node->host);
-      binn_list_add_int32(item, node->bind_port);
-      binn_list_add_list(list, item);
-      binn_free(item);
+      if( node->id > to_node->id ){
+        /* add this node to the list */
+        item = binn_list();
+        binn_list_add_str(item, node->host);
+        binn_list_add_int32(item, node->bind_port);
+        binn_list_add_list(list, item);
+        binn_free(item);
+      }else{  // if( node->id < to_node->id ){
+        /* inform the other peer to connect to the new one */
+        send_peer_list_to_node(node, list2);
+      }
     }
   }
 
   if( binn_count(list)>0 ){
-    /* create and send the packet */
-    binn *map = binn_map();
-    binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_PEERS);
-    binn_map_set_list (map, PLUGIN_PEERS, list);
-    send_peer_message(to_node, map, NULL);
-    binn_free(map);
+    send_peer_list_to_node(to_node, list);
   }
 
   binn_free(list);
+  binn_free(list2);
 }
 
 /****************************************************************************/
