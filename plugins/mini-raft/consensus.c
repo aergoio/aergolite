@@ -159,7 +159,7 @@ SQLITE_PRIVATE int verify_block(plugin *plugin, struct block *block){
   SYNCTRACE("verify_block\n");
 
   /* if this node is in a state update, return */
-  if( plugin->sync_down_state!=DB_STATE_IN_SYNC ) return SQLITE_ERROR;
+  if( plugin->sync_down_state!=DB_STATE_IN_SYNC ) return SQLITE_BUSY;
 
   //block = plugin->new_block;
   if( !block ) return SQLITE_EMPTY;
@@ -230,6 +230,7 @@ SQLITE_PRIVATE int verify_block(plugin *plugin, struct block *block){
     binn_free(map);
   }
 
+  SYNCTRACE("verify_block OK\n");
   return SQLITE_OK;
 
 loc_failed:
@@ -289,6 +290,7 @@ SQLITE_PRIVATE int commit_block(plugin *plugin, struct block *block){
   plugin->current_block = block;
   plugin->new_block = NULL;
 
+  SYNCTRACE("commit_block OK\n");
   return SQLITE_OK;
 
 loc_failed:
@@ -369,10 +371,6 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
     return;
   }
 
-  /* store the new block data */
-  if( plugin->new_block ) discard_block(plugin->new_block);
-  plugin->new_block = block;
-
   /* verify if the block is correct */
   verify_block(plugin, block);
 
@@ -399,6 +397,7 @@ SQLITE_PRIVATE void on_commit_block(node *node, void *msg, int size) {
   block = plugin->new_block;
   if( !block ){
     /* the block is not on memory. request it */
+    SYNCTRACE("on_commit_block - no open block\n");
     //request_block(plugin, block->height);  //! if it fails, start a state update
     request_state_update(plugin);
     return;
@@ -407,6 +406,7 @@ SQLITE_PRIVATE void on_commit_block(node *node, void *msg, int size) {
   /* check if the local block is the expected one */
   if( block->height!=height ){
     SYNCTRACE("on_commit_block - unexpected block height - cached block height: %d\n", block->height);
+    rollback_block(plugin);
     request_state_update(plugin);
     return;
   }
