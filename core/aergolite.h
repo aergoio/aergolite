@@ -52,6 +52,8 @@ struct block {
   void *header;
   void *body;
   void *signatures;
+  int  header_id;
+  int  body_id;
   BOOL verify_ok;
 #ifdef AERGOLITE_AMALGAMATION
   int  ack_count;
