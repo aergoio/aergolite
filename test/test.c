@@ -2701,7 +2701,10 @@ int main(){
     /* num_txns_on_online_nodes,   */ 0,
     /* active_online_nodes[],      */ (int[]){0},
     /* num_txns_on_reconnect,      */ 0,
-    /* active_nodes_on_reconnect[] */ (int[]){0}
+    /* active_nodes_on_reconnect[] */ (int[]){0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ true,
+    /* exec_while_adding           */ false
   );
 
   test_reconnection(10, false, 500,
@@ -2711,7 +2714,10 @@ int main(){
     /* num_txns_on_online_nodes,   */ 0,
     /* active_online_nodes[],      */ (int[]){0},
     /* num_txns_on_reconnect,      */ 3,
-    /* active_nodes_on_reconnect[] */ (int[]){3,6,9,0}
+    /* active_nodes_on_reconnect[] */ (int[]){3,6,9,0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ true,
+    /* exec_while_adding           */ false
   );
 
   test_reconnection(10, false, 500,
@@ -2721,7 +2727,10 @@ int main(){
     /* num_txns_on_online_nodes,   */ 3,
     /* active_online_nodes[],      */ (int[]){3,8,0},
     /* num_txns_on_reconnect,      */ 0,
-    /* active_nodes_on_reconnect[] */ (int[]){0}
+    /* active_nodes_on_reconnect[] */ (int[]){0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ true,
+    /* exec_while_adding           */ false
   );
 
   test_reconnection(10, false, 500,
@@ -2731,7 +2740,10 @@ int main(){
     /* num_txns_on_online_nodes,   */ 3,
     /* active_online_nodes[],      */ (int[]){3,8,0},
     /* num_txns_on_reconnect,      */ 5,
-    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,0}
+    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ true,
+    /* exec_while_adding           */ false
   );
 
   test_reconnection(10, false, 500,
@@ -2741,7 +2753,10 @@ int main(){
     /* num_txns_on_online_nodes,   */ 0,
     /* active_online_nodes[],      */ (int[]){0},
     /* num_txns_on_reconnect,      */ 0,
-    /* active_nodes_on_reconnect[] */ (int[]){0}
+    /* active_nodes_on_reconnect[] */ (int[]){0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ true,
+    /* exec_while_adding           */ false
   );
 
   test_reconnection(10, false, 500,

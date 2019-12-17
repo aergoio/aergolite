@@ -623,6 +623,20 @@ int random_number(int lower, int upper){
   return (rand() % (upper - lower + 1)) + lower;
 }
 
+/***************************************************************************/
+
+char * strip(char *mainstr, char *separator) {
+  char *ptr;
+
+  if( !mainstr ) return NULL;
+
+  ptr = strstr(mainstr, separator);
+  if( !ptr ) return NULL;
+  ptr[0] = '\0';
+  ptr += strlen(separator);
+  return ptr;
+}
+
 /****************************************************************************/
 
 bool in_array(int item, int len, int list[]){
