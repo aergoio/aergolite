@@ -275,7 +275,7 @@ SQLITE_PRIVATE int commit_block(plugin *plugin, struct block *block){
   /* remove the old transactions from the mempool */
   binn_list_foreach(list, value) {
     for( txn=plugin->mempool; txn; txn=txn->next ){
-      if( txn->block_height <= block->height - 2 ){
+      if( txn->block_height>0 && txn->block_height <= block->height - 2 ){
         discard_mempool_transaction(plugin, txn);
         break;
       }
