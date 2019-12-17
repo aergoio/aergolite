@@ -130,7 +130,7 @@ SQLITE_PRIVATE void on_requested_block(node *node, void *msg, int size){
 
 /****************************************************************************/
 
-SQLITE_PRIVATE int rollback_block(plugin *plugin){
+SQLITE_PRIVATE void rollback_block(plugin *plugin){
   aergolite *this_node = plugin->this_node;
 
   aergolite_rollback_block(this_node);
