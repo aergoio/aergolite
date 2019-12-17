@@ -504,7 +504,8 @@ loc_again:
       /* include this transaction on the block */
       /* no need to check the return result. if the execution failed or was rejected
       ** the nonce will be included in the block as a failed transaction */
-      aergolite_execute_transaction(this_node, txn->node_id, txn->nonce, txn->log);
+      rc = aergolite_execute_transaction(this_node, txn->node_id, txn->nonce, txn->log);
+      if( rc==SQLITE_PERM ) continue;
       update_last_nonce_array(plugin, txn->node_id, txn->nonce);
       txn->block_height = -1;
       count++;
