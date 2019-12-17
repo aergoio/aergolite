@@ -98,6 +98,14 @@ void delete_files(int n){
 
 /****************************************************************************/
 
+void delete_log(){
+  char fname[256];
+  sprintf(fname, "log-%d", getpid());
+  unlink(fname);
+}
+
+/****************************************************************************/
+
 void print_nodes(char *title, int list[]){
   printf("%s=%d  { ", title, len_array_list(list));
   for(int i=0; list[i]; i++){
@@ -119,6 +127,7 @@ void test_5_nodes(int bind_to_random_ports){
   /* delete the db files if they exist */
 
   delete_files(5);
+  delete_log();
 
   /* open the connections to the databases */
 
@@ -332,6 +341,7 @@ void test_invalid_admin(int n, int add_from_node, bool bind_to_random_ports, int
 
   /* delete the db files if they exist */
   delete_files(n);
+  delete_log();
 
   /* generate private and public keys to manage the network */
   prepare_blockchain_admin_keys();
@@ -604,6 +614,7 @@ void test_add_nodes(int n, int n_each_time, int add_from_node, bool bind_to_rand
 
   /* delete the db files if they exist */
   delete_files(n);
+  delete_log();
 
   /* generate private and public keys to manage the network */
   prepare_blockchain_admin_keys();
@@ -991,6 +1002,7 @@ void test_reconnection(
 
   /* delete the db files if they exist */
   delete_files(n);
+  delete_log();
 
   /* generate private and public keys to manage the network */
   prepare_blockchain_admin_keys();
@@ -1581,6 +1593,7 @@ void test_new_nodes(
 
   /* delete the db files if they exist */
   delete_files(n);
+  delete_log();
 
   /* generate private and public keys to manage the network */
   prepare_blockchain_admin_keys();
@@ -2709,6 +2722,7 @@ loc_exit:
 
   /* delete the test db files on success */
   delete_files(200);
+  delete_log();
 
   puts("OK. All tests pass!"); return 0;
 }
