@@ -523,6 +523,12 @@ SQLITE_PRIVATE void aergolite_core_timer_cb(uv_timer_t* handle){
 SQLITE_PRIVATE void after_connections_timer_cb(uv_timer_t* handle){
   plugin *plugin = (struct plugin *) handle->loop->data;
 
+  if( !plugin->peers ){
+    start_node_discovery(plugin);
+    uv_timer_start(&plugin->after_connections_timer, after_connections_timer_cb, 1500, 0);
+    return;
+  }
+
   check_base_db(plugin);
 
   //! this could be in another place if not doing anything with the base db
