@@ -831,7 +831,7 @@ loc_again2:
 
   /* check if the data was replicated to the other nodes */
 
-  for(i=2; i<=n; i++){
+  for(i=1; i<=n; i++){
 
     printf("checking node %d\n", i); fflush(stdout);
 
@@ -860,14 +860,6 @@ loc_again2:
     db_check_int(db[i], "select count(*) from t1 where name='aa2'", 1);
 
   }
-
-
-  /* db1 */
-
-  db_check_int(db[1], "select count(*) from t1", 2);
-  db_check_int(db[1], "select count(*) from t1 where name='aa1'", 1);
-  db_check_int(db[1], "select count(*) from t1 where name='aa2'", 1);
-
 
 
   /* execute more transactions on separate databases */
