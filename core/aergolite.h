@@ -275,6 +275,13 @@ SQLITE_API int aergolite_iterate_allowed_nodes(
 );
 
 
+SQLITE_API int aergolite_load_current_state(
+  aergolite *this_node,
+  int64 *pblock_height,
+  void **pheader,
+  void **pbody,
+  void **psignatures
+);
 
 SQLITE_PRIVATE int check_page(aergolite *this_node, Pgno pgno, void *data, int size);
 
