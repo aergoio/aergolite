@@ -2251,12 +2251,24 @@ loc_again2:
     }
     assert(done);
 
+    int total_tables = 1 + 1 + n_new_with_content * num_offline_txns;
+
+    done = 0;
+    for(count=0; !done && count<100; count++){
+      int result;
+      if( count>0 ) usleep(wait_time);
+      rc = db_query_int32(&result, db[node], "select count(*) from sqlite_master where type='table'");
+      assert(rc==SQLITE_OK);
+      done = (result >= total_tables);
+    }
+    assert(done);
+
     db_check_int(db[node], "select count(*) from t1 where name='aa1'", 1);
     db_check_int(db[node], "select count(*) from t1 where name='aa2'", 1);
     db_check_int(db[node], "select count(*) from t1 where name='online'", new_blocks_on_net * num_txns_per_block);
     db_check_int(db[node], "select count(*) from t1 where name='disconnected'", n_old_with_content * num_offline_txns);
     db_check_int(db[node], "select count(*) from t1", total_rows);
-    db_check_int(db[node], "select count(*) from sqlite_master where type='table'", 1 + 1 + n_new_with_content * num_offline_txns);
+    db_check_int(db[node], "select count(*) from sqlite_master where type='table'", total_tables);
 
   }
 
