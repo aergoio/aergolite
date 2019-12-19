@@ -302,7 +302,7 @@ SQLITE_PRIVATE void start_current_leader_query(plugin *plugin) {
 
   send_tcp_broadcast(plugin, "leader?");
 
-  uv_timer_start(&plugin->leader_check_timer, on_leader_check_timeout, 1000, 0);
+  uv_timer_start(&plugin->leader_check_timer, on_leader_check_timeout, 5000, 0);
 
 }
 
