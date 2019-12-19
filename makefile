@@ -138,9 +138,9 @@ $(SSHELL): shell.o $(LIBRARY)
 ifeq ($(OS),Windows_NT)
 	$(CC) $< -o $@ -L. -l$(IMPLIB) $(LFLAGS) -lbinn-1.0
 else ifeq ($(OS),OSX)
-	$(CC) $< -o $@ -L. -lsqlite3 -ldl -lbinn -lreadline
+	$(CC) $< -o $@ -L. -lsqlite3 -lbinn -lreadline -ldl
 else
-	$(CC) $< -o $@ -Wl,-rpath,$(LIBPATH) -L. -lsqlite3 -lbinn -lreadline -ldl
+	$(CC) $< -o $@ -Wl,-rpath,$(LIBPATH2) -L. -lsqlite3 -lbinn -lreadline -ldl
 endif
 	strip $(SSHELL)
 
@@ -171,7 +171,7 @@ clean:
 	rm -f *.o libaergolite.a libaergolite.dylib $(LIBRARY) $(LIBNICK1) $(LIBNICK2) $(LIBNICK3) $(LIBNICK4) $(SSHELL) test/runtest
 
 test/runtest: test/test.c test/db_functions.c
-	$(CC) $< -o $@ -L. -lsqlite3 -lsecp256k1
+	$(CC) $< -o $@ -Wl,-rpath=$(LIBPATH2) -L. -lsqlite3 -lsecp256k1
 
 test: test/runtest
 ifeq ($(OS),OSX)
@@ -214,19 +214,6 @@ else	# Linux
 endif
 endif
 
-tests: test.o seatest.o sqlite3dbg.o
-	gcc -g $^ -o $@ -lbinn -luv -ldl
-	cp tests test/tests
-	cd test && ./tests
-
-test.o: test/test.c
-	gcc -c $< -o $@
-
-seatest.o: ../common/seatest.c
-	gcc -c $< -o $@
-
-sqlite3dbg.o: sqlite3.c
-	gcc -g -DSQLITE_DEBUG=1 -DDEBUGPRINT -DSQLITE_HAS_CODEC -DSQLITE_USE_URI=1 -DSQLITE_THREADSAFE=1 -DHAVE_USLEEP -DSQLITE_ENABLE_COLUMN_METADATA -c $< -o $@
 
 # variables:
 #   $@  output
