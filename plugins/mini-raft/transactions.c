@@ -448,7 +448,8 @@ SQLITE_PRIVATE int store_transaction_on_mempool(
 
 SQLITE_PRIVATE void discard_mempool_transaction(plugin *plugin, struct transaction *txn){
 
-  SYNCTRACE("discard_mempool_transaction\n");
+  SYNCTRACE("discard_mempool_transaction node_id=%d nonce=%" INT64_FORMAT "\n",
+            txn->node_id, txn->nonce);
 
   /* remove the transaction from the mempool */
   if( txn ){

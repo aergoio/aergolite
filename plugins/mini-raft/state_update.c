@@ -144,6 +144,10 @@ SQLITE_PRIVATE void request_state_update(plugin *plugin) {
 
   plugin->sync_down_state = DB_STATE_SYNCHRONIZING;
 
+  if( plugin->new_block){
+    rollback_block(plugin);
+  }
+
   map = binn_map();
   if( !map ) goto loc_failed;
 
@@ -193,6 +197,12 @@ SQLITE_PRIVATE void on_update_db_page(node *node, void *msg, int size) {
 
   SYNCTRACE("on_update_db_page - pgno: %d  size: %d\n", pgno, size);
 
+  if( plugin->sync_down_state!=DB_STATE_SYNCHRONIZING ){
+    sqlite3_log(1, "on_update_db_page FAILED - the state is not synchronizing");
+    //request_state_update(plugin);  -- the apply msg from the previous request can cause problems
+    goto loc_failed;
+  }
+
   if( !plugin->is_updating_state ){
     /* start the state update */
     rc = aergolite_begin_state_update(this_node);
@@ -239,6 +249,13 @@ SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
   assert(header);
   //assert(signatures);
   assert(mod_pages);
+
+  if( plugin->sync_down_state!=DB_STATE_SYNCHRONIZING ||
+      !plugin->is_updating_state ){
+    sqlite3_log(1, "on_apply_state_update FAILED - the current node is not synchronizing");
+    //request_state_update(plugin);
+    goto loc_failed;
+  }
 
   /* commit the new state */
   //rc = aergolite_apply_state_update(this_node, header, body, signatures);

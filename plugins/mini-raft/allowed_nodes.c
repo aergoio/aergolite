@@ -37,7 +37,8 @@ SQLITE_PRIVATE int send_authorizations(node *node, void *log){
 
   SYNCTRACE("send_authorizations log=%p\n", log);
 
-  if( !node->is_authorized ) return SQLITE_PERM;
+  // do not make this check because authorization for other nodes can arrive first
+  //if( !node->is_authorized ) return SQLITE_PERM;
 
   /* send all the authorizations to the remote node */
 

@@ -120,6 +120,10 @@ SQLITE_PRIVATE void new_leader_election(plugin *plugin) {
 
 SQLITE_PRIVATE void start_leader_election(plugin *plugin) {
 
+  plugin->in_leader_query = FALSE;
+
+  if( !has_nodes_for_consensus(plugin) ) return;
+
   send_tcp_broadcast(plugin, "election");
 
   /* as the broadcast does not include itself, call the function directly */
@@ -146,8 +150,10 @@ SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle) {
         break;
       }
     }else{  /* querying the current leader */
-      leader_id = votes->id;
-      break;
+      if( votes->id!=0 ){
+        leader_id = votes->id;
+        break;
+      }
     }
   }
 
@@ -155,6 +161,11 @@ SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle) {
     array_free(&plugin->leader_query);
     if( plugin->some_nodes_in_election ){
       SYNCTRACE("on_leader_check_timeout: some nodes in election\n");
+      start_current_leader_query(plugin);
+      return;
+    }
+    if( !plugin->leader_votes ){
+      SYNCTRACE("on_leader_check_timeout: no answer from peers\n");
       start_current_leader_query(plugin);
       return;
     }
@@ -291,7 +302,7 @@ SQLITE_PRIVATE void start_current_leader_query(plugin *plugin) {
 
   send_tcp_broadcast(plugin, "leader?");
 
-  uv_timer_start(&plugin->leader_check_timer, on_leader_check_timeout, 1000, 0);
+  uv_timer_start(&plugin->leader_check_timer, on_leader_check_timeout, 5000, 0);
 
 }
 
@@ -342,7 +353,7 @@ SQLITE_PRIVATE int calculate_new_leader(plugin *plugin){
   for( node=plugin->peers; node; node=node->next ){
     if( node->is_authorized ){
       SYNCTRACE("calculate_new_leader node_id=%d last_block=%" INT64_FORMAT "\n", node->id, node->last_block);
-      if( node->last_block==max_blocks && node!=plugin->last_leader ){
+      if( node->last_block==max_blocks ){
         number = max_blocks ^ (uint64)node->id;
         if( number>biggest ) biggest = number;
       }
@@ -351,7 +362,7 @@ SQLITE_PRIVATE int calculate_new_leader(plugin *plugin){
 
   for( node=plugin->peers; node; node=node->next ){
     if( node->is_authorized ){
-      if( node->last_block==max_blocks && node!=plugin->last_leader ){
+      if( node->last_block==max_blocks ){
         number = max_blocks ^ (uint64)node->id;
         if( number==biggest ) return node->id;
       }
@@ -580,8 +591,6 @@ loc_found:
     }
   }
 
-  if( leader_id==0 ) goto loc_exit;
-
   for( votes=plugin->leader_votes; votes; votes=votes->next ){
     if( votes->id==leader_id ){
       votes->count++;
@@ -590,14 +599,17 @@ loc_found:
   }
 
   if( !votes ){  /* no item allocated for the given node id */
-    if( plugin->leader_votes && plugin->leader_votes->id!=0 && leader_id!=0 ){
-      /* there are nodes with different leader */
-      SYNCTRACE("on_requested_peer_leader: some node(s) with a different leader."
-                " leader1=%d leader2=%d\n", plugin->leader_votes->id, leader_id);
-      start_leader_election(plugin);
-      return;
+    for( votes=plugin->leader_votes; votes; votes=votes->next ){
+      if( votes->id!=0 && leader_id!=0 && votes->id!=leader_id ){
+        /* there are nodes with different leader */
+        SYNCTRACE("on_requested_peer_leader: some node(s) with a different leader."
+                  " leader1=%d leader2=%d\n", plugin->leader_votes->id, leader_id);
+        uv_timer_stop(&plugin->leader_check_timer);
+        start_leader_election(plugin);
+        return;
+      }
     }
-    /* store the node id */
+    /* store the leader id */
     votes = sqlite3_malloc(sizeof(struct leader_votes));
     if( !votes ) return;
     votes->id = leader_id;
