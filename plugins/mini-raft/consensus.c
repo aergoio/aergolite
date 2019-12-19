@@ -127,6 +127,19 @@ SQLITE_PRIVATE void on_requested_block(node *node, void *msg, int size){
 
 }
 #endif
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void rollback_block(plugin *plugin){
+  aergolite *this_node = plugin->this_node;
+
+  aergolite_rollback_block(this_node);
+
+  discard_block(plugin->new_block);
+  plugin->new_block = NULL;
+
+}
+
 /****************************************************************************/
 
 // iterate the payload to check the transactions
@@ -147,7 +160,7 @@ SQLITE_PRIVATE int verify_block(plugin *plugin, struct block *block){
   SYNCTRACE("verify_block\n");
 
   /* if this node is in a state update, return */
-  if( plugin->sync_down_state!=DB_STATE_IN_SYNC ) return SQLITE_ERROR;
+  if( plugin->sync_down_state!=DB_STATE_IN_SYNC ) return SQLITE_BUSY;
 
   //block = plugin->new_block;
   if( !block ) return SQLITE_EMPTY;
@@ -223,6 +236,7 @@ SQLITE_PRIVATE int verify_block(plugin *plugin, struct block *block){
   }
   binn_free(map);
 
+  SYNCTRACE("verify_block OK\n");
   return SQLITE_OK;
 
 loc_failed:
@@ -267,7 +281,7 @@ SQLITE_PRIVATE int commit_block(plugin *plugin, struct block *block){
   /* remove the old transactions from the mempool */
   binn_list_foreach(list, value) {
     for( txn=plugin->mempool; txn; txn=txn->next ){
-      if( txn->block_height <= block->height - 2 ){
+      if( txn->block_height>0 && txn->block_height <= block->height - 2 ){
         discard_mempool_transaction(plugin, txn);
         break;
       }
@@ -282,6 +296,7 @@ SQLITE_PRIVATE int commit_block(plugin *plugin, struct block *block){
   plugin->current_block = block;
   plugin->new_block = NULL;
 
+  SYNCTRACE("commit_block OK\n");
   return SQLITE_OK;
 
 loc_failed:
@@ -340,6 +355,11 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
     return;
   }
 
+  /* if another block is open, discard it */
+  if( plugin->new_block ){
+    rollback_block(plugin);
+  }
+
   /* allocate a new block structure */
   block = sqlite3_malloc_zero(sizeof(struct block));
   if( !block ) return;  // SQLITE_NOMEM;
@@ -354,10 +374,6 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
     discard_block(block);
     return;
   }
-
-  /* store the new block data */
-  if( plugin->new_block ) discard_block(plugin->new_block);
-  plugin->new_block = block;
 
   /* verify if the block is correct */
   verify_block(plugin, block);
@@ -387,6 +403,7 @@ SQLITE_PRIVATE void on_node_approved_block(node *source_node, void *msg, int siz
   if( !block ){
     if( !plugin->is_leader && ( !plugin->current_block || height>plugin->current_block->height ) ){
       /* the block is not on memory. request it */
+      SYNCTRACE("on_node_approved_block - no open block\n");
       //request_block(plugin, height);  //! if it fails, start a state update
       request_state_update(plugin);
     }
@@ -423,6 +440,17 @@ SQLITE_PRIVATE void on_node_approved_block(node *source_node, void *msg, int siz
 /****************************************************************************/
 /****************************************************************************/
 
+SQLITE_PRIVATE int count_mempool_unused_txns(plugin *plugin){
+  struct transaction *txn;
+  int count = 0;
+  for( txn=plugin->mempool; txn; txn=txn->next ){
+    if( txn->block_height==0 ) count++;
+  }
+  return count;
+}
+
+/****************************************************************************/
+
 SQLITE_PRIVATE bool is_next_nonce(plugin *plugin, int node_id, int64 nonce){
   struct node_nonce *item;
   int count, i;
@@ -449,11 +477,6 @@ SQLITE_PRIVATE bool is_next_nonce(plugin *plugin, int node_id, int64 nonce){
 
 /****************************************************************************/
 
-
-//! ---> it can only create it if the previous state is applied on the db!!!
-//!      it must check this
-
-
 SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
   aergolite *this_node = plugin->this_node;
   struct transaction *txn;
@@ -464,11 +487,16 @@ SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
   SYNCTRACE("create_new_block\n");
 
   /* are there unused transactions on mempool? */
-  count = 0;
-  for( txn=plugin->mempool; txn; txn=txn->next ){
-    if( txn->block_height==0 ) count++;
+  if( count_mempool_unused_txns(plugin)==0 ||
+      !has_nodes_for_consensus(plugin)
+  ){
+    return (struct block *) -1;
   }
-  if( count==0 ) return NULL;
+
+  /* if another block is open, discard it */
+  if( plugin->new_block ){
+    rollback_block(plugin);
+  }
 
   /* get the list of last_nonce for each node */
   build_last_nonce_array(plugin);
@@ -497,7 +525,8 @@ loc_again:
       /* include this transaction on the block */
       /* no need to check the return result. if the execution failed or was rejected
       ** the nonce will be included in the block as a failed transaction */
-      aergolite_execute_transaction(this_node, txn->node_id, txn->nonce, txn->log);
+      rc = aergolite_execute_transaction(this_node, txn->node_id, txn->nonce, txn->log);
+      if( rc==SQLITE_PERM ) continue;
       update_last_nonce_array(plugin, txn->node_id, txn->nonce);
       txn->block_height = -1;
       count++;
@@ -526,22 +555,6 @@ loc_failed2:
   if( block ) sqlite3_free(block);
   array_free(&plugin->nonces);
   return NULL;
-
-#if 0
-
-  // --- or if having the mempool implemented on the core:
-
-  binn *block = NULL;
-  binn *payload = NULL;
-
-  rc = aergolite_create_block(this_node, &block, &payload);
-
-
-  // first check if all txns are in the mempool, download those that aren't, and then:
-  rc = aergolite_apply_block(this_node, block, payload);  // apply_new_state
-
-#endif
-
 }
 
 /****************************************************************************/
@@ -550,7 +563,7 @@ loc_failed2:
 ** Used by the leader.
 ** -start a db transaction
 ** -execute the transactions from the local mempool (without the BEGIN and COMMIT)
-** LATER: -track which db pages were modified and their hashes
+** -track which db pages were modified and their hashes
 ** -create a "block" with the transactions ids (and page hashes)
 ** -roll back the database transaction
 ** -reset the block ack_count
@@ -563,29 +576,38 @@ SQLITE_PRIVATE void new_block_timer_cb(uv_timer_t* handle) {
 
   SYNCTRACE("new_block_timer_cb\n");
 
+  if( !plugin->is_leader ){
+    SYNCTRACE("new_block_timer_cb not longer the leader node\n");
+    return;
+  }
+
   block = create_new_block(plugin);
   if( !block ){
+    SYNCTRACE("create_new_block FAILED. restarting the timer\n");
     /* restart the timer */
     uv_timer_start(&plugin->new_block_timer, new_block_timer_cb, NEW_BLOCK_WAIT_INTERVAL, 0);
     return;
   }
+  if( block==(struct block *)-1 ) return;
 
   /* store the new block */
   //llist_add(&plugin->blocks, block);
   plugin->new_block = block;
 
-  /* broadcast the block to the peers */
+  /* reset the block ack_count */
   block->ack_count = 1;  /* ack by this node */
-  broadcast_new_block(plugin, block);
 
-// if it fails, it can use a timer to try later
-// but if the connection is down probably it will have to discard the block
+  /* broadcast the block to the peers */
+  broadcast_new_block(plugin);
 
 }
 
 /****************************************************************************/
 
 SQLITE_PRIVATE void start_new_block_timer(plugin *plugin) {
+  //if( plugin->new_block ) return;
+  if( count_mempool_unused_txns(plugin)==0 ) return;
+  if( !has_nodes_for_consensus(plugin) ) return;
   if( !uv_is_active((uv_handle_t*)&plugin->new_block_timer) ){
     SYNCTRACE("start_new_block_timer\n");
     uv_timer_start(&plugin->new_block_timer, new_block_timer_cb, plugin->block_interval, 0);
@@ -594,24 +616,58 @@ SQLITE_PRIVATE void start_new_block_timer(plugin *plugin) {
 
 /****************************************************************************/
 
+SQLITE_PRIVATE binn* encode_new_block(plugin *plugin) {
+  struct block *block;
+  binn *map;
+  if( !plugin->new_block ) return NULL;
+  block = plugin->new_block;
+  map = binn_map();
+  if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_NEW_BLOCK)==FALSE ) goto loc_failed;
+  if( binn_map_set_int64(map, PLUGIN_HEIGHT, block->height)==FALSE ) goto loc_failed;
+  if( binn_map_set_blob(map, PLUGIN_HEADER, block->header, binn_size(block->header))==FALSE ) goto loc_failed;
+  if( binn_map_set_blob(map, PLUGIN_BODY, block->body, binn_size(block->body))==FALSE ) goto loc_failed;
+  return map;
+loc_failed:
+  if( map ) binn_free(map);
+  return NULL;
+}
+
+/****************************************************************************/
+
 /*
 ** Used by the leader.
 */
-SQLITE_PRIVATE int broadcast_new_block(plugin *plugin, struct block *block) {
+SQLITE_PRIVATE void send_new_block(plugin *plugin, node *node) {
+  binn *map;
+
+  if( !plugin->new_block ) return;
+
+  SYNCTRACE("send_new_block - height=%" INT64_FORMAT "\n",
+            plugin->new_block->height);
+
+  map = encode_new_block(plugin);
+  if( map ){
+    send_peer_message(node, map, NULL);
+    binn_free(map);
+  }
+
+}
+
+/****************************************************************************/
+
+/*
+** Used by the leader.
+*/
+SQLITE_PRIVATE int broadcast_new_block(plugin *plugin) {
   struct node *node;
   binn *map;
 
   SYNCTRACE("broadcast_new_block - height=%" INT64_FORMAT "\n",
-            block->height);
+            plugin->new_block->height);
 
   /* signal other peers that there is a new transaction */
-  map = binn_map();
+  map = encode_new_block(plugin);
   if( !map ) return SQLITE_BUSY;  /* flag to retry the command later */
-
-  binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_NEW_BLOCK);
-  binn_map_set_int64(map, PLUGIN_HEIGHT, block->height);
-  binn_map_set_blob(map, PLUGIN_HEADER, block->header, binn_size(block->header));
-  binn_map_set_blob(map, PLUGIN_BODY, block->body, binn_size(block->body));
 
   for( node=plugin->peers; node; node=node->next ){
     if( node->is_authorized ){

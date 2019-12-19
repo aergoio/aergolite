@@ -37,7 +37,8 @@ SQLITE_PRIVATE int send_authorizations(node *node, void *log){
 
   SYNCTRACE("send_authorizations log=%p\n", log);
 
-  if( !node->is_authorized ) return SQLITE_PERM;
+  // do not make this check because authorization for other nodes can arrive first
+  //if( !node->is_authorized ) return SQLITE_PERM;
 
   /* send all the authorizations to the remote node */
 
@@ -88,13 +89,19 @@ SQLITE_PRIVATE void on_new_accepted_node(node *node) {
 
   send_mempool_transactions(plugin, node);
 
-  check_current_leader(plugin);
+  //check_current_leader(plugin);
+
+  if( plugin->is_leader ){
+    /* it will check whether there are transactions to be processed and
+    ** enough connected nodes */
+    start_new_block_timer(plugin);
+  }
 
 }
 
 /****************************************************************************/
 
-SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log){
+SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log, BOOL from_network){
   aergolite *this_node = plugin->this_node;
   node *node, *authorized_node=NULL;
   char pubkey[36];
@@ -106,44 +113,26 @@ SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log){
   rc = aergolite_new_authorization(this_node, log, pubkey, &pklen);
   if( rc ) return rc;
 
+  /* update the number of authorized nodes */
+  count_authorized_nodes(plugin);
+
   if( plugin->pklen==pklen && memcmp(plugin->pubkey,pubkey,pklen)==0 ){
     plugin->is_authorized = TRUE;
   }
 
-#if 0
   for( node=plugin->peers; node; node=node->next ){
     if( node->pklen==pklen && memcmp(node->pubkey,pubkey,pklen)==0 ){
-      /* send all the authorizations to the new node */
-      rc = send_authorizations(node, NULL);
       node->is_authorized = TRUE;
       authorized_node = node;
-    }else if( node->is_authorized ){
+      if( !from_network ){
+        /* send all the authorizations to the new node */
+        rc = send_authorizations(node, NULL);
+      }
+    }else if( node->is_authorized && !from_network ){
       /* send only this new authorization to this node */
       rc = send_authorizations(node, log);
     }
     if( rc ) break;
-  }
-#endif
-
-  for( node=plugin->peers; node; node=node->next ){
-    if( node->pklen==pklen && memcmp(node->pubkey,pubkey,pklen)==0 ){
-      node->is_authorized = TRUE;
-      authorized_node = node;
-      /* send all the authorizations to the new node */
-      rc = send_authorizations(node, NULL);
-    }
-    if( rc ) break;
-  }
-
-  if( !authorized_node ){
-    /* if the authorized node is not connected, send the auth to all the connected nodes */
-    for( node=plugin->peers; node; node=node->next ){
-      if( node->is_authorized ){
-        /* send only this new authorization to this node */
-        rc = send_authorizations(node, log);
-        if( rc ) break;
-      }
-    }
   }
 
   /* if the authorized node is online */
@@ -174,7 +163,7 @@ SQLITE_PRIVATE void on_authorization_received(node *node, void *msg, int size){
   binn_list_foreach(list, item){
     assert( item.type==BINN_LIST );
     void *log = item.ptr;
-    on_new_authorization(plugin, log);
+    on_new_authorization(plugin, log, TRUE);
   }
 
 }
@@ -334,6 +323,44 @@ loc_failed2:
 }
 
 /****************************************************************************/
+/****************************************************************************/
+
+SQLITE_PRIVATE void add_node_connection_identifier(
+  node *node,
+  int node_id,
+  uint64 random_no
+){
+
+  if( !node->conn_id ){
+    node->conn_id = binn_map();
+  }
+
+  binn_map_set_uint64(node->conn_id, node_id, random_no);
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE node* choose_duplicate_connection(node *node1, node *node2){
+  plugin *plugin = node1->plugin;
+  uint64 value1, value2;
+  int id;
+
+  id = MIN(plugin->node_id, node1->id);
+  value1 = binn_map_uint64(node1->conn_id, id);
+
+  id = MIN(plugin->node_id, node2->id);
+  value2 = binn_map_uint64(node2->conn_id, id);
+
+  if( value1 < value2 ){
+    return node1;
+  }else{
+    return node2;
+  }
+
+}
+
+/****************************************************************************/
 
 SQLITE_PRIVATE void check_new_identified_node(node *new_node) {
   plugin *plugin = new_node->plugin;
@@ -355,6 +382,7 @@ SQLITE_PRIVATE void check_new_identified_node(node *new_node) {
   for( node=plugin->peers; node; node=node->next ){
     if( node!=new_node && memcmp(node->pubkey,new_node->pubkey,33)==0 ){
       SYNCTRACE("discarding previous connection from remote node\n");
+      node = choose_duplicate_connection(node, new_node);
       disconnect_peer(node);
       return;
     }
@@ -468,6 +496,7 @@ loc_failed:
 #endif
 
 /****************************************************************************/
+/****************************************************************************/
 
 SQLITE_PRIVATE void on_node_identification(node *node, void *msg, int size) {
   plugin *plugin = node->plugin;
@@ -570,6 +599,11 @@ SQLITE_PRIVATE void on_node_identification(node *node, void *msg, int size) {
     node->authorization_sent = TRUE;
   }
 
+  {
+    uint64 random_no = binn_map_uint64(msg, PLUGIN_RANDOM);
+    add_node_connection_identifier(node, node->id, random_no);
+  }
+
   /* xxx */
   check_new_identified_node(node);
 
@@ -640,6 +674,13 @@ SQLITE_PRIVATE BOOL send_node_identification(plugin *plugin, node *node) {
     goto loc_exit;
   }
   if( binn_map_set_blob(map, PLUGIN_SIGNATURE, signature, siglen)==FALSE ) goto loc_failed;
+
+  {
+    uint64 random_no;
+    sqlite3_randomness(sizeof(int64), &random_no);
+    if( binn_map_set_uint64(map, PLUGIN_RANDOM, random_no)==FALSE ) goto loc_failed;
+    add_node_connection_identifier(node, plugin->node_id, random_no);
+  }
 
   /* send the message to the peer */
 

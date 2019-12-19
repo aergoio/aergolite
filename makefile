@@ -36,7 +36,7 @@ else
         LIBNICK3 = libsqlite3.so.0
         LIBNICK4 = libsqlite3.so
         SONAME   = libsqlite3.so.0
-        prefix  ?= /usr
+        prefix  ?= /usr/local
     endif
     LIBPATH  = $(prefix)/lib
     LIBPATH2 = $(prefix)/lib/aergolite
@@ -92,7 +92,7 @@ else
 endif
 
 libaergolite.0.dylib: $(OBJECTS)
-	$(CC) -dynamiclib -install_name "$(INSTNAME)" -current_version $(CURR_VERSION) -compatibility_version $(COMPAT_VERSION) $^ -o $@ $(LDFLAGS) -lbinn -luv -lsecp256k1
+	$(CC) -dynamiclib -install_name "$(INSTNAME)" -current_version $(CURR_VERSION) -compatibility_version $(COMPAT_VERSION) $^ -o $@ $(LDFLAGS) -lbinn -luv -lsecp256k1 -ldl
 ifeq ($(MAKECMDGOALS),valgrind)
 else ifeq ($(MAKECMDGOALS),debug)
 else
@@ -107,7 +107,7 @@ libaergolite.a: $(OBJECTS)
 	$(AR) rcs $@ $^
 
 libaergolite.dylib: $(OBJECTS)
-	$(CC) -dynamiclib -o $@ $^ $(LDFLAGS) -lbinn -luv -lsecp256k1
+	$(CC) -dynamiclib -o $@ $^ $(LDFLAGS) -lbinn -luv -lsecp256k1 -ldl
 ifeq ($(MAKECMDGOALS),valgrind)
 else ifeq ($(MAKECMDGOALS),debug)
 else
@@ -115,7 +115,7 @@ else
 endif
 
 libaergolite.so.0.0.1: $(OBJECTS)
-	$(CC) -shared -Wl,-soname,$(SONAME) $^ -o $@ $(LDFLAGS) -lbinn -luv -lsecp256k1
+	$(CC) -shared -Wl,-soname,$(SONAME) $^ -o $@ $(LDFLAGS) -lbinn -luv -lsecp256k1 -ldl
 ifeq ($(MAKECMDGOALS),valgrind)
 else ifeq ($(MAKECMDGOALS),debug)
 else
@@ -140,7 +140,7 @@ ifeq ($(OS),Windows_NT)
 else ifeq ($(OS),OSX)
 	$(CC) $< -o $@ -L. -lsqlite3 -ldl -lbinn -lreadline
 else
-	$(CC) $< -o $@ -Wl,-rpath,$(LIBPATH) -L. -lsqlite3 -ldl -lbinn -lreadline
+	$(CC) $< -o $@ -Wl,-rpath,$(LIBPATH) -L. -lsqlite3 -lbinn -lreadline -ldl
 endif
 	strip $(SSHELL)
 

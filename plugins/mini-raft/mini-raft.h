@@ -27,8 +27,10 @@
 #define PLUGIN_CMD_ID              0xcd01     /* peer identification */
 //#define PLUGIN_REQUEST_NODE_ID     0xcd02     /* request a node id */
 //#define PLUGIN_NEW_NODE_ID         0xcd03     /* send the new node id */
-#define PLUGIN_ID_CONFLICT         0xcd04     /* there is another node with the same id */
+#define PLUGIN_RANDOM              0xcd02
+#define PLUGIN_ID_CONFLICT         0xcd03     /* there is another node with the same id */
 
+#define PLUGIN_GET_PEERS           0xcd04     /* request the list of peers */
 #define PLUGIN_PEERS               0xcd05     /* list of peers */
 
 #define PLUGIN_CMD_PING            0xcd06     /* check if alive */
@@ -184,6 +186,7 @@ struct node {
   node *next;            /* Next item in the list */
   int   id;              /* Node id */
 
+  binn *conn_id;
   struct node_id_conflict *id_conflict;
 
   int   conn_type;       /* outgoing or incoming connection */
@@ -269,9 +272,11 @@ struct plugin {
   BOOL is_leader;             /* True if this node is the current leader */
   node *leader_node;          /* Points to the leader node if it is connected */
   node *last_leader;          /* Points to the previous leader node */
+  void *leader_query;
   struct leader_votes *leader_votes;
   BOOL in_leader_query;       /* True if in a leader query */
   BOOL in_election;           /* True if in a leader election */
+  BOOL some_nodes_in_election;/* True if any node is in a leader election during leader query */
 
   struct transaction *mempool;
   struct txn_list *special_txn; /* New special transaction */
@@ -323,6 +328,8 @@ SQLITE_PRIVATE int send_udp_message(plugin *plugin, const struct sockaddr *addre
 
 SQLITE_PRIVATE void on_text_command_received(node *node, char *message);
 
+SQLITE_PRIVATE BOOL has_nodes_for_consensus(plugin *plugin);
+
 /* leader checking and election */
 
 SQLITE_PRIVATE void on_new_election_request(plugin *plugin, node *node, char *arg);
@@ -351,7 +358,9 @@ SQLITE_PRIVATE int  load_current_state(plugin *plugin);
 SQLITE_PRIVATE void request_state_update(plugin *plugin);
 
 SQLITE_PRIVATE void start_new_block_timer(plugin *plugin);
-SQLITE_PRIVATE int  broadcast_new_block(plugin *plugin, struct block *block);
+SQLITE_PRIVATE int  broadcast_new_block(plugin *plugin);
+SQLITE_PRIVATE void send_new_block(plugin *plugin, node *node);
+SQLITE_PRIVATE void rollback_block(plugin *plugin);
 
 /* event loop and timers */
 
@@ -391,9 +400,11 @@ SQLITE_PRIVATE void register_tcp_message(char *name, tcp_message_callback callba
 
 SQLITE_PRIVATE void start_node_discovery(plugin *plugin);
 
+SQLITE_PRIVATE void request_peer_list(plugin *plugin, node *node);
 SQLITE_PRIVATE void send_peer_list(plugin *plugin, node *to_node);
+SQLITE_PRIVATE void on_peer_list_request(node *node, void *msg, int size);
 SQLITE_PRIVATE void on_peer_list_received(node *node, void *msg, int size);
 
 /* node authorization */
 
-SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log);
+SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log, BOOL from_network);

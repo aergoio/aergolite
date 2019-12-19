@@ -98,6 +98,14 @@ void delete_files(int n){
 
 /****************************************************************************/
 
+void delete_log(){
+  char fname[256];
+  sprintf(fname, "log-%d", getpid());
+  unlink(fname);
+}
+
+/****************************************************************************/
+
 void print_nodes(char *title, int list[]){
   printf("%s=%d  { ", title, len_array_list(list));
   for(int i=0; list[i]; i++){
@@ -119,6 +127,7 @@ void test_5_nodes(int bind_to_random_ports){
   /* delete the db files if they exist */
 
   delete_files(5);
+  delete_log();
 
   /* open the connections to the databases */
 
@@ -332,6 +341,7 @@ void test_invalid_admin(int n, int add_from_node, bool bind_to_random_ports, int
 
   /* delete the db files if they exist */
   delete_files(n);
+  delete_log();
 
   /* generate private and public keys to manage the network */
   prepare_blockchain_admin_keys();
@@ -604,6 +614,7 @@ void test_add_nodes(int n, int n_each_time, int add_from_node, bool bind_to_rand
 
   /* delete the db files if they exist */
   delete_files(n);
+  delete_log();
 
   /* generate private and public keys to manage the network */
   prepare_blockchain_admin_keys();
@@ -678,9 +689,6 @@ loc_again1:
   }
 
   puts("");
-
-
-  /* check the protocol status */
 
 
   /* register the callback function used to sign the admin transactions */
@@ -823,7 +831,7 @@ loc_again2:
 
   /* check if the data was replicated to the other nodes */
 
-  for(i=2; i<=n; i++){
+  for(i=1; i<=n; i++){
 
     printf("checking node %d\n", i); fflush(stdout);
 
@@ -852,14 +860,6 @@ loc_again2:
     db_check_int(db[i], "select count(*) from t1 where name='aa2'", 1);
 
   }
-
-
-  /* db1 */
-
-  db_check_int(db[1], "select count(*) from t1", 2);
-  db_check_int(db[1], "select count(*) from t1 where name='aa1'", 1);
-  db_check_int(db[1], "select count(*) from t1 where name='aa2'", 1);
-
 
 
   /* execute more transactions on separate databases */
@@ -967,7 +967,11 @@ void test_reconnection(
   int active_online_nodes[],
   /* transactions executed after the nodes were reconnected and in sync */
   int num_txns_on_reconnect,
-  int active_nodes_on_reconnect[]
+  int active_nodes_on_reconnect[],
+  /* additional parameters */
+  int wait_between_add_nodes,
+  bool check_connections,
+  bool exec_while_adding
 ){
   sqlite3 *db[512];
   char uri[256];
@@ -987,6 +991,9 @@ void test_reconnection(
   printf("  num_txns_on_offline_nodes=%d\n", num_txns_on_offline_nodes);
   printf("  num_txns_on_online_nodes=%d\n", num_txns_on_online_nodes);
   printf("  num_txns_on_reconnect=%d\n", num_txns_on_reconnect);
+  printf("  wait_between_add_nodes=%d\n", wait_between_add_nodes);
+  printf("  check_connections=%s\n", check_connections ? "yes" : "no");
+  printf("  exec_while_adding=%s\n", exec_while_adding ? "yes" : "no");
   puts(")");
   fflush(stdout);
 
@@ -994,6 +1001,7 @@ void test_reconnection(
 
   /* delete the db files if they exist */
   delete_files(n);
+  delete_log();
 
   /* generate private and public keys to manage the network */
   prepare_blockchain_admin_keys();
@@ -1060,11 +1068,13 @@ loc_again1:
     assert( rc==SQLITE_DONE || rc==SQLITE_OK );
     sqlite3_finalize(stmt); stmt = NULL;
 
-    if( (i<=2 && nrows<n) ||
-        (i>2  && nrows<3) ){
-      printf("."); fflush(stdout);
-      usleep(wait_time);
-      goto loc_again1;
+    if( check_connections ){
+      if( (i<=2 && nrows<n) ||
+          (i>2  && nrows<3) ){
+        printf("."); fflush(stdout);
+        usleep(wait_time);
+        goto loc_again1;
+      }
     }
   }
 
@@ -1090,13 +1100,17 @@ loc_again1:
     printf("adding node %d to the network\n", node);
     sprintf(cmd, "pragma add_node='%s'", node_pubkey[node]);
     db_execute(db[add_from_node], cmd);
+    usleep(wait_between_add_nodes * 1000);
   }
+
+
+  if( check_connections ){
 
   /* ensure that the nodes are included on the blockchain network */
 
   for(node=1; node<=n; node++){
     int nrows;
-    printf("checking node %d", node);
+    printf("checking node %d\n", node);
 loc_again2:
     sqlite3_finalize(stmt); stmt = NULL;
     rc = sqlite3_prepare_v2(db[node], "pragma nodes", -1, &stmt, NULL);
@@ -1117,7 +1131,7 @@ loc_again2:
         if( strcmp(node_pubkey[j], nodepk)==0 ){
           //assert( external[0]==0 ); /* internal node */
           if( external[0]=='y' ){     /* "yes" */
-            printf("."); fflush(stdout);
+            printf("authorization for node %d has not arrived\n", j); fflush(stdout);
             usleep(wait_time);
             goto loc_again2;
           }
@@ -1126,18 +1140,49 @@ loc_again2:
       /* count how many peers this node is connected to */
       nrows++;
     }
-    puts("");
 
     assert( rc==SQLITE_DONE || rc==SQLITE_OK );
     sqlite3_finalize(stmt); stmt = NULL;
 
-    printf("connected to %d nodes\n", nrows);
+    printf("connected to %d nodes\n", nrows); fflush(stdout);
     if( node<=2 ){
       assert( nrows==n );
     }else{
       if( nrows<n ) goto loc_again2;
     }
   }
+
+  bool has_external;
+
+loc_check_conns:
+  has_external = false;
+
+  /* count how many peers each node is connected to */
+  for(i=1; i<=n; i++){
+    int nauths = 0, npeers = 0, nexternal = 0;
+    rc = sqlite3_prepare_v2(db[i], "pragma nodes", -1, &stmt, NULL);
+    assert( rc==SQLITE_OK );
+    assert( stmt!=NULL );
+    while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
+      char *address = (char*)sqlite3_column_text(stmt, 2);
+      char *external = (char*)sqlite3_column_text(stmt, 8);
+      if( address[0] ) npeers++;
+      if( external[0]=='y' ) nexternal++;
+      else nauths++;
+    }
+    assert( rc==SQLITE_DONE || rc==SQLITE_OK );
+    sqlite3_finalize(stmt); stmt = NULL;
+    printf("node %d connected to %d nodes (%d external). total of %d authorized nodes\n", i, npeers-1, nexternal, nauths);
+    if( nexternal>0 ) has_external = true;
+  }
+
+  if( has_external ){
+    usleep(2000000);
+    puts("");
+    goto loc_check_conns;
+  }
+
+  }  // if( check_connections )
 
 
 
@@ -1167,10 +1212,65 @@ loc_again2:
   }
 
 
+  /* waiting for leader election */
+
+  printf("waiting for leader election"); fflush(stdout);
+
+  int last_leader_id = 0;
+
+  for(i=1; i<=n; i++){
+    char *leader_id_str = NULL;
+    done = 0;
+    for(count=0; !done && count<150; count++){
+      char *result;
+      if( count>0 ) usleep(wait_time);
+      rc = db_query_str(&result, db[i], "pragma protocol_status");
+      assert(rc==SQLITE_OK);
+      //done = strstr(result,"\"is_leader\": true")>0 || strstr(result,"\"leader\": null")==0;
+
+      if( strstr(result,"\"is_leader\": true")>0 ){
+        leader_id_str = strip(result, "\"node_id\": ");
+      }else if( strstr(result,"\"leader\": null")==0 ){
+        leader_id_str = strip(result, "\"leader\": ");
+      }
+      if( leader_id_str ){
+        int leader_id;
+        strip(result, ",");
+        leader_id = atoi(leader_id_str);
+        if( leader_id!=last_leader_id && last_leader_id!=0 ){
+          printf("\n leader_id1=%d leader_id2=%d\n", leader_id, last_leader_id);
+          assert( leader_id==last_leader_id );
+        }
+        last_leader_id = leader_id;
+        done = 1;
+      }
+
+      sqlite3_free(result);
+      printf("."); fflush(stdout);
+    }
+    if( !done ){
+      puts("");
+      for(i=1; i<=n; i++){
+        char *result;
+        rc = db_query_str(&result, db[i], "pragma protocol_status");
+        assert(rc==SQLITE_OK);
+        printf("--- node %d ---\n", i);
+        puts(result);
+        puts("");
+        sqlite3_free(result);
+      }
+    }
+    assert(done);
+  }
+  puts("");
+
+
   /* wait until the transactions are processed in a new block */
 
+  printf("waiting for new block"); fflush(stdout);
+
   done = 0;
-  for(count=0; !done && count<100; count++){
+  for(count=0; !done && count<150; count++){
     char *result;
     usleep(wait_time);
     rc = db_query_str(&result, db[exec_from_node], "PRAGMA transaction_status(3)");
@@ -1191,7 +1291,7 @@ loc_again2:
     printf("checking node %d\n", i); fflush(stdout);
 
     done = 0;
-    for(count=0; !done && count<100; count++){
+    for(count=0; !done && count<150; count++){
       int result;
       if( count>0 ) usleep(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from sqlite_master where name='t1'");
@@ -1201,7 +1301,7 @@ loc_again2:
     assert(done);
 
     done = 0;
-    for(count=0; !done && count<100; count++){
+    for(count=0; !done && count<150; count++){
       int result;
       if( count>0 ) usleep(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from t1");
@@ -1254,62 +1354,66 @@ loc_again2:
       db_check_int(db[node], "PRAGMA last_nonce", last_nonce[node]);
     }
 
-    /* wait until the transactions are processed in a new block */
+    if( n-len_array_list(disconnect_nodes) >= majority(n) ){
 
-    printf("waiting for new block"); fflush(stdout);
+      /* wait until the transactions are processed in a new block */
 
-    for(i=0; active_online_nodes[i]; i++){
-      int node = active_online_nodes[i];
+      printf("waiting for new block"); fflush(stdout);
 
-      done = 0;
-      for(count=0; !done && count<200; count++){
-        char *result, sql[128];
-        if( count>0 ) usleep(150000);
-        sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[node]);
-        rc = db_query_str(&result, db[node], sql);
-        assert(rc==SQLITE_OK);
-        done = (strcmp(result,"processed")==0);
-        sqlite3_free(result);
-        printf("."); fflush(stdout);
+      for(i=0; active_online_nodes[i]; i++){
+        int node = active_online_nodes[i];
+
+        done = 0;
+        for(count=0; !done && count<200; count++){
+          char *result, sql[128];
+          if( count>0 ) usleep(150000);
+          sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[node]);
+          rc = db_query_str(&result, db[node], sql);
+          assert(rc==SQLITE_OK);
+          done = (strcmp(result,"processed")==0);
+          sqlite3_free(result);
+          printf("."); fflush(stdout);
+        }
+        assert(done);
+
       }
-      assert(done);
 
-    }
+      puts("");
 
-    puts("");
+      /* check if the data was replicated to the other nodes */
 
-    /* check if the data was replicated to the other nodes */
+      for(i=1; i<=n; i++){
 
-    for(i=1; i<=n; i++){
+        if( in_array_list(i,disconnect_nodes) ) continue;
 
-      if( in_array_list(i,disconnect_nodes) ) continue;
+        printf("checking node %d\n", i); fflush(stdout);
 
-      printf("checking node %d\n", i); fflush(stdout);
+        done = 0;
+        for(count=0; !done && count<100; count++){
+          int result;
+          if( count>0 ) usleep(wait_time);
+          rc = db_query_int32(&result, db[i], "select count(*) from sqlite_master where name='t1'");
+          assert(rc==SQLITE_OK);
+          done = (result>0);
+        }
+        assert(done);
 
-      done = 0;
-      for(count=0; !done && count<100; count++){
-        int result;
-        if( count>0 ) usleep(wait_time);
-        rc = db_query_int32(&result, db[i], "select count(*) from sqlite_master where name='t1'");
-        assert(rc==SQLITE_OK);
-        done = (result>0);
+        done = 0;
+        for(count=0; !done && count<100; count++){
+          int result;
+          if( count>0 ) usleep(wait_time);
+          rc = db_query_int32(&result, db[i], "select count(*) from t1");
+          assert(rc==SQLITE_OK);
+          done = (result >= 2 + num_txns_on_online_nodes);
+        }
+        assert(done);
+
+        db_check_int(db[i], "select count(*) from t1", 2 + num_txns_on_online_nodes);
+        db_check_int(db[i], "select count(*) from t1 where name='aa1'", 1);
+        db_check_int(db[i], "select count(*) from t1 where name='aa2'", 1);
+        db_check_int(db[i], "select count(*) from t1 where name='online'", num_txns_on_online_nodes);
+
       }
-      assert(done);
-
-      done = 0;
-      for(count=0; !done && count<100; count++){
-        int result;
-        if( count>0 ) usleep(wait_time);
-        rc = db_query_int32(&result, db[i], "select count(*) from t1");
-        assert(rc==SQLITE_OK);
-        done = (result>2);
-      }
-      assert(done);
-
-      db_check_int(db[i], "select count(*) from t1", 2 + num_txns_on_online_nodes);
-      db_check_int(db[i], "select count(*) from t1 where name='aa1'", 1);
-      db_check_int(db[i], "select count(*) from t1 where name='aa2'", 1);
-      db_check_int(db[i], "select count(*) from t1 where name='online'", num_txns_on_online_nodes);
 
     }
 
@@ -1368,21 +1472,48 @@ loc_again2:
     int node = disconnect_nodes[i];
     printf("reconnecting node %d\n", node);
     if( node==1 ){
-      //assert( sqlite3_open("file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302", &db[1])==SQLITE_OK );
       sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
-      assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
     }else if( node==2 ){
-      //assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
       sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
-      assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
     }else{
       if( bind_to_random_ports ){
         sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
       }else{
         sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, 4300 + node, pkhex, block_interval);
       }
-      assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
     }
+    assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
+  }
+
+
+  bool has_external;
+
+loc_check_conns2:
+  has_external = false;
+
+  /* count how many peers each node is connected to */
+  for(i=1; i<=n; i++){
+    int nauths = 0, npeers = 0, nexternal = 0;
+    rc = sqlite3_prepare_v2(db[i], "pragma nodes", -1, &stmt, NULL);
+    assert( rc==SQLITE_OK );
+    assert( stmt!=NULL );
+    while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
+      char *address = (char*)sqlite3_column_text(stmt, 2);
+      char *external = (char*)sqlite3_column_text(stmt, 8);
+      if( address[0] ) npeers++;
+      if( external[0]=='y' ){ nexternal++; /* printf(" -- external: %s\n", address); */ }
+      else nauths++;
+    }
+    assert( rc==SQLITE_DONE || rc==SQLITE_OK );
+    sqlite3_finalize(stmt); stmt = NULL;
+    printf("node %d connected to %d nodes (%d external). total of %d authorized nodes\n", i, npeers-1, nexternal, nauths);
+    if( nexternal>0 ) has_external = true;
+  }
+
+  if( has_external ){
+    usleep(2000000);
+    puts("");
+    goto loc_check_conns2;
   }
 
 
@@ -1411,6 +1542,17 @@ loc_again2:
       rc = db_query_int32(&result, db[node], "select count(*) from t1");
       assert(rc==SQLITE_OK);
       done = (result >= 2 + num_txns_on_online_nodes + num_txns_on_offline_nodes);
+    }
+    if( !done ){
+      for(i=1; i<=n; i++){
+        char *result;
+        rc = db_query_str(&result, db[i], "pragma blockchain_status");
+        assert(rc==SQLITE_OK);
+        printf("--- node %d ---\n", i);
+        puts(result);
+        puts("");
+        sqlite3_free(result);
+      }
     }
     assert(done);
 
@@ -1558,11 +1700,13 @@ void test_new_nodes(
 ){
   sqlite3 *db[512] = {0};
   char uri[256];
+  char node_pubkey[512][72];
   int last_nonce[512];
   int disconnect_nodes[512] = {0};
   int active_online_nodes[512] = {0};
   int connecting_nodes[512] = {0};
-  int rc, i, j, n, count, done;
+  sqlite3_stmt *stmt=NULL;
+  int rc, i, j, n, node, count, done;
 
   printf("----------------------------------------------------------\n"
          "test_new_nodes(\n"
@@ -1586,15 +1730,13 @@ void test_new_nodes(
   assert(n>=5 && n<512);
 
   /* delete the db files if they exist */
-
   delete_files(n);
+  delete_log();
+
+  /* generate private and public keys to manage the network */
+  prepare_blockchain_admin_keys();
 
   /* open the connections to the databases */
-
-#if 0
-  assert( sqlite3_open("file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302", &db[1])==SQLITE_OK );
-  assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
-#endif
 
   sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
   assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
@@ -1616,8 +1758,107 @@ void test_new_nodes(
   /* set the initial nonce value for each node */
 
   for(i=1; i<=n; i++){
-    last_nonce[i] = 1;
+    last_nonce[i] = 0;
   }
+
+  for(i=1; i<=n_before; i++){
+    db_check_int(db[i], "PRAGMA last_nonce", last_nonce[i]);
+  }
+
+
+  /* get the public key for the new added nodes */
+  for(i=1; i<=n_before; i++){
+    rc = sqlite3_prepare_v2(db[i], "pragma nodes", -1, &stmt, NULL);
+    assert( rc==SQLITE_OK );
+    assert( stmt!=NULL );
+    assert( sqlite3_column_count(stmt)==9 );
+    assert( sqlite3_step(stmt)==SQLITE_ROW );
+    /* the first item has info about the requester node */
+    char *p = (char*)sqlite3_column_text(stmt, 1);
+    assert( p && strlen(p)<sizeof(node_pubkey[1]) );
+    strcpy(node_pubkey[i], p);
+    sqlite3_finalize(stmt); stmt = NULL;
+  }
+
+
+  /* register the callback function used to sign the admin transactions */
+
+  for(i=1; i<=n_before; i++){
+    sqlite3_create_function(db[i], "sign_transaction", 1, SQLITE_UTF8,
+      NULL, &on_sign_transaction, NULL, NULL);
+  }
+
+
+  /* add nodes to the network.
+  ** the command is signed in the callback function, using the network admin's private key */
+
+  int add_from_node = 2;
+
+  /* include some nodes on the network */
+  node = add_from_node;
+  {
+    char cmd[128];
+    printf("adding node %d to the network\n", node);
+    sprintf(cmd, "pragma add_node='%s'", node_pubkey[node]);
+    db_execute(db[add_from_node], cmd);
+  }
+  for(node=1; node<=n_before; node++){
+    char cmd[128];
+    if( node==add_from_node ) continue;
+    printf("adding node %d to the network\n", node);
+    sprintf(cmd, "pragma add_node='%s'", node_pubkey[node]);
+    db_execute(db[add_from_node], cmd);
+  }
+
+  /* ensure that the nodes are included on the blockchain network */
+
+  for(node=1; node<=n_before; node++){
+    int nrows;
+    printf("checking node %d\n", node);
+loc_again2:
+    sqlite3_finalize(stmt); stmt = NULL;
+    rc = sqlite3_prepare_v2(db[node], "pragma nodes", -1, &stmt, NULL);
+    assert( rc==SQLITE_OK );
+    assert( stmt!=NULL );
+
+    // node_id | pubkey | address | CPU | OS | hostname | app | node_info | external |
+
+    assert( sqlite3_column_count(stmt)==9 );
+    nrows = 0;
+
+    while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
+      char *nodepk = (char*)sqlite3_column_text(stmt, 1);
+      char *external = (char*)sqlite3_column_text(stmt, 8);
+      assert( nodepk && external );
+      /* identify the node by the public key */
+      for(int j=1; j<=n_before; j++){
+        if( strcmp(node_pubkey[j], nodepk)==0 ){
+          //assert( external[0]==0 ); /* internal node */
+          if( external[0]=='y' ){     /* "yes" */
+            printf("authorization for node %d has not arrived\n", j); fflush(stdout);
+            usleep(wait_time);
+            goto loc_again2;
+          }
+        }
+      }
+      /* count how many peers this node is connected to */
+      nrows++;
+    }
+
+    assert( rc==SQLITE_DONE || rc==SQLITE_OK );
+    sqlite3_finalize(stmt); stmt = NULL;
+
+    printf("connected to %d nodes\n", nrows); fflush(stdout);
+    if( node<=2 ){
+      assert( nrows==n_before );
+    }else{
+      if( nrows<n_before ) goto loc_again2;
+    }
+  }
+
+
+
+  last_nonce[add_from_node] = n_before;
 
   for(i=1; i<=n_before; i++){
     db_check_int(db[i], "PRAGMA last_nonce", last_nonce[i]);
@@ -1626,13 +1867,14 @@ void test_new_nodes(
 
   /* execute 3 db transactions on one of the databases */
 
+  printf("executing transactions on nodes...");
+
   db_execute(db[starting_node], "create table t1 (name)");
   db_execute(db[starting_node], "insert into t1 values ('aa1')");
   db_execute(db[starting_node], "insert into t1 values ('aa2')");
 
-  last_nonce[starting_node] = 4;
+  last_nonce[starting_node] += 3;
 
-  db_check_int(db[starting_node], "PRAGMA last_nonce", 4);
   for(i=1; i<=n_before; i++){
     db_check_int(db[i], "PRAGMA last_nonce", last_nonce[i]);
   }
@@ -1642,9 +1884,10 @@ void test_new_nodes(
 
   done = 0;
   for(count=0; !done && count<100; count++){
-    char *result;
+    char query[64], *result;
     usleep(wait_time);
-    rc = db_query_str(&result, db[starting_node], "PRAGMA transaction_status(4)");
+    sprintf(query, "PRAGMA transaction_status(%d)", last_nonce[starting_node]);
+    rc = db_query_str(&result, db[starting_node], query);
     assert(rc==SQLITE_OK);
     done = (strcmp(result,"processed")==0);
     sqlite3_free(result);
@@ -1685,9 +1928,11 @@ void test_new_nodes(
     db_check_int(db[i], "select count(*) from t1 where name='aa1'", 1);
     db_check_int(db[i], "select count(*) from t1 where name='aa2'", 1);
 
-    char sql[128];
-    sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[i]);
-    db_check_str(db[i], sql, "processed");
+    if( last_nonce[i] > 0 ){
+      char sql[128];
+      sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[i]);
+      db_check_str(db[i], sql, "processed");
+    }
 
   }
 
@@ -1743,6 +1988,7 @@ void test_new_nodes(
 
     for(i=0; active_online_nodes[i]; i++){
       int node = active_online_nodes[i];
+      if( last_nonce[node]==0 ) continue;
 
       done = 0;
       for(count=0; !done && count<200; count++){
@@ -1840,6 +2086,9 @@ void test_new_nodes(
       printf("opening new node %d in offline mode\n", node);
       sprintf(uri, "file:db%d.db?blockchain=on&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
       assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
+      /* register the callback function used to sign the admin transactions */
+      sqlite3_create_function(db[node], "sign_transaction", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC,
+        NULL, &on_sign_transaction, NULL, NULL);
     }
 
     puts("executing offline transactions on new nodes...");
@@ -1890,30 +2139,66 @@ void test_new_nodes(
       printf("reconnecting node %d\n", node);
     }
     if( node==1 ){
-      //assert( sqlite3_open("file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302", &db[1])==SQLITE_OK );
       sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
-      assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
     }else if( node==2 ){
-      //assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
       sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
-      assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
     }else{
       if( bind_to_random_ports ){
         sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
       }else{
         sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, 4300 + node, pkhex, block_interval);
       }
-      assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
+    }
+    assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
+  }
+
+  /* check the last nonce */
+  for(i=0; connecting_nodes[i]; i++){
+    int node = connecting_nodes[i];
+    db_check_int(db[node], "PRAGMA last_nonce", last_nonce[node]);
+  }
+
+  /* register the callback function used to sign the admin transactions */
+  sqlite3_create_function(db[add_from_node], "sign_transaction", 1, SQLITE_UTF8,
+    NULL, &on_sign_transaction, NULL, NULL);
+
+  /* get the public key for the new added nodes */
+  for(i=0; connecting_nodes[i]; i++){
+    int node = connecting_nodes[i];
+    if( node<=n_before ) continue;
+    rc = sqlite3_prepare_v2(db[node], "pragma nodes", -1, &stmt, NULL);
+    assert( rc==SQLITE_OK );
+    assert( stmt!=NULL );
+    assert( sqlite3_column_count(stmt)==9 );
+    assert( sqlite3_step(stmt)==SQLITE_ROW );
+    /* the first item has info about the requester node */
+    char *p = (char*)sqlite3_column_text(stmt, 1);
+    assert( p && strlen(p)<sizeof(node_pubkey[1]) );
+    strcpy(node_pubkey[node], p);
+    sqlite3_finalize(stmt); stmt = NULL;
+  }
+
+  /* authorize the new nodes on the network */
+  for(i=0; connecting_nodes[i]; i++){
+    int node = connecting_nodes[i];
+    if( node>n_before ){
+      char cmd[128];
+      printf("authorizing node %d on the network\n", node);
+      sprintf(cmd, "pragma add_node='%s'", node_pubkey[node]);
+      db_execute(db[add_from_node], cmd);
+      last_nonce[add_from_node]++;
     }
   }
 
 
-  /* check if they are up-to-date */
+  /* wait until the transactions are processed in a new block */
+
+  printf("waiting for new block\n"); fflush(stdout);
 
   for(i=0; connecting_nodes[i]; i++){
     int node = connecting_nodes[i];
 
-    printf("checking node %d\n", node); fflush(stdout);
+    printf("checking node %d", node); fflush(stdout);
 
     done = 0;
     for(count=0; !done && count<100; count++){
@@ -1925,6 +2210,34 @@ void test_new_nodes(
       sqlite3_free(result);
     }
     assert(done);
+
+    if( last_nonce[node]==0 ){ puts(""); continue; }
+
+    done = 0;
+    for(count=0; !done && count<200; count++){
+      char *result, sql[128];
+      if( count>0 ) usleep(150000);
+      sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[node]);
+      rc = db_query_str(&result, db[node], sql);
+      assert(rc==SQLITE_OK);
+      done = (strcmp(result,"processed")==0);
+      sqlite3_free(result);
+      printf("."); fflush(stdout);
+    }
+    assert(done);
+
+    puts("");
+  }
+
+
+  /* check if they are up-to-date */
+
+  puts("checking content"); fflush(stdout);
+
+  for(i=0; connecting_nodes[i]; i++){
+    int node = connecting_nodes[i];
+
+    printf("checking node %d\n", node); fflush(stdout);
 
     int total_rows = 2 + new_blocks_on_net * num_txns_per_block + n_old_with_content * num_offline_txns;
 
@@ -1938,12 +2251,24 @@ void test_new_nodes(
     }
     assert(done);
 
+    int total_tables = 1 + 1 + n_new_with_content * num_offline_txns;
+
+    done = 0;
+    for(count=0; !done && count<100; count++){
+      int result;
+      if( count>0 ) usleep(wait_time);
+      rc = db_query_int32(&result, db[node], "select count(*) from sqlite_master where type='table'");
+      assert(rc==SQLITE_OK);
+      done = (result >= total_tables);
+    }
+    assert(done);
+
     db_check_int(db[node], "select count(*) from t1 where name='aa1'", 1);
     db_check_int(db[node], "select count(*) from t1 where name='aa2'", 1);
     db_check_int(db[node], "select count(*) from t1 where name='online'", new_blocks_on_net * num_txns_per_block);
     db_check_int(db[node], "select count(*) from t1 where name='disconnected'", n_old_with_content * num_offline_txns);
     db_check_int(db[node], "select count(*) from t1", total_rows);
-    db_check_int(db[node], "select count(*) from sqlite_master where type='table'", 1 + 1 + n_new_with_content * num_offline_txns);
+    db_check_int(db[node], "select count(*) from sqlite_master where type='table'", total_tables);
 
   }
 
@@ -2071,6 +2396,9 @@ void test_new_nodes(
       printf("opening new node %d in offline mode\n", node);
       sprintf(uri, "file:db%d.db?blockchain=on&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
       assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
+      /* register the callback function used to sign the admin transactions */
+      sqlite3_create_function(db[node], "sign_transaction", 1, SQLITE_UTF8,
+        NULL, &on_sign_transaction, NULL, NULL);
     }
 
     puts("executing offline transactions on new nodes...");
@@ -2121,39 +2449,126 @@ void test_new_nodes(
 
   for(i=0; connecting_nodes[i]; i++){
     int node = connecting_nodes[i];
-    if( node>n_before ){
+    if( node>n_after ){
       printf("connecting new node %d\n", node);
     }else{
       printf("reconnecting node %d\n", node);
     }
     if( node==1 ){
-      //assert( sqlite3_open("file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302", &db[1])==SQLITE_OK );
       sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
-      assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
     }else if( node==2 ){
-      //assert( sqlite3_open("file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301", &db[2])==SQLITE_OK );
       sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
-      assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
     }else{
       if( bind_to_random_ports ){
         sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
       }else{
         sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, 4300 + node, pkhex, block_interval);
       }
-      assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
     }
+    assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
   }
 
+  /* check the last nonce */
+  for(i=0; connecting_nodes[i]; i++){
+    int node = connecting_nodes[i];
+    db_check_int(db[node], "PRAGMA last_nonce", last_nonce[node]);
+  }
+
+  /* register the callback function used to sign the admin transactions */
+  assert( db[add_from_node] );
+  sqlite3_create_function(db[add_from_node], "sign_transaction", 1, SQLITE_UTF8,
+    NULL, &on_sign_transaction, NULL, NULL);
+
+  /* get the public key for the new added nodes */
+  for(i=0; connecting_nodes[i]; i++){
+    int node = connecting_nodes[i];
+    if( node<=n_after ) continue;
+    rc = sqlite3_prepare_v2(db[node], "pragma nodes", -1, &stmt, NULL);
+    assert( rc==SQLITE_OK );
+    assert( stmt!=NULL );
+    assert( sqlite3_column_count(stmt)==9 );
+    assert( sqlite3_step(stmt)==SQLITE_ROW );
+    /* the first item has info about the requester node */
+    char *p = (char*)sqlite3_column_text(stmt, 1);
+    assert( p && strlen(p)<sizeof(node_pubkey[1]) );
+    strcpy(node_pubkey[node], p);
+    sqlite3_finalize(stmt); stmt = NULL;
+  }
+
+  /* count how many peers each node is connected to */
+  for(i=0; active_online_nodes[i]; i++){
+    int node = active_online_nodes[i];
+    int nauths = 0, npeers = 0;
+    rc = sqlite3_prepare_v2(db[node], "pragma nodes", -1, &stmt, NULL);
+    assert( rc==SQLITE_OK );
+    assert( stmt!=NULL );
+    while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
+      char *address = (char*)sqlite3_column_text(stmt, 2);
+      if( address[0] ) npeers++;
+      nauths++;
+    }
+    assert( rc==SQLITE_DONE || rc==SQLITE_OK );
+    sqlite3_finalize(stmt); stmt = NULL;
+    printf("node %d connected to %d nodes. total of %d authorizations\n", node, npeers-1, nauths);
+  }
+
+  /* authorize the new nodes on the network */
+  for(i=0; connecting_nodes[i]; i++){
+    int node = connecting_nodes[i];
+    if( node>n_after ){
+      char cmd[128];
+      printf("authorizing node %d on the network\n", node);
+      sprintf(cmd, "pragma add_node='%s'", node_pubkey[node]);
+      db_execute(db[add_from_node], cmd);
+      last_nonce[add_from_node]++;
+    }
+  }
 
 
   /* check if the transactions are processed in a new block */
 
   if( n_after2 >= majority(n) ){
 
+    printf("waiting for leader election"); fflush(stdout);
+
+    for(i=0; active_online_nodes[i]; i++){
+      int node = active_online_nodes[i];
+      done = 0;
+      for(count=0; !done && count<100; count++){
+        char *result;
+        if( count>0 ) usleep(wait_time);
+        rc = db_query_str(&result, db[node], "pragma protocol_status");
+        assert(rc==SQLITE_OK);
+        done = strstr(result,"\"is_leader\": true")>0 || strstr(result,"\"leader\": null")==0;
+        sqlite3_free(result);
+        printf("."); fflush(stdout);
+      }
+      assert(done);
+    }
+    puts("");
+
+    /* count how many peers each node is connected to */
+    for(i=0; active_online_nodes[i]; i++){
+      int node = active_online_nodes[i];
+      int nauths = 0, npeers = 0;
+      rc = sqlite3_prepare_v2(db[node], "pragma nodes", -1, &stmt, NULL);
+      assert( rc==SQLITE_OK );
+      assert( stmt!=NULL );
+      while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
+        char *address = (char*)sqlite3_column_text(stmt, 2);
+        if( address[0] ) npeers++;
+        nauths++;
+      }
+      assert( rc==SQLITE_DONE || rc==SQLITE_OK );
+      sqlite3_finalize(stmt); stmt = NULL;
+      printf("node %d connected to %d nodes. total of %d authorizations\n", node, npeers-1, nauths);
+    }
+
     printf("waiting for new block"); fflush(stdout);
 
     for(i=0; active_online_nodes[i]; i++){
       int node = active_online_nodes[i];
+      if( last_nonce[node]==0 ) continue;
       done = 0;
       for(count=0; !done && count<200; count++){
         char *result, sql[128];
@@ -2168,6 +2583,7 @@ void test_new_nodes(
       assert(done);
     }
     puts("");
+
 
     /* check if the data was replicated to the other nodes */
 
@@ -2237,6 +2653,8 @@ loc_exit:
     sqlite3_close(db[i]);
   }
 
+  secp256k1_context_destroy(ecdsa_ctx);
+
   puts("done");
 
 }
@@ -2287,7 +2705,10 @@ int main(){
     /* num_txns_on_online_nodes,   */ 0,
     /* active_online_nodes[],      */ (int[]){0},
     /* num_txns_on_reconnect,      */ 0,
-    /* active_nodes_on_reconnect[] */ (int[]){0}
+    /* active_nodes_on_reconnect[] */ (int[]){0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ true,
+    /* exec_while_adding           */ false
   );
 
   test_reconnection(10, false, 500,
@@ -2297,7 +2718,10 @@ int main(){
     /* num_txns_on_online_nodes,   */ 0,
     /* active_online_nodes[],      */ (int[]){0},
     /* num_txns_on_reconnect,      */ 3,
-    /* active_nodes_on_reconnect[] */ (int[]){3,6,9,0}
+    /* active_nodes_on_reconnect[] */ (int[]){3,6,9,0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ true,
+    /* exec_while_adding           */ false
   );
 
   test_reconnection(10, false, 500,
@@ -2307,7 +2731,10 @@ int main(){
     /* num_txns_on_online_nodes,   */ 3,
     /* active_online_nodes[],      */ (int[]){3,8,0},
     /* num_txns_on_reconnect,      */ 0,
-    /* active_nodes_on_reconnect[] */ (int[]){0}
+    /* active_nodes_on_reconnect[] */ (int[]){0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ true,
+    /* exec_while_adding           */ false
   );
 
   test_reconnection(10, false, 500,
@@ -2317,7 +2744,10 @@ int main(){
     /* num_txns_on_online_nodes,   */ 3,
     /* active_online_nodes[],      */ (int[]){3,8,0},
     /* num_txns_on_reconnect,      */ 5,
-    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,0}
+    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ true,
+    /* exec_while_adding           */ false
   );
 
   test_reconnection(10, false, 500,
@@ -2327,7 +2757,10 @@ int main(){
     /* num_txns_on_online_nodes,   */ 0,
     /* active_online_nodes[],      */ (int[]){0},
     /* num_txns_on_reconnect,      */ 0,
-    /* active_nodes_on_reconnect[] */ (int[]){0}
+    /* active_nodes_on_reconnect[] */ (int[]){0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ true,
+    /* exec_while_adding           */ false
   );
 
   test_reconnection(10, false, 500,
@@ -2337,7 +2770,10 @@ int main(){
     /* num_txns_on_online_nodes,   */ 3,
     /* active_online_nodes[],      */ (int[]){3,8,0},
     /* num_txns_on_reconnect,      */ 5,
-    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,0}
+    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ true,
+    /* exec_while_adding           */ false
   );
 
   test_reconnection(25, false, 500,
@@ -2347,22 +2783,183 @@ int main(){
     /* num_txns_on_online_nodes,   */ 6,
     /* active_online_nodes[],      */ (int[]){3,8,11,17,0},
     /* num_txns_on_reconnect,      */ 9,
-    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,20,21,0}
+    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,20,21,0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ true,
+    /* exec_while_adding           */ false
   );
 
-goto loc_exit;
+  test_reconnection(25, false, 500,   // majority disconnected
+    /* disconnect_nodes[]          */ (int[]){2,4,6,8,10,12,14,16,18,20,22,23,24,0},
+    /* num_txns_on_offline_nodes,  */ 9,
+    /* active_offline_nodes[],     */ (int[]){2,8,16,22,0},
+    /* num_txns_on_online_nodes,   */ 6,
+    /* active_online_nodes[],      */ (int[]){3,7,11,17,0},
+    /* num_txns_on_reconnect,      */ 9,
+    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,20,21,0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ false,
+    /* exec_while_adding           */ false
+  );
 
-  test_reconnection(50, false, 500,
+  test_reconnection(25, false, 500,   // all disconnected - node 2 reconnects first
+    /* disconnect_nodes[]          */ (int[]){2,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,1,0},
+    /* num_txns_on_offline_nodes,  */ 9,
+    /* active_offline_nodes[],     */ (int[]){1,5,15,17,23,0},
+    /* num_txns_on_online_nodes,   */ 0,
+    /* active_online_nodes[],      */ (int[]){0},
+    /* num_txns_on_reconnect,      */ 9,
+    /* active_nodes_on_reconnect[] */ (int[]){1,2,3,6,7,20,23,0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ false,
+    /* exec_while_adding           */ false
+  );
+
+  test_reconnection(25, false, 500,   // all disconnected - main nodes reconnect later
+    /* disconnect_nodes[]          */ (int[]){25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0},
+    /* num_txns_on_offline_nodes,  */ 9,
+    /* active_offline_nodes[],     */ (int[]){1,5,15,17,23,0},
+    /* num_txns_on_online_nodes,   */ 0,
+    /* active_online_nodes[],      */ (int[]){0},
+    /* num_txns_on_reconnect,      */ 9,
+    /* active_nodes_on_reconnect[] */ (int[]){1,2,3,6,7,20,23,0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ false,
+    /* exec_while_adding           */ false
+  );
+
+  test_reconnection(25, false, 500,   // all disconnected - main nodes reconnect in the middle
+    /* disconnect_nodes[]          */ (int[]){25,24,23,22,21,20,19,18,17,2,16,15,14,13,1,12,11,10,9,8,7,6,5,4,3,0},
+    /* num_txns_on_offline_nodes,  */ 9,
+    /* active_offline_nodes[],     */ (int[]){1,5,15,17,23,0},
+    /* num_txns_on_online_nodes,   */ 0,
+    /* active_online_nodes[],      */ (int[]){0},
+    /* num_txns_on_reconnect,      */ 9,
+    /* active_nodes_on_reconnect[] */ (int[]){1,2,3,6,7,20,23,0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ false,
+    /* exec_while_adding           */ false
+  );
+
+#if 0
+  test_reconnection(50, false, 1000,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,0},
     /* num_txns_on_offline_nodes,  */ 9,
     /* active_offline_nodes[],     */ (int[]){4,10,20,33,38,49,0},
     /* num_txns_on_online_nodes,   */ 9,
     /* active_online_nodes[],      */ (int[]){3,8,11,25,35,45,0},
     /* num_txns_on_reconnect,      */ 12,
-    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,20,25,44,45,0}
+    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,20,25,44,45,0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ true,
+    /* exec_while_adding           */ false
   );
 
-  test_reconnection(100, false, 500,
+  test_reconnection(50, false, 1000,
+    /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,0},
+    /* num_txns_on_offline_nodes,  */ 9,
+    /* active_offline_nodes[],     */ (int[]){4,10,20,33,38,49,0},
+    /* num_txns_on_online_nodes,   */ 9,
+    /* active_online_nodes[],      */ (int[]){3,8,11,25,35,45,0},
+    /* num_txns_on_reconnect,      */ 12,
+    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,20,25,44,45,0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ false,
+    /* exec_while_adding           */ false
+  );
+
+  test_reconnection(50, false, 1000,
+    /* disconnect_nodes[]          */ (int[]){49,44,38,37,33,23,20,15,10,7,4,2,0},
+    /* num_txns_on_offline_nodes,  */ 9,
+    /* active_offline_nodes[],     */ (int[]){4,10,20,33,38,49,0},
+    /* num_txns_on_online_nodes,   */ 9,
+    /* active_online_nodes[],      */ (int[]){3,8,11,25,35,45,0},
+    /* num_txns_on_reconnect,      */ 12,
+    /* active_nodes_on_reconnect[] */ (int[]){45,44,25,20,7,6,3,2,0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ false,
+    /* exec_while_adding           */ false
+  );
+
+  test_reconnection(50, false, 1000,  // majority disconnected
+    /* disconnect_nodes[]          */ (int[]){50,48,46,44,42,40,38,36,34,32,30,28,26,24,22,20,18,16,14,12,10,8,6,4,2,0},
+    /* num_txns_on_offline_nodes,  */ 9,
+    /* active_offline_nodes[],     */ (int[]){4,10,20,32,38,48,0},
+    /* num_txns_on_online_nodes,   */ 9,
+    /* active_online_nodes[],      */ (int[]){3,7,11,25,35,45,0},
+    /* num_txns_on_reconnect,      */ 12,
+    /* active_nodes_on_reconnect[] */ (int[]){45,44,25,20,7,6,3,2,0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ false,
+    /* exec_while_adding           */ false
+  );
+
+  test_reconnection(50, false, 1000,  // all disconnected
+    /* disconnect_nodes[]          */ (int[]){50,49,48,47,46,45,44,43,42,41,40,39,38,37,36,35,34,33,32,31,30,29,28,27,26,25,1,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,0},
+    /* num_txns_on_offline_nodes,  */ 9,
+    /* active_offline_nodes[],     */ (int[]){4,10,20,1,32,38,48,0},
+    /* num_txns_on_online_nodes,   */ 0,
+    /* active_online_nodes[],      */ (int[]){0},
+    /* num_txns_on_reconnect,      */ 12,
+    /* active_nodes_on_reconnect[] */ (int[]){45,44,25,20,7,6,3,2,0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ false,
+    /* exec_while_adding           */ false
+  );
+
+  test_reconnection(50, false, 1000,
+    /* disconnect_nodes[]          */ (int[]){49,44,38,37,33,23,20,15,10,7,4,2,0},
+    /* num_txns_on_offline_nodes,  */ 9,
+    /* active_offline_nodes[],     */ (int[]){20,33,2,38,49,10,0},
+    /* num_txns_on_online_nodes,   */ 9,
+    /* active_online_nodes[],      */ (int[]){25,8,45,11,3,35,0},
+    /* num_txns_on_reconnect,      */ 12,
+    /* active_nodes_on_reconnect[] */ (int[]){45,44,25,20,7,6,3,2,0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ false,
+    /* exec_while_adding           */ false
+  );
+
+  test_reconnection(100, false, 3000,
+    /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,55,66,77,88,95,0},
+    /* num_txns_on_offline_nodes,  */ 9,
+    /* active_offline_nodes[],     */ (int[]){4,10,20,33,38,49,0},
+    /* num_txns_on_online_nodes,   */ 9,
+    /* active_online_nodes[],      */ (int[]){3,8,11,25,35,45,0},
+    /* num_txns_on_reconnect,      */ 12,
+    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,20,25,44,45,0},
+    /* wait_between_add_nodes      */ 250,
+    /* check_connections           */ true,
+    /* exec_while_adding           */ false
+  );
+
+  test_reconnection(100, false, 3000,
+    /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,55,66,77,88,95,0},
+    /* num_txns_on_offline_nodes,  */ 9,
+    /* active_offline_nodes[],     */ (int[]){4,10,20,33,38,49,0},
+    /* num_txns_on_online_nodes,   */ 9,
+    /* active_online_nodes[],      */ (int[]){3,8,11,25,35,45,0},
+    /* num_txns_on_reconnect,      */ 12,
+    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,20,25,44,45,0},
+    /* wait_between_add_nodes      */ 250,
+    /* check_connections           */ false,
+    /* exec_while_adding           */ false
+  );
+
+  test_reconnection(100, false, 3000,
+    /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,55,66,77,88,95,0},
+    /* num_txns_on_offline_nodes,  */ 9,
+    /* active_offline_nodes[],     */ (int[]){4,10,20,33,38,49,0},
+    /* num_txns_on_online_nodes,   */ 9,
+    /* active_online_nodes[],      */ (int[]){3,8,11,25,35,45,0},
+    /* num_txns_on_reconnect,      */ 12,
+    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,20,25,44,45,0},
+    /* wait_between_add_nodes      */ 250,
+    /* check_connections           */ false,
+    /* exec_while_adding           */ true
+  );
+
+  test_reconnection(150, false, 3000,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,55,66,77,88,95,0},
     /* num_txns_on_offline_nodes,  */ 9,
     /* active_offline_nodes[],     */ (int[]){4,10,20,33,38,49,0},
@@ -2372,18 +2969,7 @@ goto loc_exit;
     /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,20,25,44,45,0}
   );
 
-#if 0
-  test_reconnection(150, false, 500,
-    /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,55,66,77,88,95,0},
-    /* num_txns_on_offline_nodes,  */ 9,
-    /* active_offline_nodes[],     */ (int[]){4,10,20,33,38,49,0},
-    /* num_txns_on_online_nodes,   */ 9,
-    /* active_online_nodes[],      */ (int[]){3,8,11,25,35,45,0},
-    /* num_txns_on_reconnect,      */ 12,
-    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,20,25,44,45,0}
-  );
-
-  test_reconnection(200, false, 500,
+  test_reconnection(200, false, 5000,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,55,66,77,88,95,0},
     /* num_txns_on_offline_nodes,  */ 9,
     /* active_offline_nodes[],     */ (int[]){4,10,20,33,38,49,0},
@@ -2434,7 +3020,7 @@ goto loc_exit;
     /* new_blocks_on_net,     */ 1,
     /* num_offline_txns,      */ 3,
 
-    /* n_remaining_online,    */ 7,
+    /* n_remaining_online,    */ 6,
     /* n_new_no_content2,     */ 1,
     /* n_new_with_content2    */ 1
   );
@@ -2451,7 +3037,7 @@ goto loc_exit;
     /* new_blocks_on_net,     */ 1,
     /* num_offline_txns,      */ 3,
 
-    /* n_remaining_online,    */ 7,
+    /* n_remaining_online,    */ 6,
     /* n_new_no_content2,     */ 2,
     /* n_new_with_content2    */ 0
   );
@@ -2464,6 +3050,7 @@ loc_exit:
 
   /* delete the test db files on success */
   delete_files(200);
+  delete_log();
 
   puts("OK. All tests pass!"); return 0;
 }
