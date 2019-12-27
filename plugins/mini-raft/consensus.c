@@ -217,7 +217,7 @@ SQLITE_PRIVATE int verify_block(plugin *plugin, struct block *block){
     }
   }
 
-  rc = aergolite_verify_block(this_node, block->header, block->body);
+  rc = aergolite_verify_block(this_node, block->header, block->body, block->id);
   if( rc ) goto loc_failed;
 
   if( block->sender ){
@@ -521,7 +521,7 @@ loc_again:
   if( count==0 ) goto loc_failed;
 
   /* finalize the block creation */
-  rc = aergolite_create_block(this_node, &block->height, &block->header, &block->body);
+  rc = aergolite_create_block(this_node, &block->height, &block->header, &block->body, block->id);
   if( rc ) goto loc_failed2;
 
   array_free(&plugin->nonces);

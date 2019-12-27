@@ -11809,8 +11809,8 @@ SQLITE_API int aergolite_verify_transaction(
 */
 
 SQLITE_API int aergolite_begin_block(aergolite *this_node);
-SQLITE_API int aergolite_create_block(aergolite *this_node, int64 *pheight, void **pheader, void **pbody);
-SQLITE_API int aergolite_verify_block(aergolite *this_node, void *header, void *body);
+SQLITE_API int aergolite_create_block(aergolite *this_node, int64 *pheight, void **pheader, void **pbody, void *id);
+SQLITE_API int aergolite_verify_block(aergolite *this_node, void *header, void *body, void *id);
 SQLITE_API int aergolite_commit_block(aergolite *this_node, void *header, void *body, void *signatures);
 SQLITE_API int aergolite_apply_block(aergolite *this_node, void *header, void *body, void *signatures);
 SQLITE_API int aergolite_rollback_block(aergolite *this_node);
