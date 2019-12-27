@@ -83,6 +83,7 @@
 #define PLUGIN_BODY                0xc0de017
 #define PLUGIN_SIGNATURES          0xc0de018
 #define PLUGIN_MOD_PAGES           0xc0de019
+#define PLUGIN_HASH                0xc0de020
 
 
 /* peer message parameters */
@@ -97,7 +98,6 @@
 #define PLUGIN_TID                 0xc0de007  /*  */
 #define PLUGIN_NONCE               0xc0de008  /*  */
 #define PLUGIN_SQL_CMDS            0xc0de009  /*  */
-//#define PLUGIN_HASH                0xc0de010  /*  */
 
 
 //#define BLOCK_HEIGHT    0x34
@@ -238,6 +238,7 @@ struct transaction {
 struct block {
   struct block *next;
   int64 height;
+  unsigned char id[32];
   void *header;
   void *body;
   void *signatures;

@@ -56,6 +56,7 @@ struct block {
   int  body_id;
   BOOL verify_ok;
 #ifdef AERGOLITE_AMALGAMATION
+  unsigned char id[32];
   int  ack_count;
   BOOL commit_sent;
   int  downloading_txns;
