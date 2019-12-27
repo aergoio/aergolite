@@ -226,6 +226,7 @@ SQLITE_PRIVATE int verify_block(plugin *plugin, struct block *block){
     binn *map = binn_map();
     binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_NEW_BLOCK_ACK);
     binn_map_set_int64(map, PLUGIN_HEIGHT, block->height);
+    binn_map_set_blob(map, PLUGIN_HASH, block->id, 32);
     send_peer_message(block->sender, map, NULL);
     binn_free(map);
   }
@@ -383,12 +384,13 @@ SQLITE_PRIVATE void on_commit_block(node *node, void *msg, int size) {
   plugin *plugin = node->plugin;
   struct block *block;
   int64 height;
-  //uchar *hash;
+  unsigned char *id;
 
   height = binn_map_int64(msg, PLUGIN_HEIGHT);
-  //hash = binn_map_blob (msg, PLUGIN_HASH, NULL);  //&hash_size);
+  id = binn_map_blob(msg, PLUGIN_HASH, NULL);
 
-  SYNCTRACE("on_commit_block - height=%" INT64_FORMAT "\n", height);
+  SYNCTRACE("on_commit_block - height=%" INT64_FORMAT " id=%02X%02X%02X%02X\n",
+            height, *id, *(id+1), *(id+2), *(id+3));
 
   /* if this node is in a state update, ignore the block commit command */
   if( plugin->sync_down_state!=DB_STATE_IN_SYNC ) return;
@@ -404,8 +406,10 @@ SQLITE_PRIVATE void on_commit_block(node *node, void *msg, int size) {
   }
 
   /* check if the local block is the expected one */
-  if( block->height!=height ){
-    SYNCTRACE("on_commit_block - unexpected block height - cached block height: %d\n", block->height);
+  if( block->height!=height || id==NULL || memcmp(block->id,id,32)!=0 ){
+    SYNCTRACE("on_commit_block - unexpected block - cached block height: %"
+              INT64_FORMAT " id=%02X%02X%02X%02X\n", block->height,
+              *block->id, *(block->id+1), *(block->id+2), *(block->id+3));
     rollback_block(plugin);
     request_state_update(plugin);
     return;
@@ -663,7 +667,6 @@ SQLITE_PRIVATE int broadcast_new_block(plugin *plugin) {
 /*
 ** Used by the leader.
 */
-// signed block, signed state, state commit
 SQLITE_PRIVATE int broadcast_block_commit(plugin *plugin, struct block *block) {
   struct node *node;
   binn *map;
@@ -677,7 +680,7 @@ SQLITE_PRIVATE int broadcast_block_commit(plugin *plugin, struct block *block) {
 
   binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_COMMIT_BLOCK);
   binn_map_set_int64(map, PLUGIN_HEIGHT, block->height);
-  //binn_map_set_blob(map, PLUGIN_HASH, block->hash, SHA256_BLOCK_SIZE);
+  binn_map_set_blob(map, PLUGIN_HASH, block->id, 32);
 
   for( node=plugin->peers; node; node=node->next ){
     send_peer_message(node, map, NULL);
@@ -695,7 +698,7 @@ SQLITE_PRIVATE void on_acknowledged_block(plugin *plugin, struct block *block) {
 
   SYNCTRACE("on_acknowledged_block - height=%" INT64_FORMAT "\n", block->height);
 
-  /* send command to apply the new block */  //! -- is this needed?  it depends on enough signatures
+  /* send command to apply the new block */
   rc = broadcast_block_commit(plugin, block);
   if( rc ){
     /* discard the block */
@@ -714,22 +717,25 @@ SQLITE_PRIVATE void on_acknowledged_block(plugin *plugin, struct block *block) {
 
 /****************************************************************************/
 
-//! ack or signed?
-
 SQLITE_PRIVATE void on_node_acknowledged_block(node *source_node, void *msg, int size) {
   plugin *plugin = source_node->plugin;
   aergolite *this_node = source_node->this_node;
   struct block *block;
+  unsigned char *id;
   int64 height;
 
   height = binn_map_int64(msg, PLUGIN_HEIGHT);
+  id = binn_map_blob(msg, PLUGIN_HASH, NULL);
 
-  SYNCTRACE("on_node_acknowledged_block - height=%" INT64_FORMAT "\n", height);
+  assert(id);
 
-  block = plugin->new_block; //! ??
+  SYNCTRACE("on_node_acknowledged_block - height=%" INT64_FORMAT " id=%02X%02X%02X%02X\n",
+            height, *id, *(id+1), *(id+2), *(id+3));
+
+  block = plugin->new_block;
   if( !block ) return;  /* already committed */
 
-  if( block->height!=height ){
+  if( block->height!=height || id==NULL || memcmp(block->id,id,32)!=0 ){
     SYNCTRACE("on_node_acknowledged_block - NOT FOUND\n");
     return;
   }

@@ -171,7 +171,11 @@ clean:
 	rm -f *.o libaergolite.a libaergolite.dylib $(LIBRARY) $(LIBNICK1) $(LIBNICK2) $(LIBNICK3) $(LIBNICK4) $(SSHELL) test/runtest
 
 test/runtest: test/test.c test/db_functions.c
+ifeq ($(OS),OSX)
+	$(CC) $< -o $@ -L. -lsqlite3 -lsecp256k1
+else
 	$(CC) $< -o $@ -Wl,-rpath=$(LIBPATH2) -L. -lsqlite3 -lsecp256k1
+endif
 
 test: test/runtest
 ifeq ($(OS),OSX)
