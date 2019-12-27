@@ -228,7 +228,8 @@ SQLITE_PRIVATE int verify_block(plugin *plugin, struct block *block){
   //! it must be signed (?) - later
   map = binn_map();
   binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_BLOCK_APPROVED);
-  binn_map_set_int64(map, PLUGIN_HEIGHT, block->height);  // maybe add more info, as hash/id/sign..
+  binn_map_set_int64(map, PLUGIN_HEIGHT, block->height);
+  binn_map_set_blob(map, PLUGIN_HASH, block->id, 32);
   for( node=plugin->peers; node; node=node->next ){
     if( node->is_authorized ){
       send_peer_message(node, map, NULL);
@@ -386,12 +387,13 @@ SQLITE_PRIVATE void on_node_approved_block(node *source_node, void *msg, int siz
   plugin *plugin = source_node->plugin;
   struct block *block;
   int64 height;
-  //uchar *hash;
+  unsigned char *id;
 
   height = binn_map_int64(msg, PLUGIN_HEIGHT);
-  //hash = binn_map_blob (msg, PLUGIN_HASH, NULL);  //&hash_size);
+  id = binn_map_blob(msg, PLUGIN_HASH, NULL);
 
-  SYNCTRACE("on_node_approved_block - height=%" INT64_FORMAT "\n", height);
+  SYNCTRACE("on_node_approved_block - height=%" INT64_FORMAT " id=%02X%02X%02X%02X\n",
+            height, *id, *(id+1), *(id+2), *(id+3));
 
   if( !plugin->is_leader ){
     /* if this node is in a state update, ignore the block commit command */
@@ -411,9 +413,12 @@ SQLITE_PRIVATE void on_node_approved_block(node *source_node, void *msg, int siz
   }
 
   /* check if the local block is the expected one */
-  if( block->height!=height ){
-    SYNCTRACE("on_node_approved_block - unexpected block height - cached block height: %d\n", block->height);
+  if( block->height!=height || id==NULL || memcmp(block->id,id,32)!=0 ){
+    SYNCTRACE("on_node_approved_block - unexpected block - cached block height: %"
+              INT64_FORMAT " id=%02X%02X%02X%02X\n", block->height,
+              *block->id, *(block->id+1), *(block->id+2), *(block->id+3));
     if( !plugin->is_leader ){
+      rollback_block(plugin);
       request_state_update(plugin);
     }
     return;
