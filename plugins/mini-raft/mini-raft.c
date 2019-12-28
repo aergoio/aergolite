@@ -466,8 +466,6 @@ SQLITE_PRIVATE void start_downstream_db_sync(plugin *plugin) {
     }
   }
 
-  plugin->sync_down_state = DB_STATE_SYNCHRONIZING;
-
   request_state_update(plugin);
 
 }
@@ -1826,6 +1824,7 @@ loc_exit:
 loc_return:
   plugin->thread_running = FALSE;
   SYNCTRACE("worker thread: returning\n");
+  DEBUG_EXIT_THREAD();
   return;
 
 loc_no_memory:

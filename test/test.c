@@ -2610,6 +2610,16 @@ loc_again2:
       }
       assert(done);
 
+      done = 0;
+      for(count=0; !done && count<100; count++){
+        int result;
+        if( count>0 ) usleep(wait_time);
+        rc = db_query_int32(&result, db[i], "select count(*) from sqlite_master where type='table'");
+        assert(rc==SQLITE_OK);
+        done = (result >= num_tables);
+      }
+      assert(done);
+
       db_check_int(db[i], "select count(*) from t1 where name='aa1'", 1);
       db_check_int(db[i], "select count(*) from t1 where name='aa2'", 1);
       db_check_int(db[i], "select count(*) from t1 where name='online'", new_blocks_on_net * num_txns_per_block);

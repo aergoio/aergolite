@@ -298,6 +298,11 @@ SQLITE_PRIVATE int commit_block(plugin *plugin, struct block *block){
   plugin->new_block = NULL;
 
   SYNCTRACE("commit_block OK\n");
+
+  if( plugin->is_leader ){
+    start_new_block_timer(plugin);
+  }
+
   return SQLITE_OK;
 
 loc_failed:
@@ -339,26 +344,48 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
   struct block *block;
   int64 height;
   void *header, *body;
+  uchar id[32]={0};
+  int rc;
 
   height = binn_map_int64(msg, PLUGIN_HEIGHT);
   header = binn_map_blob(msg, PLUGIN_HEADER, NULL);
   body   = binn_map_blob(msg, PLUGIN_BODY, NULL);
 
-  SYNCTRACE("on_new_block - height=%" INT64_FORMAT "\n", height);
+  rc = aergolite_verify_block_header(this_node, header, body, id);
+
+  SYNCTRACE("on_new_block - %s height=%" INT64_FORMAT " id=%02X%02X%02X%02X\n",
+            rc ? "INVALID BLOCK -" : "",
+            height, id[0], id[1], id[2], id[3]);
+
+  if( rc ) return;
 
   /* if this node is not prepared to apply this block, do not acknowledge its receival */
   if( !plugin->current_block ){
     SYNCTRACE("on_new_block plugin->current_block==NULL\n");
-    if( height!=1 ) return;
-  }else if( height!=plugin->current_block->height+1 ){
-    SYNCTRACE("on_new_block FAILED plugin->current_block->height=%" INT64_FORMAT "\n",
+    if( height>1 ){
+      request_state_update(plugin);  //! what if the block is from an attacker?
+      return;
+    }
+  }else if( height<=plugin->current_block->height ){
+    SYNCTRACE("on_new_block OLD BLOCK plugin->current_block->height=%" INT64_FORMAT "\n",
               plugin->current_block->height);
+    return;
+  }else if( height!=plugin->current_block->height+1 ){
+    SYNCTRACE("on_new_block OUTDATED STATE plugin->current_block->height=%" INT64_FORMAT "\n",
+              plugin->current_block->height);
+    request_state_update(plugin);  //! what if the block is from an attacker?
     return;
   }
 
-  /* if another block is open, discard it */
+  /* if another block is open */
   if( plugin->new_block ){
-    rollback_block(plugin);
+    if( height==plugin->new_block->height && memcmp(id,plugin->new_block->id,32)==0 ){
+      /* it is the same block */
+      return;
+    }else{
+      /* it is a different block */
+      rollback_block(plugin);
+    }
   }
 
   /* allocate a new block structure */
@@ -375,6 +402,8 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
     discard_block(block);
     return;
   }
+
+  memcpy(block->id, id, 32);
 
   /* verify if the block is correct */
   verify_block(plugin, block);
@@ -551,6 +580,7 @@ loc_again:
   if( rc ) goto loc_failed2;
 
   array_free(&plugin->nonces);
+  SYNCTRACE("create_new_block OK\n");
   return block;
 
 loc_failed:
