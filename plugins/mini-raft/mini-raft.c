@@ -466,8 +466,6 @@ SQLITE_PRIVATE void start_downstream_db_sync(plugin *plugin) {
     }
   }
 
-  plugin->sync_down_state = DB_STATE_SYNCHRONIZING;
-
   request_state_update(plugin);
 
 }

@@ -142,11 +142,16 @@ SQLITE_PRIVATE void request_state_update(plugin *plugin) {
     return;
   }
 
-  plugin->sync_down_state = DB_STATE_SYNCHRONIZING;
-
   if( plugin->new_block){
     rollback_block(plugin);
   }
+
+  if( plugin->sync_down_state==DB_STATE_SYNCHRONIZING ){
+    SYNCTRACE("request_state_update ALREADY SENT\n");
+    return;
+  }
+
+  plugin->sync_down_state = DB_STATE_SYNCHRONIZING;
 
   map = binn_map();
   if( !map ) goto loc_failed;
@@ -200,7 +205,7 @@ SQLITE_PRIVATE void on_update_db_page(node *node, void *msg, int size) {
   if( plugin->sync_down_state!=DB_STATE_SYNCHRONIZING ){
     sqlite3_log(1, "on_update_db_page FAILED - the state is not synchronizing");
     //request_state_update(plugin);  -- the apply msg from the previous request can cause problems
-    goto loc_failed;
+    return;
   }
 
   if( !plugin->is_updating_state ){
@@ -254,7 +259,7 @@ SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
       !plugin->is_updating_state ){
     sqlite3_log(1, "on_apply_state_update FAILED - the current node is not synchronizing");
     //request_state_update(plugin);
-    goto loc_failed;
+    return;
   }
 
   /* commit the new state */
@@ -286,6 +291,8 @@ SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
 
   /* remove old transactions from mempool */
   check_mempool_transactions(plugin);
+
+  SYNCTRACE("on_apply_state_update - OK\n");
 
 loc_exit:
   plugin->is_updating_state = false;
