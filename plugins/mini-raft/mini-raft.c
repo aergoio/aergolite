@@ -435,6 +435,7 @@ SQLITE_PRIVATE void discard_block(struct block *block) {
   if( block->header     ) sqlite3_free(block->header);
   if( block->body       ) sqlite3_free(block->body);
   if( block->signatures ) sqlite3_free(block->signatures);
+  if( block->votes      ) array_free(&block->votes);
   sqlite3_free(block);
 
 }
@@ -1879,6 +1880,8 @@ SQLITE_API void plugin_end(void *arg){
   close_worker_thread(plugin);
 
   clear_leader_votes(plugin);
+
+  clear_block_votes(plugin);
 
   while( plugin->mempool ){
     discard_mempool_transaction(plugin, plugin->mempool);

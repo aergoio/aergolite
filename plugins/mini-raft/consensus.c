@@ -1,5 +1,6 @@
 
 SQLITE_PRIVATE int verify_last_block(plugin *plugin);
+SQLITE_PRIVATE int commit_block(plugin *plugin, struct block *block);
 
 /****************************************************************************/
 
@@ -79,6 +80,116 @@ SQLITE_PRIVATE void on_requested_transaction_not_found(node *node, void *msg, in
 
 }
 
+/****************************************************************************/
+/****************************************************************************/
+
+SQLITE_PRIVATE bool add_block_vote(struct block *block, int node_id){
+  int *node_ids, i, count;
+
+  SYNCTRACE("add_block_vote\n");
+
+  if( !block->votes ){
+    block->votes = new_array(16, sizeof(int));
+    if( !block->votes ) return false;
+  }
+
+  /* check if the vote is already stored */
+  count = array_count(block->votes);
+  node_ids = (int*) array_ptr(block->votes);
+  for( i=0; i<count; i++ ){
+    if( node_ids[i]==node_id ) return false;
+  }
+
+  /* add it to the array */
+  array_append(&block->votes, &node_id);
+
+  return true;
+}
+
+/****************************************************************************/
+
+/*
+** Store the votes temporarily while the block does not arrive
+*/
+SQLITE_PRIVATE void store_block_vote(node *node, int64 height, uchar *block_id){
+  plugin *plugin = node->plugin;
+  struct block_vote *vote;
+
+  SYNCTRACE("store_block_vote\n");
+
+  /* check if the vote is already stored */
+  for( vote=plugin->block_votes; vote; vote=vote->next ){
+    if( vote->height==height && memcmp(vote->block_id,block_id,32)==0 &&
+        vote->node_id==node->id ){
+      return;
+    }
+  }
+
+  /* store the new vote */
+
+  vote = sqlite3_malloc_zero(sizeof(struct block_vote));
+  if( !vote ) return;
+
+  vote->height = height;
+  memcpy(vote->block_id, block_id, 32);
+  vote->node_id = node->id;
+
+  llist_add(&plugin->block_votes, vote);
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void transfer_block_votes(plugin *plugin, struct block *block){
+  struct block_vote *vote;
+
+  SYNCTRACE("transfer_block_votes\n");
+
+  for( vote=plugin->block_votes; vote; vote=vote->next ){
+    if( vote->height==block->height && memcmp(vote->block_id,block->id,32)==0 ){
+      if( add_block_vote(block,vote->node_id) ){
+        block->ack_count++;
+      }
+    }
+  }
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void discard_old_block_votes(plugin *plugin){
+  int64 current_height = plugin->current_block ? plugin->current_block->height : 0;
+  struct block_vote *vote;
+
+  SYNCTRACE("discard_old_block_votes\n");
+
+loc_again:
+
+  for( vote=plugin->block_votes; vote; vote=vote->next ){
+    if( vote->height < current_height ){
+      llist_remove(&plugin->block_votes, vote);
+      sqlite3_free(vote);
+      goto loc_again;
+    }
+  }
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void clear_block_votes(plugin *plugin){
+
+  SYNCTRACE("clear_block_votes\n");
+
+  while( plugin->block_votes ){
+    struct block_vote *next = plugin->block_votes->next;
+    sqlite3_free(plugin->block_votes);
+    plugin->block_votes = next;
+  }
+
+}
+
+/****************************************************************************/
 /****************************************************************************/
 #if 0
 SQLITE_PRIVATE void request_block(plugin *plugin, int64 height){
@@ -238,6 +349,13 @@ SQLITE_PRIVATE int verify_block(plugin *plugin, struct block *block){
   binn_free(map);
 
   SYNCTRACE("verify_block OK\n");
+
+  /* check if it already has sufficient votes */
+//  if( block->ack_count >= majority(plugin->total_authorized_nodes) ){
+    /* commit the new block on this node */
+//    commit_block(plugin, block);
+//  }
+
   return SQLITE_OK;
 
 loc_failed:
@@ -296,6 +414,9 @@ SQLITE_PRIVATE int commit_block(plugin *plugin, struct block *block){
   if( plugin->current_block ) discard_block(plugin->current_block);
   plugin->current_block = block;
   plugin->new_block = NULL;
+
+  /* discard old block votes */
+  discard_old_block_votes(plugin);
 
   SYNCTRACE("commit_block OK\n");
 
@@ -405,6 +526,9 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
 
   memcpy(block->id, id, 32);
 
+  /* are there stored votes for this block? */
+  transfer_block_votes(plugin, block);
+
   /* verify if the block is correct */
   verify_block(plugin, block);
 
@@ -424,21 +548,31 @@ SQLITE_PRIVATE void on_node_approved_block(node *source_node, void *msg, int siz
   SYNCTRACE("on_node_approved_block - height=%" INT64_FORMAT " id=%02X%02X%02X%02X\n",
             height, *id, *(id+1), *(id+2), *(id+3));
 
-  if( !plugin->is_leader ){
-    /* if this node is in a state update, ignore the block commit command */
-    if( plugin->sync_down_state!=DB_STATE_IN_SYNC ) return;
-  }
-
   /* check if we have some block to be committed */
   block = plugin->new_block;
   if( !block ){
-    if( !plugin->is_leader && ( !plugin->current_block || height>plugin->current_block->height ) ){
-      /* the block is not on memory. request it */
-      SYNCTRACE("on_node_approved_block - no open block\n");
-      //request_block(plugin, height);  //! if it fails, start a state update
-      request_state_update(plugin);
+    int64 current_height = plugin->current_block ? plugin->current_block->height : 0;
+    SYNCTRACE("on_node_approved_block - no open block\n");
+    if( plugin->is_leader ) return;
+    if( height>current_height ){
+      /* store the vote for this block */
+      store_block_vote(source_node, height, id);
+      //if( plugin->sync_down_state==DB_STATE_IN_SYNC ){
+      //  /* the block is not on memory. request it */
+      //! request_block(source_node, height, id);  //! if it fails, start a state update
+      //}
+    }
+    if( height>current_height+1 ){
+      if( plugin->sync_down_state==DB_STATE_IN_SYNC ){
+        request_state_update(plugin);
+      }
     }
     return;
+  }
+
+  if( !plugin->is_leader ){
+    /* if this node is in a state update, ignore the block commit command */
+    if( plugin->sync_down_state!=DB_STATE_IN_SYNC ) return;
   }
 
   /* check if the local block is the expected one */
@@ -450,6 +584,12 @@ SQLITE_PRIVATE void on_node_approved_block(node *source_node, void *msg, int siz
       rollback_block(plugin);
       request_state_update(plugin);
     }
+    return;
+  }
+
+  /* check if this vote was already counted */
+  if( add_block_vote(block,source_node->id)==false ){
+    SYNCTRACE("on_node_approved_block - block vote already stored\n");
     return;
   }
 
@@ -525,11 +665,6 @@ SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
       !has_nodes_for_consensus(plugin)
   ){
     return (struct block *) -1;
-  }
-
-  /* if another block is open, discard it */
-  if( plugin->new_block ){
-    rollback_block(plugin);
   }
 
   /* get the list of last_nonce for each node */
@@ -616,6 +751,12 @@ SQLITE_PRIVATE void new_block_timer_cb(uv_timer_t* handle) {
     return;
   }
 
+  /* if there is an open non-commited block */
+  if( plugin->new_block ){
+    SYNCTRACE("new_block_timer_cb OPEN BLOCK\n");
+    return;
+  }
+
   block = create_new_block(plugin);
   if( !block ){
     SYNCTRACE("create_new_block FAILED. restarting the timer\n");
@@ -628,6 +769,8 @@ SQLITE_PRIVATE void new_block_timer_cb(uv_timer_t* handle) {
   /* store the new block */
   //llist_add(&plugin->blocks, block);
   plugin->new_block = block;
+
+  add_block_vote(block, plugin->node_id);
 
   /* reset the block ack_count */
   block->ack_count = 1;  /* ack by this node */

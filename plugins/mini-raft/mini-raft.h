@@ -242,11 +242,18 @@ struct block {
   void *body;
   void *signatures;
 
+  void *votes;
   int  ack_count;
-  BOOL commit_sent;
   int  downloading_txns;
 };
 #endif
+
+struct block_vote {
+  struct block_vote *next;
+  int64 height;
+  uchar block_id[32];
+  int node_id;
+};
 
 struct txn_list {
   struct txn_list *next;
@@ -286,6 +293,7 @@ struct plugin {
 
   struct block *current_block;
   struct block *new_block;
+  struct block_vote *block_votes;
 
 #if TARGET_OS_IPHONE
   uv_callback_t worker_cb;    /* callback handle to send msg to the worker thread */

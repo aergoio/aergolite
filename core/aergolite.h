@@ -57,8 +57,8 @@ struct block {
   BOOL verify_ok;
 #ifdef AERGOLITE_AMALGAMATION
   unsigned char id[32];
+  void *votes;
   int  ack_count;
-  BOOL commit_sent;
   int  downloading_txns;
 #endif
 };
