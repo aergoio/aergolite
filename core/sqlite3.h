@@ -12002,9 +12002,12 @@ uchar* aergolite_decrypt(aergolite *this_node, uchar *data, int *psize, int coun
 SQLITE_API void aergolite_log(char *format, ...);
 #define SYNCTRACE      aergolite_log
 #define SYNCERROR      aergolite_log
+SQLITE_API void aergolite_debug_exit_thread();
+#define DEBUG_EXIT_THREAD aergolite_debug_exit_thread
 #else
 #define SYNCTRACE(...)
 #define SYNCERROR(...)
+#define DEBUG_EXIT_THREAD(...)
 #endif
 
 

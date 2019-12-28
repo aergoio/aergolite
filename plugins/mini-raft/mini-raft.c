@@ -1829,6 +1829,7 @@ loc_exit:
 loc_return:
   plugin->thread_running = FALSE;
   SYNCTRACE("worker thread: returning\n");
+  DEBUG_EXIT_THREAD();
   return;
 
 loc_no_memory:
