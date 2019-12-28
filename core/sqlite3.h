@@ -11814,6 +11814,7 @@ SQLITE_API int aergolite_verify_block(aergolite *this_node, void *header, void *
 SQLITE_API int aergolite_commit_block(aergolite *this_node, void *header, void *body, void *signatures);
 SQLITE_API int aergolite_apply_block(aergolite *this_node, void *header, void *body, void *signatures);
 SQLITE_API int aergolite_rollback_block(aergolite *this_node);
+SQLITE_API int aergolite_verify_block_header(aergolite *this_node, void *header, void *body, void *id);
 
 
 /*
