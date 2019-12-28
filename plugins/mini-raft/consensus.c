@@ -291,6 +291,11 @@ SQLITE_PRIVATE int commit_block(plugin *plugin, struct block *block){
   plugin->new_block = NULL;
 
   SYNCTRACE("commit_block OK\n");
+
+  if( plugin->is_leader ){
+    start_new_block_timer(plugin);
+  }
+
   return SQLITE_OK;
 
 loc_failed:
@@ -365,9 +370,15 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
     return;
   }
 
-  /* if another block is open, discard it */
+  /* if another block is open */
   if( plugin->new_block ){
-    rollback_block(plugin);
+    if( height==plugin->new_block->height && memcmp(id,plugin->new_block->id,32)==0 ){
+      /* it is the same block */
+      return;
+    }else{
+      /* it is a different block */
+      rollback_block(plugin);
+    }
   }
 
   /* allocate a new block structure */
@@ -386,6 +397,8 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
     discard_block(block);
     return;
   }
+
+  memcpy(block->id, id, 32);
 
   /* verify if the block is correct */
   verify_block(plugin, block);
