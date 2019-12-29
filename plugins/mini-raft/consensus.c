@@ -340,11 +340,10 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
   uchar id[32]={0};
   int rc;
 
-  height = binn_map_int64(msg, PLUGIN_HEIGHT);
   header = binn_map_blob(msg, PLUGIN_HEADER, NULL);
   body   = binn_map_blob(msg, PLUGIN_BODY, NULL);
 
-  rc = aergolite_verify_block_header(this_node, header, body, id);
+  rc = aergolite_verify_block_header(this_node, header, body, &height, id);
 
   SYNCTRACE("on_new_block - %s height=%" INT64_FORMAT " id=%02X%02X%02X%02X\n",
             rc ? "INVALID BLOCK -" : "",
@@ -632,7 +631,6 @@ SQLITE_PRIVATE binn* encode_new_block(plugin *plugin) {
   block = plugin->new_block;
   map = binn_map();
   if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_NEW_BLOCK)==FALSE ) goto loc_failed;
-  if( binn_map_set_int64(map, PLUGIN_HEIGHT, block->height)==FALSE ) goto loc_failed;
   if( binn_map_set_blob(map, PLUGIN_HEADER, block->header, binn_size(block->header))==FALSE ) goto loc_failed;
   if( binn_map_set_blob(map, PLUGIN_BODY, block->body, binn_size(block->body))==FALSE ) goto loc_failed;
   return map;
