@@ -52,10 +52,11 @@ SQLITE_PRIVATE void llist_remove(void *pfirst, void *pto_del) {
     while (item != 0) {
       if (item->next == to_del) {
         item->next = to_del->next;
-        return;
+        break;
       }
       item = item->next;
     }
   }
 
+  to_del->next = NULL;
 }
