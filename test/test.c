@@ -729,7 +729,7 @@ loc_again1:
     for(i=0; i<len_array_list(included_nodes); i++){
       int nrows;
       int node = included_nodes[i];
-      printf("checking node %d", node);
+      printf("checking node %d connections", node);
 loc_again2:
       sqlite3_finalize(stmt); stmt = NULL;
       rc = sqlite3_prepare_v2(db[node], "pragma nodes", -1, &stmt, NULL);
@@ -774,7 +774,7 @@ loc_again2:
       assert( rc==SQLITE_DONE || rc==SQLITE_OK );
       sqlite3_finalize(stmt); stmt = NULL;
 
-      printf("connected to %d nodes\n", nrows);
+      //printf("connected to %d nodes\n", nrows);
       if( node<=2 ){
         assert( nrows==n );
       }else{
@@ -1110,7 +1110,7 @@ loc_again1:
 
   for(node=1; node<=n; node++){
     int nrows;
-    printf("checking node %d\n", node);
+    printf("checking node %d connections\n", node);
 loc_again2:
     sqlite3_finalize(stmt); stmt = NULL;
     rc = sqlite3_prepare_v2(db[node], "pragma nodes", -1, &stmt, NULL);
@@ -1144,7 +1144,7 @@ loc_again2:
     assert( rc==SQLITE_DONE || rc==SQLITE_OK );
     sqlite3_finalize(stmt); stmt = NULL;
 
-    printf("connected to %d nodes\n", nrows); fflush(stdout);
+    //printf("connected to %d nodes\n", nrows); fflush(stdout);
     if( node<=2 ){
       assert( nrows==n );
     }else{
@@ -1212,6 +1212,7 @@ loc_check_conns:
   }
 
 
+#if 0
   /* waiting for leader election */
 
   printf("waiting for leader election"); fflush(stdout);
@@ -1262,6 +1263,7 @@ loc_check_conns:
     }
     assert(done);
   }
+#endif
   puts("");
 
 
@@ -1524,6 +1526,7 @@ loc_check_conns2:
 
     printf("checking node %d\n", node); fflush(stdout);
 
+#if 0
     done = 0;
     for(count=0; !done && count<100; count++){
       char *result;
@@ -1534,6 +1537,7 @@ loc_check_conns2:
       sqlite3_free(result);
     }
     assert(done);
+#endif
 
     done = 0;
     for(count=0; !done && count<100; count++){
@@ -1814,7 +1818,7 @@ void test_new_nodes(
 
   for(node=1; node<=n_before; node++){
     int nrows;
-    printf("checking node %d\n", node);
+    printf("checking node %d connections\n", node);
 loc_again2:
     sqlite3_finalize(stmt); stmt = NULL;
     rc = sqlite3_prepare_v2(db[node], "pragma nodes", -1, &stmt, NULL);
@@ -1848,7 +1852,7 @@ loc_again2:
     assert( rc==SQLITE_DONE || rc==SQLITE_OK );
     sqlite3_finalize(stmt); stmt = NULL;
 
-    printf("connected to %d nodes\n", nrows); fflush(stdout);
+    //printf("connected to %d nodes\n", nrows); fflush(stdout);
     if( node<=2 ){
       assert( nrows==n_before );
     }else{
@@ -2200,6 +2204,7 @@ loc_again2:
 
     printf("checking node %d", node); fflush(stdout);
 
+#if 0
     done = 0;
     for(count=0; !done && count<100; count++){
       char *result;
@@ -2210,6 +2215,7 @@ loc_again2:
       sqlite3_free(result);
     }
     assert(done);
+#endif
 
     if( last_nonce[node]==0 ){ puts(""); continue; }
 
@@ -2293,12 +2299,24 @@ loc_again2:
     }
     assert(done);
 
+    int total_tables = 1 + 1 + n_new_with_content * num_offline_txns;
+
+    done = 0;
+    for(count=0; !done && count<100; count++){
+      int result;
+      if( count>0 ) usleep(wait_time);
+      rc = db_query_int32(&result, db[i], "select count(*) from sqlite_master where type='table'");
+      assert(rc==SQLITE_OK);
+      done = (result >= total_tables);
+    }
+    assert(done);
+
     db_check_int(db[i], "select count(*) from t1 where name='aa1'", 1);
     db_check_int(db[i], "select count(*) from t1 where name='aa2'", 1);
     db_check_int(db[i], "select count(*) from t1 where name='online'", new_blocks_on_net * num_txns_per_block);
     db_check_int(db[i], "select count(*) from t1 where name='disconnected'", n_old_with_content * num_offline_txns);
     db_check_int(db[i], "select count(*) from t1", total_rows);
-    db_check_int(db[i], "select count(*) from sqlite_master where type='table'", 1 + 1 + n_new_with_content * num_offline_txns);
+    db_check_int(db[i], "select count(*) from sqlite_master where type='table'", total_tables);
 
   }
 
@@ -2529,6 +2547,7 @@ loc_again2:
 
   if( n_after2 >= majority(n) ){
 
+#if 0
     printf("waiting for leader election"); fflush(stdout);
 
     for(i=0; active_online_nodes[i]; i++){
@@ -2546,6 +2565,7 @@ loc_again2:
       assert(done);
     }
     puts("");
+#endif
 
     /* count how many peers each node is connected to */
     for(i=0; active_online_nodes[i]; i++){
@@ -2786,7 +2806,7 @@ int main(){
     /* exec_while_adding           */ false
   );
 
-  test_reconnection(25, false, 500,
+  test_reconnection(25, false, 1000,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,0},
     /* num_txns_on_offline_nodes,  */ 6,
     /* active_offline_nodes[],     */ (int[]){2,7,15,23,0},
@@ -2799,7 +2819,7 @@ int main(){
     /* exec_while_adding           */ false
   );
 
-  test_reconnection(25, false, 500,   // majority disconnected
+  test_reconnection(25, false, 1000,   // majority disconnected
     /* disconnect_nodes[]          */ (int[]){2,4,6,8,10,12,14,16,18,20,22,23,24,0},
     /* num_txns_on_offline_nodes,  */ 9,
     /* active_offline_nodes[],     */ (int[]){2,8,16,22,0},
@@ -2812,7 +2832,7 @@ int main(){
     /* exec_while_adding           */ false
   );
 
-  test_reconnection(25, false, 500,   // all disconnected - node 2 reconnects first
+  test_reconnection(25, false, 1000,   // all disconnected - node 2 reconnects first
     /* disconnect_nodes[]          */ (int[]){2,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,1,0},
     /* num_txns_on_offline_nodes,  */ 9,
     /* active_offline_nodes[],     */ (int[]){1,5,15,17,23,0},
@@ -2825,7 +2845,7 @@ int main(){
     /* exec_while_adding           */ false
   );
 
-  test_reconnection(25, false, 500,   // all disconnected - main nodes reconnect later
+  test_reconnection(25, false, 1000,   // all disconnected - main nodes reconnect later
     /* disconnect_nodes[]          */ (int[]){25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0},
     /* num_txns_on_offline_nodes,  */ 9,
     /* active_offline_nodes[],     */ (int[]){1,5,15,17,23,0},
@@ -2838,7 +2858,7 @@ int main(){
     /* exec_while_adding           */ false
   );
 
-  test_reconnection(25, false, 500,   // all disconnected - main nodes reconnect in the middle
+  test_reconnection(25, false, 1000,   // all disconnected - main nodes reconnect in the middle
     /* disconnect_nodes[]          */ (int[]){25,24,23,22,21,20,19,18,17,2,16,15,14,13,1,12,11,10,9,8,7,6,5,4,3,0},
     /* num_txns_on_offline_nodes,  */ 9,
     /* active_offline_nodes[],     */ (int[]){1,5,15,17,23,0},
