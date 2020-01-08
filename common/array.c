@@ -106,6 +106,33 @@ SQLITE_PRIVATE void * array_get(void *array, int pos){
   return base + (pos * item_size);
 }
 
+/* does a full scan on the array until it finds the element using the compare function */
+SQLITE_PRIVATE int array_find(void *array, int(*compare_fn)(void*,void*), void *item){
+  uint16_t *pshort = (uint16_t *) array;
+  int item_size, used_items, i;
+  char *base;
+
+  if( !array || !compare_fn || !item ) return -2;
+
+  item_size  = pshort[0];
+  used_items = pshort[2];
+  base       = (char*) &pshort[4];  /* array base */
+
+  for( i=0; i<used_items; i++ ){
+    void *itemx = base + (i * item_size);
+    if( compare_fn(itemx,item)==0 ){
+      return i;  /* returns the position of the existing item */
+    }
+  }
+
+  /* item not found */
+  return -1;
+}
+
+SQLITE_PRIVATE bool in_array(void *array, int(*compare_fn)(void*,void*), void *item){
+  return array_find(array,compare_fn,item) >= 0;
+}
+
 /* increases the array size automatically if needed */
 static int array_insert_ex(void **parray, void *item, int pos, int(*compare_fn)(void*,void*), int replace){
   void *array;
