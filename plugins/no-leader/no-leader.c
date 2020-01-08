@@ -15,7 +15,7 @@
 #include <ctype.h>   /* for isdigit */
 #include <unistd.h>  /* for unlink */
 
-#include "mini-raft.h"
+#include "no-leader.h"
 
 #ifndef container_of
 #define container_of(ptr, type, member) ((type *)((char *)(ptr) - offsetof(type, member)))
@@ -2072,7 +2072,7 @@ void * plugin_init(aergolite *this_node, char *uri) {
   int64 random_no;
   int rc;
 
-  SYNCTRACE("initializing a new instance of mini-raft plugin\n");
+  SYNCTRACE("initializing a new instance of no-leader plugin\n");
 
   /* allocate a new plugin object */
 
@@ -2198,12 +2198,12 @@ loc_failed:
 
 // int register_plugin(){ -- if using as a library, this can be the entry point
 
-int register_miniraft_plugin(){
+int register_noleader_plugin(){
   int rc;
 
-  SYNCTRACE("registering the mini-raft plugin\n");
+  SYNCTRACE("registering the no-leader plugin\n");
 
-  rc = aergolite_plugin_register("mini-raft",
+  rc = aergolite_plugin_register("no-leader",
     plugin_init,
     plugin_end,
     on_new_local_transaction,
