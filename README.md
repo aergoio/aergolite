@@ -471,8 +471,6 @@ For the `mini-raft` consensus protocol the result is in this format:
 {
 "use_blockchain": true,
 "node_id": 692281563,
-"is_leader": false,
-"leader": 1772633815,
 "num_peers": 3,
 "mempool": {
   "num_transactions": 0
@@ -494,20 +492,16 @@ In this case the returned data will contain the list of connected nodes:
 {
 "use_blockchain": true,
 "node_id": 1506405147,
-"is_leader": false,
 "peers": [{
   "node_id": 692281563,
-  "is_leader": false,
   "conn_type": "outgoing",
   "address": "192.168.1.45:4329"
 },{
   "node_id": 1617834522,
-  "is_leader": true,
   "conn_type": "outgoing",
   "address": "192.168.1.42:4329"
 },{
   "node_id": 1772633815,
-  "is_leader": false,
   "conn_type": "incoming",
   "address": "192.168.1.47:38024"
 }],
@@ -646,11 +640,11 @@ sqlite3_create_function(db, "update_notification", 1, SQLITE_UTF8 | SQLITE_DETER
 
 ## Block interval
 
-Blocks are created by the leader node when using the mini-raft consensus protocol (default).
+Blocks are created by randomly selected nodes on each round when using the `no-leader` consensus protocol (default).
 
 AergoLite does not produce empty blocks. If there is no transaction to be processed, then no block is created.
 
-A timer for creating a new block is activated when a transaction arrives on the leader node (and the timer is not yet active).
+A timer for creating a new block is activated when a transaction arrives on the nodes (and the timer is not yet active).
 
 This timeout interval can be configured via URI using the `block_interval` parameter.
 
@@ -665,10 +659,10 @@ If the block interval is not specified then the library will use a default value
 
 ## Limitations
 
-This first version uses a modified version of Raft for communication and consensus between the nodes.
+This first version uses a fully connected network for communication between the nodes.
 
 It works with up to 100 nodes on the automated tests.
 
-Future versions will contain also a gossip based protocol to support thousands of nodes.
+Future versions will also contain a gossip based protocol to support thousands of nodes.
 
 Each node can create 2^32 rows on each rowid table.
