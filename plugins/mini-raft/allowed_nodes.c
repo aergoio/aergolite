@@ -89,13 +89,19 @@ SQLITE_PRIVATE void on_new_accepted_node(node *node) {
 
   send_mempool_transactions(plugin, node);
 
-  //check_current_leader(plugin);
+  send_new_blocks(plugin, node);
 
-  if( plugin->is_leader ){
-    /* it will check whether there are transactions to be processed and
-    ** enough connected nodes */
-    start_new_block_timer(plugin);
+  send_block_votes(plugin, node);
+
+  if( !uv_is_active((uv_handle_t*)&plugin->process_transactions_timer) ){
+    /* activate a timer to retry the synchronization if it fails */
+    SYNCTRACE("starting the process local transactions timer\n");
+    uv_timer_start(&plugin->process_transactions_timer, process_transactions_timer_cb, 1, 500);
   }
+
+  /* it will check whether there are transactions to be processed and
+  ** enough connected nodes */
+  start_new_block_timer(plugin);
 
 }
 

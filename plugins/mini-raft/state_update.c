@@ -1,90 +1,52 @@
+/*
 
-#if 0
+protocol:
 
-SQLITE_PRIVATE void on_transaction_request_sent(send_message_t *req, int status) {
+  send the request to all (or most) peers
+  one at a time, selecting the node at random (check if already contacted)
+  wait for the answer or timeout
+  continue with the next one until majority is reached  (or until enough votes for a new block arrives)
 
-  if (status < 0) {
-    SYNCTRACE("on_transaction_request_sent FAILED - (%d) %s\n", status, uv_strerror(status));
-    uv_close2( (uv_handle_t*) ((uv_write_t*)req)->handle, worker_thread_on_close);  /* disconnect */
-  }
+  pro: it scales better
+  pro: it may be safer, as the node can compare the result from many nodes
 
-}
+or:
 
-/****************************************************************************/
+  send a broadcast message to all peers requesting the last height number
+  activate a timer to wait for answers
+  when all answered OR timeout reached:
+    order by the higher block height
+    request the state update from the node with higher block height
+      if it fails, try with the next one
+    if they all have the same block height as this node, mark as updated
 
-SQLITE_PRIVATE void on_requested_transaction_not_found(node *node, void *msg, int size) {
-  int rc;
+  problem: when connecting to many nodes, at the beginning it has less connections
 
-  /* the local transaction (from wal-remote or main db) is not present in the primary node */
 
-  /* save the local db and download a new one from the primary node */
-//  rc = aergolite_store_and_empty_local_db(node->this_node);
+if it receives enough votes for a new block, and it is at the same height (new block height - 1)
+then consider that it is up-to-date
+and apply the new block
 
-//!  if( rc ){
-//    /* disconnect from the primary node */
-//    disconnect_peer(this_node->leader_node);  //! ??  should it retry after an interval? (uv_timer)
-//  }
 
-}
+when a new block arrives:
+  save it, but do not verify it (unless if this node is at the previous height)
+  and do not start the timers (wait_bock and vote)
+when a vote arrives:
+  store the vote in the plugin OR in the block
+  if the amount of votes reaches majority (and it is previous height):
+    verify the block too and apply it - also mark as IN_SYNC
 
-/****************************************************************************/
+vars:
+  plugin->in_state_update
+and
+  plugin->is_updating_state  ->  plugin->is_applying_new_state
 
-SQLITE_PRIVATE void on_get_block(node *node, void *msg, int size) {
-  plugin *plugin = node->plugin;
-  aergolite *this_node = node->this_node;
+*/
 
-  int64 height = binn_map_int64(msg, PLUGIN_HEIGHT);
-
-  SYNCTRACE("on_get_block - request from node %d - height=%" INT64_FORMAT "\n", node->id, height);
-
-  map = binn_map();
-  if (!map) goto loc_failed;
-
-  rc = aergolite_get_block(this_node, height, &block->header, &block->body, &block->signatures);
-
-  switch( rc ){
-  case SQLITE_NOTFOUND: /* there is no record with the given prev_tid */
-    binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_BLOCK_NOTFOUND);
-    break;
-  case SQLITE_OK:
-    binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_REQUESTED_BLOCK);
-    binn_map_set_int64(map, PLUGIN_HEIGHT, height);
-    binn_map_set_blob(map, PLUGIN_HEADER, block->header, binn_size(block->header));
-    binn_map_set_blob(map, PLUGIN_BODY, block->body, binn_size(block->body));
-    binn_map_set_blob(map, PLUGIN_SIGNATURES, block->signatures, binn_size(block->signatures));
-    break;
-  default:
-    sqlite3_log(rc, "on_get_block: get_block failed");
-    goto loc_failed;
-  }
-
-  send_peer_message(node, map, on_data_sent);
-
-  return;
-
-loc_failed:
-
-  if (map) binn_free(map);
-
-}
-
-#endif
-
-/****************************************************************************/
-
-SQLITE_PRIVATE void on_in_sync_message(node *node, void *msg, int size) {
-  plugin *plugin = node->plugin;
-  aergolite *this_node = node->this_node;
-
-  /* update the state */
-  plugin->sync_down_state = DB_STATE_IN_SYNC;
-
-  /* start sending the local transactions */
-  if( plugin->sync_up_state!=DB_STATE_SYNCHRONIZING && plugin->sync_up_state!=DB_STATE_IN_SYNC ){
-    start_upstream_db_sync(plugin);
-  }
-
-}
+SQLITE_PRIVATE void request_state_update_next(plugin *plugin);
+SQLITE_PRIVATE int  request_state_update_to_node(plugin *plugin, node *to_node);
+SQLITE_PRIVATE void state_update_finished(plugin *plugin);
+SQLITE_PRIVATE void on_state_update_node_timeout(uv_timer_t* handle);
 
 /****************************************************************************/
 
@@ -112,7 +74,6 @@ SQLITE_PRIVATE int load_current_state(plugin *plugin) {
   plugin->current_block = block;
 
   return SQLITE_OK;
-
 }
 
 /****************************************************************************/
@@ -128,22 +89,48 @@ SQLITE_PRIVATE void on_state_update_request_sent(send_message_t *req, int status
 
 /****************************************************************************/
 
+/*
+** Also called when there is enough block votes for a block that is
+** the next to the current applied block.
+*/
+SQLITE_PRIVATE void state_update_finished(plugin *plugin){
+
+  SYNCTRACE("state_update_finished\n");
+
+  array_free(&plugin->state_update_contacted_nodes);
+
+  plugin->contacted_node_id = 0;
+
+  /* update the state */
+  if( plugin->sync_down_state==DB_STATE_SYNCHRONIZING ){
+    plugin->sync_down_state = DB_STATE_IN_SYNC;
+  }
+
+  // this is in a timer:
+  /* start sending the local transactions */
+  //if( plugin->sync_up_state!=DB_STATE_SYNCHRONIZING && plugin->sync_up_state!=DB_STATE_IN_SYNC ){
+  //  start_upstream_db_sync(plugin);
+  //}
+
+}
+
+/****************************************************************************/
+
 /* update this node's db state with the peers' current state  (sync down) */
 /* if the this node's current state is invalid or empty, download a new db from the peers */
+
 SQLITE_PRIVATE void request_state_update(plugin *plugin) {
   int64 current_height;
-  char *state_hash;
-  binn *map;
 
   SYNCTRACE("request_state_update\n");
 
-  if( !plugin->leader_node ){
-    plugin->sync_down_state = DB_STATE_UNKNOWN;
-    return;
+  if( plugin->open_block){
+    rollback_block(plugin);
   }
 
-  if( plugin->new_block){
-    rollback_block(plugin);
+  if( !plugin->peers ){
+    plugin->sync_down_state = DB_STATE_UNKNOWN;
+    return;
   }
 
   if( plugin->sync_down_state==DB_STATE_SYNCHRONIZING ){
@@ -153,8 +140,87 @@ SQLITE_PRIVATE void request_state_update(plugin *plugin) {
 
   plugin->sync_down_state = DB_STATE_SYNCHRONIZING;
 
-  map = binn_map();
-  if( !map ) goto loc_failed;
+  plugin->state_update_errors = 0;
+
+  request_state_update_next(plugin);
+
+}
+
+/****************************************************************************/
+
+/*
+
+also called when:
+-the previous contacted node answered
+-a timeout reached for the previous node to answer
+
+  check if majority of nodes were already contacted
+
+  select one node at random
+  check if already contacted
+    if yes, repeat
+  send the request to the selected node
+  activate the timer to wait for answer
+
+  (wait for the answer or timeout)
+
+  continue with the next one until majority is reached  (or until enough votes for a new block arrives)
+
+*/
+SQLITE_PRIVATE void request_state_update_next(plugin *plugin) {
+  struct node *node;
+  int rc, count;
+
+  SYNCTRACE("request_state_update_next\n");
+
+loc_next:
+
+  /* check if majority of nodes were already contacted */
+  count_authorized_nodes(plugin);  /* including off-line nodes */
+  count = array_count(plugin->state_update_contacted_nodes) - plugin->state_update_errors;
+  if( count >= majority(plugin->total_authorized_nodes) ){
+    SYNCTRACE("request_state_update_next - majority already contacted\n");
+    state_update_finished(plugin);
+    return;
+  }
+
+  /* create the array of contacted nodes */
+  if( !plugin->state_update_contacted_nodes ){
+    plugin->state_update_contacted_nodes = new_array(plugin->total_authorized_nodes, sizeof(int));
+  }
+
+  /* select a random connected node */
+  node = select_random_connected_node_not_in_list(plugin, plugin->state_update_contacted_nodes);
+  if( !node ){
+    SYNCTRACE("request_state_update_next - no remaining nodes\n");
+    state_update_finished(plugin);
+    return;
+  }
+
+  /* mark the node as contacted */
+  array_append(&plugin->state_update_contacted_nodes, &node->id);
+
+  /* send the request to the selected node */
+  rc = request_state_update_to_node(plugin, node);
+  if( rc ) goto loc_next;
+
+  /* activate the timer to wait for answer */
+  uv_timer_start(&plugin->state_update_timer, on_state_update_node_timeout, 3000, 0);
+  // if the node answered with pages, restart the timer
+  // if the node answered with finish, disable the timer
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE int request_state_update_to_node(plugin *plugin, node *to_node) {
+  int64 current_height;
+  //char *state_hash;
+  binn *map;
+
+  if( !to_node ){
+    return SQLITE_ERROR;
+  }
 
   if( plugin->current_block ){
     current_height = plugin->current_block->height;
@@ -164,9 +230,10 @@ SQLITE_PRIVATE void request_state_update(plugin *plugin) {
     //state_hash = NULL;
   }
 
-  SYNCTRACE("request_state_update - current_height=%" INT64_FORMAT "\n", current_height);
+  SYNCTRACE("request_state_update_to_node - current_height=%" INT64_FORMAT "\n", current_height);
 
-  /* create request packet */
+  /* create the request packet */
+  map = binn_map();
   if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_REQUEST_STATE_DIFF)==FALSE ) goto loc_failed;
   if( binn_map_set_int64(map, PLUGIN_HEIGHT, current_height)==FALSE ) goto loc_failed;
   //if( state_hash ){
@@ -174,17 +241,41 @@ SQLITE_PRIVATE void request_state_update(plugin *plugin) {
   //}
 
   /* send the packet */
-  if( send_peer_message(plugin->leader_node, map, on_state_update_request_sent)==FALSE ) goto loc_failed;
+  if( send_peer_message(to_node, map, on_state_update_request_sent)==FALSE ) goto loc_failed;
 
   binn_free(map);
 
-  return;
+  /* save which is the node the request was sent to */
+  plugin->contacted_node_id = to_node->id;
+
+  return SQLITE_OK;
+
 loc_failed:
   if( map ) binn_free(map);
-  plugin->sync_down_state = DB_STATE_ERROR;
+  plugin->state_update_errors++;
+  return SQLITE_ERROR;
+}
 
-// use a timer if it is off-line
-// also call this fn when it reconnects
+/****************************************************************************/
+
+/* 
+** The remote node did not answer in time
+*/
+SQLITE_PRIVATE void on_state_update_node_timeout(uv_timer_t* handle) {
+  plugin *plugin = (struct plugin *) handle->loop->data;
+  aergolite *this_node = plugin->this_node;
+
+  SYNCTRACE("on_state_update_node_timeout\n");
+
+  /* is it in the middle of an update? (some pages sent) */
+  if( plugin->is_updating_state ){
+    aergolite_cancel_state_update(this_node);
+    plugin->is_updating_state = false;
+  }
+
+  plugin->state_update_errors++;
+
+  request_state_update_next(plugin);
 
 }
 
@@ -201,6 +292,12 @@ SQLITE_PRIVATE void on_update_db_page(node *node, void *msg, int size) {
   data = binn_map_blob(msg, PLUGIN_DBPAGE, &size);
 
   SYNCTRACE("on_update_db_page - pgno: %d  size: %d\n", pgno, size);
+
+  /* ignore messages from invalid nodes */
+  if( node->id!=plugin->contacted_node_id ){
+    SYNCTRACE("on_update_db_page - message coming from invalid node: %d\n", node->id);
+    return;
+  }
 
   if( plugin->sync_down_state!=DB_STATE_SYNCHRONIZING ){
     sqlite3_log(1, "on_update_db_page FAILED - the state is not synchronizing");
@@ -223,11 +320,18 @@ SQLITE_PRIVATE void on_update_db_page(node *node, void *msg, int size) {
     goto loc_failed;
   }
 
+  /* update the timer to wait for the next message */
+  uv_timer_start(&plugin->state_update_timer, on_state_update_node_timeout, 3000, 0);
+
   return;
 
 loc_failed:
   plugin->is_updating_state = false;
-  plugin->sync_down_state = DB_STATE_ERROR;
+  plugin->state_update_errors++;
+  /* disable the timer */
+  uv_timer_stop(&plugin->state_update_timer);
+  /* check on next node */
+  request_state_update_next(plugin);
 
 }
 
@@ -243,7 +347,7 @@ SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
 
   height = binn_map_uint64(msg, PLUGIN_HEIGHT);
   header = binn_map_map(msg, PLUGIN_STATE);
-//  body = binn_map_blob(msg, PLUGIN_PAYLOAD, &payload_size);
+  //body = binn_map_blob(msg, PLUGIN_BODY, &body_size);
   signatures = binn_map_list(msg, PLUGIN_SIGNATURES);
   mod_pages = binn_map_list(msg, PLUGIN_MOD_PAGES);
 
@@ -254,6 +358,12 @@ SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
   assert(header);
   //assert(signatures);
   assert(mod_pages);
+
+  /* ignore messages from invalid nodes */
+  if( node->id!=plugin->contacted_node_id ){
+    SYNCTRACE("on_apply_state_update - message coming from invalid node: %d\n", node->id);
+    return;
+  }
 
   if( plugin->sync_down_state!=DB_STATE_SYNCHRONIZING ||
       !plugin->is_updating_state ){
@@ -273,7 +383,7 @@ SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
 
   block->height = height;
   block->header = sqlite3_memdup(header, binn_size(header));
-//  block->body = sqlite3_memdup(payload, payload_size);  // needed on full nodes?
+  //block->body = sqlite3_memdup(body, body_size);  // needed on full nodes?
   block->signatures = sqlite3_memdup(signatures, binn_size(signatures));
 
   if( !block->header ) goto loc_failed2;
@@ -284,10 +394,8 @@ SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
   plugin->current_block = block;
 
   /* discard any new incoming block */
-  discard_block(plugin->new_block);
-  plugin->new_block = NULL;
-
-  plugin->sync_down_state = DB_STATE_IN_SYNC;
+  discard_uncommitted_blocks(plugin);
+  //plugin->open_block = NULL;
 
   /* remove old transactions from mempool */
   check_mempool_transactions(plugin);
@@ -296,11 +404,15 @@ SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
 
 loc_exit:
   plugin->is_updating_state = false;
+  /* disable the timer */
+  uv_timer_stop(&plugin->state_update_timer);
+  /* check on next node */
+  request_state_update_next(plugin);
   return;
 
 loc_failed:
   SYNCTRACE("on_apply_state_update - FAILED\n");
-  plugin->sync_down_state = DB_STATE_ERROR;
+  plugin->state_update_errors++;
   goto loc_exit;
 
 loc_failed2:
@@ -308,8 +420,29 @@ loc_failed2:
   /* force to reload the current state */
   discard_block(plugin->current_block);
   plugin->current_block = NULL;
-  plugin->sync_down_state = DB_STATE_UNKNOWN;
+  plugin->sync_down_state = DB_STATE_UNKNOWN; // -- use this flag to reload state?  if it is out of memory, then it may not be able to relaod it... it should return error code/message, and not consider current_block_height==0
   goto loc_exit;
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void on_uptodate_message(node *node, void *msg, int size) {
+  plugin *plugin = node->plugin;
+
+  SYNCTRACE("on_uptodate_message\n");
+
+  /* ignore messages from invalid nodes */
+  if( node->id!=plugin->contacted_node_id ){
+    SYNCTRACE("on_uptodate_message - message coming from invalid node: %d\n", node->id);
+    return;
+  }
+
+  /* disable the timer */
+  uv_timer_stop(&plugin->state_update_timer);
+
+  /* check on next node */
+  request_state_update_next(plugin);
 
 }
 
@@ -375,11 +508,17 @@ SQLITE_PRIVATE void on_request_state_update(node *node, void *msg, int size) {
     }
     if( send_peer_message(node, map, NULL)==FALSE ) goto loc_failed;
     binn_free(map); map = NULL;
-    /* if there is an open uncommitted block, send it to the peer */
-    send_new_block(plugin, node);
+    /* if there are open uncommitted blocks, send them to the peer */
+    send_new_blocks(plugin, node);
+    send_block_votes(plugin, node);
     return;
   }
 
+
+  /* if there is an open verified block, roll it back */
+  if( plugin->open_block ){
+    rollback_block(plugin);
+  }
 
   /* start reading the current state of the database */
   rc = aergolite_begin_state_read(this_node);
@@ -440,8 +579,9 @@ SQLITE_PRIVATE void on_request_state_update(node *node, void *msg, int size) {
 
   binn_free(list); list = NULL;
 
-  /* if there is an open uncommitted block, send it to the peer */
-  send_new_block(plugin, node);
+  /* if there are open uncommitted blocks, send them to the peer */
+  send_new_blocks(plugin, node);
+  send_block_votes(plugin, node);
 
   return;
 loc_failed:
@@ -450,5 +590,4 @@ loc_failed:
   if( list ) binn_free(list);
   if( array ) array_free(&array);
   aergolite_end_state_read(this_node);
-
 }

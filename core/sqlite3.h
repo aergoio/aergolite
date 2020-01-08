@@ -11800,7 +11800,9 @@ SQLITE_API int aergolite_execute_transaction(
 SQLITE_API int aergolite_verify_transaction(
   aergolite *this_node,
   int node_id,
-  void *log
+  void *log,
+  int64 *pnonce,
+  char *datetime
 );
 
 

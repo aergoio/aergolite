@@ -44,12 +44,11 @@
 #define PLUGIN_DB_PAGE             0xdb03
 #define PLUGIN_APPLY_UPDATE        0xdb04
 
-#define PLUGIN_INSERT_TRANSACTION  0xdb11     /* follower -> leader */
 #define PLUGIN_NEW_TRANSACTION     0xdb12     /* follower <- leader -> follower (broadcast) */
 #define PLUGIN_TRANSACTION_FAILED  0xdb13     /* follower <- leader (response) */
 
 #define PLUGIN_NEW_BLOCK           0xdb21     /* follower <- leader */
-#define PLUGIN_BLOCK_APPROVED      0xdb22     /* follower -> all (broadcast) */
+#define PLUGIN_BLOCK_VOTE          0xdb22     /* follower -> all (broadcast) */
 
 #define PLUGIN_GET_MEMPOOL         0xdb51     /* any -> any (request) */
 
@@ -83,6 +82,9 @@
 #define PLUGIN_SIGNATURES          0xc0de018
 #define PLUGIN_MOD_PAGES           0xc0de019
 #define PLUGIN_HASH                0xc0de020
+
+#define PLUGIN_WAIT_TIME           0xc0de031
+#define PLUGIN_PROOF               0xc0de032
 
 
 /* peer message parameters */
@@ -176,12 +178,6 @@ struct node_id_conflict {
   uv_timer_t timer;
 };
 
-struct leader_votes {
-  int id;
-  int count;
-  struct leader_votes *next;
-};
-
 struct node {
   node *next;            /* Next item in the list */
   int   id;              /* Node id */
@@ -229,6 +225,7 @@ struct transaction {
   int node_id;
   int64 nonce;
   int64 id;
+  char  datetime[24];
   void *log;
   int64 block_height;
 };
@@ -242,8 +239,9 @@ struct block {
   void *body;
   void *signatures;
 
+  unsigned int wait_time;
   void *votes;
-  int  ack_count;
+  int  num_votes;
   int  downloading_txns;
 };
 #endif
@@ -259,6 +257,14 @@ struct txn_list {
   struct txn_list *next;
   void *log;
 };
+
+struct request {
+  struct request *next;
+  int64 transaction_id;
+  void *contacted_nodes;
+  uv_timer_t timer;
+};
+
 
 struct plugin {
   int node_id;                /* Node id */
@@ -277,14 +283,7 @@ struct plugin {
 
   BOOL is_authorized;         /* Whether this node is authorized on the network */
 
-  BOOL is_leader;             /* True if this node is the current leader */
-  node *leader_node;          /* Points to the leader node if it is connected */
-  node *last_leader;          /* Points to the previous leader node */
-  void *leader_query;
-  struct leader_votes *leader_votes;
-  BOOL in_leader_query;       /* True if in a leader query */
-  BOOL in_election;           /* True if in a leader election */
-  BOOL some_nodes_in_election;/* True if any node is in a leader election during leader query */
+  struct request *requests;
 
   struct transaction *mempool;
   struct txn_list *special_txn; /* New special transaction */
@@ -292,8 +291,12 @@ struct plugin {
   void *nonces;
 
   struct block *current_block;
-  struct block *new_block;
+  struct block *new_blocks;
+  struct block *open_block;
   struct block_vote *block_votes;
+
+  int block_interval;
+  int random_block_interval;
 
 #if TARGET_OS_IPHONE
   uv_callback_t worker_cb;    /* callback handle to send msg to the worker thread */
@@ -309,12 +312,12 @@ struct plugin {
 
   uv_timer_t after_connections_timer;
 
-  uv_timer_t leader_check_timer;
-  uv_timer_t election_info_timer;
+  uv_timer_t state_update_timer;
 
   uv_timer_t process_transactions_timer;
+
   uv_timer_t new_block_timer;
-  int block_interval;
+  uv_timer_t block_wait_timer;
 
   uv_timer_t reconnect_timer;
   int reconnect_timer_enabled;
@@ -322,6 +325,10 @@ struct plugin {
   sqlite3_mutex *mutex;
 
   bool is_updating_state;
+  int  contacted_node_id;
+  void *state_update_contacted_nodes;
+  int  state_update_errors;
+
   int sync_down_state;        /* downstream synchronization state */
   int sync_up_state;          /* upstream synchronization state */
 };
@@ -339,16 +346,9 @@ SQLITE_PRIVATE void on_text_command_received(node *node, char *message);
 
 SQLITE_PRIVATE BOOL has_nodes_for_consensus(plugin *plugin);
 
-/* leader checking and election */
+/* general */
 
-SQLITE_PRIVATE void on_new_election_request(plugin *plugin, node *node, char *arg);
-
-SQLITE_PRIVATE void on_leader_check_timeout(uv_timer_t* handle);
-
-SQLITE_PRIVATE void check_current_leader(plugin *plugin);
-SQLITE_PRIVATE void start_leader_election(plugin *plugin);
-
-SQLITE_PRIVATE void leader_node_process_local_transactions(plugin *plugin);
+SQLITE_PRIVATE int random_number(int lower, int upper);
 
 /* mempool */
 
@@ -358,6 +358,11 @@ SQLITE_PRIVATE int  store_transaction_on_mempool(
 SQLITE_PRIVATE void discard_mempool_transaction(plugin *plugin, struct transaction *txn);
 SQLITE_PRIVATE int  check_mempool_transactions(plugin *plugin);
 
+/* transactions */
+
+SQLITE_PRIVATE void on_new_remote_transaction(node *node, void *msg, int size);
+SQLITE_PRIVATE bool process_arrived_transaction(plugin *plugin, struct transaction *txn);
+
 /* blockchain */
 
 SQLITE_PRIVATE void start_downstream_db_sync(plugin *plugin);
@@ -366,10 +371,15 @@ SQLITE_PRIVATE void start_upstream_db_sync(plugin *plugin);
 SQLITE_PRIVATE int  load_current_state(plugin *plugin);
 SQLITE_PRIVATE void request_state_update(plugin *plugin);
 
+/* blocks */
+
 SQLITE_PRIVATE void start_new_block_timer(plugin *plugin);
-SQLITE_PRIVATE int  broadcast_new_block(plugin *plugin);
-SQLITE_PRIVATE void send_new_block(plugin *plugin, node *node);
+SQLITE_PRIVATE int  broadcast_new_block(plugin *plugin, struct block *block);
+SQLITE_PRIVATE void send_new_block(plugin *plugin, node *node, struct block *block);
+SQLITE_PRIVATE void send_new_blocks(plugin *plugin, node *node);
+SQLITE_PRIVATE void send_block_votes(plugin *plugin, node *node);
 SQLITE_PRIVATE void rollback_block(plugin *plugin);
+SQLITE_PRIVATE void discard_uncommitted_blocks(plugin *plugin);
 
 /* event loop and timers */
 
@@ -416,4 +426,5 @@ SQLITE_PRIVATE void on_peer_list_received(node *node, void *msg, int size);
 
 /* node authorization */
 
-SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log, BOOL from_network);
+SQLITE_PRIVATE int  on_new_authorization(plugin *plugin, void *log, BOOL from_network);
+SQLITE_PRIVATE void count_authorized_nodes(plugin *plugin);

@@ -17,6 +17,10 @@
 
 #include "mini-raft.h"
 
+#ifndef container_of
+#define container_of(ptr, type, member) ((type *)((char *)(ptr) - offsetof(type, member)))
+#endif
+
 #ifndef AERGOLITE_AMALGAMATION
 #include "../../common/array.c"
 #include "../../common/linked_list.c"
@@ -87,13 +91,11 @@ SQLITE_API char * get_protocol_status(void *arg, BOOL extended) {
   plugin *plugin = (struct plugin *) arg;
   aergolite *this_node = plugin->this_node;
   struct node *node;
-  char buf[64];
   sqlite3_str *str = sqlite3_str_new(NULL);
 
   sqlite3_str_appendall(str, "{\n\"use_blockchain\": true,\n");
 
   sqlite3_str_appendf(str, "\"node_id\": %d,\n", plugin->node_id);
-  sqlite3_str_appendf(str, "\"is_leader\": %s,\n", plugin->is_leader ? "true" : "false");
 //sqlite3_str_appendf(str, "\"db_is_ready\": %s,\n", plugin->db_is_ready ? "true" : "false");
 
   if( extended ){
@@ -113,7 +115,6 @@ SQLITE_API char * get_protocol_status(void *arg, BOOL extended) {
       if( node->info ){
         sqlite3_str_appendf(str, "  \"node_info\": \"%s\",\n", node->info);
       }
-      sqlite3_str_appendf(str, "  \"is_leader\": %s,\n", (node==plugin->leader_node) ? "true" : "false");
       sqlite3_str_appendf(str, "  \"conn_type\": \"%s\",\n", getConnType(node->conn_type));
       sqlite3_str_appendf(str, "  \"address\": \"%s:%d\"\n", node->host, node->port);
       //sqlite3_str_appendf(str, "  \"conn_state\": \"%s\",\n", getConnState(node->conn_state));
@@ -129,12 +130,6 @@ SQLITE_API char * get_protocol_status(void *arg, BOOL extended) {
 
     int num_peers;
 
-    if( plugin->leader_node ){
-      sqlite3_snprintf(64, buf, "%d", plugin->leader_node->id);
-    }else{
-      strcpy(buf, "null");
-    }
-
     num_peers = 0;
     for( node=plugin->peers; node; node=node->next ){
       if( node->conn_state==CONN_STATE_CONNECTED ){
@@ -142,7 +137,6 @@ SQLITE_API char * get_protocol_status(void *arg, BOOL extended) {
       }
     }
 
-    sqlite3_str_appendf(str, "\"leader\": %s,\n", buf);
     sqlite3_str_appendf(str, "\"num_peers\": %d,\n", num_peers);
 
   }
@@ -165,12 +159,11 @@ SQLITE_API char * get_protocol_status(void *arg, BOOL extended) {
     if( last ){
       sqlite3_str_appendall(str, ",\n  \"last_transaction\": ");
       if( extended ){
-        char *timestamp=NULL;
-        binn_list_get(last->log, binn_count(last->log), BINN_DATETIME, &timestamp, NULL);
         sqlite3_str_appendall(str, "{\n");
         sqlite3_str_appendf(str, "    \"id\": %lld,\n", last->id);
         sqlite3_str_appendf(str, "    \"node_id\": %d,\n", last->node_id);
-        sqlite3_str_appendf(str, "    \"timestamp\": \"%s\"\n", timestamp);
+        sqlite3_str_appendf(str, "    \"nonce\": %lld,\n", last->nonce);
+        sqlite3_str_appendf(str, "    \"timestamp\": \"%s\"\n", last->datetime);
         sqlite3_str_appendall(str, "  }");
       }else{
         sqlite3_str_appendf(str, "%lld", last->id);
@@ -442,6 +435,8 @@ SQLITE_PRIVATE void discard_block(struct block *block) {
 
 /****************************************************************************/
 
+#include "requests.c"
+#include "block_producer.c"
 #include "state_update.c"
 #include "transactions.c"
 #include "consensus.c"
@@ -494,8 +489,6 @@ SQLITE_PRIVATE void check_base_db(plugin *plugin) {
   /* start the db synchronization */
 //  start_downstream_db_sync(plugin);
 
-//  check_current_leader(plugin);
-
 }
 
 /****************************************************************************/
@@ -512,8 +505,6 @@ SQLITE_PRIVATE void aergolite_core_timer_cb(uv_timer_t* handle){
   if( !plugin->is_updating_state ){
     aergolite_periodic(plugin->this_node);
   }
-
-  check_current_leader(plugin);
 
 }
 
@@ -539,20 +530,18 @@ SQLITE_PRIVATE void after_connections_timer_cb(uv_timer_t* handle){
 /****************************************************************************/
 
 /*
-** On follower nodes this function exists for continuing the synchronization
-** process when it is stopped due to a failure.
+** This function exists for continuing the synchronization process when it
+** is stopped due to a failure.
 **
-** Maybe it could also work when it sends a request to the leader node but
+** Maybe it could also work when it sends a request to a peer node but
 ** no answer is returned.
 */
 SQLITE_PRIVATE void process_transactions_timer_cb(uv_timer_t* handle) {
   plugin *plugin = (struct plugin *) handle->loop->data;
   aergolite *this_node = plugin->this_node;
-  if( plugin->is_leader ){
-    leader_node_process_local_transactions(plugin);
-  }else{
-    //follower_node_process_local_transactions(plugin);
-    if( !plugin->leader_node ) return;
+
+    if( !plugin->peers ) return;
+
     /* downstream synchronization */
     if( plugin->sync_down_state!=DB_STATE_SYNCHRONIZING && plugin->sync_down_state!=DB_STATE_IN_SYNC ){
       start_downstream_db_sync(plugin);
@@ -563,7 +552,7 @@ SQLITE_PRIVATE void process_transactions_timer_cb(uv_timer_t* handle) {
         send_local_transactions(plugin);
       }
     }
-  }
+
 }
 
 /****************************************************************************/
@@ -616,13 +605,9 @@ SQLITE_PRIVATE void on_node_disconnected(node *node) {
   plugin = node->plugin;
   this_node = node->this_node;
 
-  SYNCTRACE("--- node disconnected: %s:%d leader=%s\n", node->host, node->port,
-            node==plugin->leader_node?"yes":"no");
+  SYNCTRACE("--- node disconnected: %s:%d\n", node->host, node->port);
 
-  if( node==plugin->last_leader ){
-    plugin->last_leader = NULL;
-  }
-
+#if 0
   if( node==plugin->leader_node ){
     plugin->leader_node = NULL;
     reset_node_state(plugin);
@@ -631,6 +616,7 @@ SQLITE_PRIVATE void on_node_disconnected(node *node) {
       check_current_leader(plugin);
     }
   }
+#endif
 
   //enable_reconnect_timer(plugin);
 
@@ -904,9 +890,9 @@ SQLITE_PRIVATE void reconnect_timer_cb(uv_timer_t* handle) {
 */
 
 /*
-** The connection to the leader node dropped.
+** The connection to the peer node dropped.
 ** This node can be off-line. This is detected when this node executes
-** a new transaction and tries it to send it to the leader node.
+** a new transaction and tries it to send it to the peers.
 */
 SQLITE_PRIVATE void reconnect_timer_cb(uv_timer_t* handle) {
   plugin *plugin = (struct plugin *) handle->loop->data;
@@ -1014,6 +1000,7 @@ SQLITE_PRIVATE void enable_reconnect_timer(plugin *plugin) {
 /****************************************************************************/
 
 SQLITE_PRIVATE void worker_thread_on_close(uv_handle_t *handle) {
+  plugin *plugin = (struct plugin *) handle->loop->data;
 
   SYNCTRACE("worker_thread_on_(handle)_close - handle=%p\n", handle);
 
@@ -1027,8 +1014,6 @@ SQLITE_PRIVATE void worker_thread_on_close(uv_handle_t *handle) {
     node *node = node_from_socket((uv_msg_t*)handle);   //! what if this fn fails... if the node was already removed...
     SYNCTRACE("worker_thread_on_(handle)_close - TCP\n");
     if( node ){  /* this is a client socket */
-      plugin *plugin = (struct plugin *) handle->loop->data;
-      aergolite *this_node = plugin->this_node;
       if( node->conn_state==CONN_STATE_CONNECTED ){
         /* only fires the event if the node was connected */
         on_node_disconnected(node);
@@ -1059,6 +1044,12 @@ SQLITE_PRIVATE void worker_thread_on_close(uv_handle_t *handle) {
       if( handle->data ){
         sqlite3_free(handle->data);
       }
+    }
+    if( ((uv_timer_t*)handle)->timer_cb==request_transaction_timer_cb ){
+      struct request *request = container_of(handle, struct request, timer);
+      array_free(&request->contacted_nodes);
+      llist_remove(&plugin->requests, request);
+      sqlite3_free(request);
     }
     break;
   default:  /* also to avoid compiler warning about not listed enum elements */
@@ -1134,7 +1125,6 @@ SQLITE_PRIVATE void worker_thread_on_peer_message(uv_msg_t *stream, void *msg, i
     break;
   }
 
-  /* messages sent to the follower nodes */
   case PLUGIN_ID_CONFLICT:
     SYNCTRACE("   received message: PLUGIN_ID_CONFLICT\n");
     on_id_conflict_recvd(node, msg, size);
@@ -1152,21 +1142,22 @@ SQLITE_PRIVATE void worker_thread_on_peer_message(uv_msg_t *stream, void *msg, i
     SYNCTRACE("   received message: PLUGIN_APPLY_UPDATE\n");
     on_apply_state_update(node, msg, size);
     break;
-  case PLUGIN_UPTODATE: // or PLUGIN_IN_SYNC
+  case PLUGIN_UPTODATE:
     SYNCTRACE("   received message: PLUGIN_UPTODATE\n");
-    on_in_sync_message(node, msg, size);
+    on_uptodate_message(node, msg, size);
     break;
 
+/*
   case PLUGIN_TXN_NOTFOUND:
     SYNCTRACE("   received message: PLUGIN_TXN_NOTFOUND\n");
     on_requested_transaction_not_found(node, msg, size);
     break;
-/*
   case PLUGIN_BLOCK_NOTFOUND:
     SYNCTRACE("   received message: PLUGIN_BLOCK_NOTFOUND\n");
     on_requested_block_not_found(node, msg, size);
     break;
 */
+
   case PLUGIN_REQUESTED_TRANSACTION:
     SYNCTRACE("   received message: PLUGIN_REQUESTED_TRANSACTION\n");
     on_requested_remote_transaction(node, msg, size);
@@ -1179,9 +1170,9 @@ SQLITE_PRIVATE void worker_thread_on_peer_message(uv_msg_t *stream, void *msg, i
     SYNCTRACE("   received message: PLUGIN_NEW_BLOCK\n");
     on_new_block(node, msg, size);
     break;
-  case PLUGIN_BLOCK_APPROVED:
-    SYNCTRACE("   received message: PLUGIN_BLOCK_APPROVED\n");
-    on_node_approved_block(node, msg, size);
+  case PLUGIN_BLOCK_VOTE:
+    SYNCTRACE("   received message: PLUGIN_BLOCK_VOTE\n");
+    on_block_vote(node, msg, size);
     break;
 
 /*
@@ -1200,7 +1191,6 @@ SQLITE_PRIVATE void worker_thread_on_peer_message(uv_msg_t *stream, void *msg, i
     on_get_mempool_transactions(node, msg, size);
     break;
 
-  /* messages sent to the leader node */
   case PLUGIN_CMD_PONG:
     SYNCTRACE("   received message: PLUGIN_CMD_PONG\n");
     on_ping_response(node, msg, size);
@@ -1219,10 +1209,6 @@ SQLITE_PRIVATE void worker_thread_on_peer_message(uv_msg_t *stream, void *msg, i
     on_get_block(node, msg, size);
     break;
 */
-  case PLUGIN_INSERT_TRANSACTION:
-    SYNCTRACE("   received message: PLUGIN_INSERT_TRANSACTION\n");
-    on_insert_transaction(node, msg, size);
-    break;
 
   default:
     SYNCTRACE("   ---> unknown received message!  cmd=0x%x  <---\n", cmd);
@@ -1643,7 +1629,6 @@ SQLITE_PRIVATE int send_udp_message_ex(plugin *plugin, char *ip_addr, int port, 
 /****************************************************************************/
 
 #include "node_discovery.c"
-#include "leader_election.c"
 
 /****************************************************************************/
 /****************************************************************************/
@@ -1672,7 +1657,6 @@ SQLITE_PRIVATE void node_thread(void *arg) {
 
   /* initialize sub-modules */
   node_discovery_init();
-  leader_election_init();
 
   /* register UDP message handlers */
   /* a broadcast message requesting blockchain status info */
@@ -1768,12 +1752,13 @@ SQLITE_PRIVATE void node_thread(void *arg) {
 
   /* initialize the timers */
   uv_timer_init(&loop, &plugin->after_connections_timer);
-  uv_timer_init(&loop, &plugin->leader_check_timer);
-  uv_timer_init(&loop, &plugin->election_info_timer);
   uv_timer_init(&loop, &plugin->reconnect_timer);
+
+  uv_timer_init(&loop, &plugin->state_update_timer);
 
   uv_timer_init(&loop, &plugin->process_transactions_timer);
   uv_timer_init(&loop, &plugin->new_block_timer);
+  uv_timer_init(&loop, &plugin->block_wait_timer);
 
   uv_timer_init(&loop, &plugin->aergolite_core_timer);
 
@@ -1879,9 +1864,11 @@ SQLITE_API void plugin_end(void *arg){
   /* close the worker thread with all the connections */
   close_worker_thread(plugin);
 
-  clear_leader_votes(plugin);
-
   clear_block_votes(plugin);
+
+  discard_new_blocks(plugin);
+
+  discard_block(plugin->current_block);
 
   while( plugin->mempool ){
     discard_mempool_transaction(plugin, plugin->mempool);
@@ -1898,9 +1885,6 @@ SQLITE_API void plugin_end(void *arg){
     sqlite3_free(plugin->discovery);
     plugin->discovery = next;
   }
-
-  discard_block(plugin->current_block);
-  discard_block(plugin->new_block);
 
   sqlite3_mutex_free(plugin->mutex);
 
@@ -2107,8 +2091,6 @@ void * plugin_init(aergolite *this_node, char *uri) {
   /* is this an authorizated node? */
   rc = is_node_authorized(this_node, plugin->pubkey, plugin->pklen, &plugin->is_authorized);
   if( rc ) goto loc_failed;
-
-  plugin->is_leader = FALSE;
 
 
   /* parse the node discovery parameter */

@@ -1,68 +1,58 @@
 
-SQLITE_PRIVATE int verify_last_block(plugin *plugin);
-SQLITE_PRIVATE int commit_block(plugin *plugin, struct block *block);
+SQLITE_PRIVATE void choose_block_to_vote(plugin *plugin);
+SQLITE_PRIVATE void check_for_winner_block(plugin *plugin);
+SQLITE_PRIVATE int  commit_block(plugin *plugin, struct block *block);
 
 /****************************************************************************/
 
-SQLITE_PRIVATE void on_transaction_request_sent(send_message_t *req, int status) {
+SQLITE_PRIVATE BOOL has_nodes_for_consensus(plugin *plugin){
+  node *node;
+  int count;
 
-  if (status < 0) {
-    SYNCTRACE("on_transaction_request_sent FAILED - (%d) %s\n", status, uv_strerror(status));
-    uv_close2( (uv_handle_t*) ((uv_write_t*)req)->handle, worker_thread_on_close);  /* disconnect */
+  count_authorized_nodes(plugin);
+  if( plugin->total_authorized_nodes<=1 ) return FALSE;
+
+  count = 0;
+  if( plugin->is_authorized ){  /* this node */
+    count++;
+  }
+  for( node=plugin->peers; node; node=node->next ){
+    if( node->is_authorized && node->id!=0 ) count++;
   }
 
+  SYNCTRACE("has_nodes_for_consensus connected=%d\n", count);
+
+  if( count<majority(plugin->total_authorized_nodes) ){
+    return FALSE;
+  }
+
+  return TRUE;
 }
 
 /****************************************************************************/
 
-SQLITE_PRIVATE void request_transaction(plugin *plugin, int64 tid){
-  binn *map;
+SQLITE_PRIVATE bool process_arrived_transaction(plugin *plugin, struct transaction *txn){
+  bool is_requested_txn;
 
-  SYNCTRACE("request_transaction - tid=%" INT64_FORMAT "\n", tid);
-  assert(tid>0);
+  SYNCTRACE("process_arrived_transaction\n");
 
-  if( !plugin->leader_node ) return;
+  is_requested_txn = requested_transaction_arrived(plugin, txn->id);
 
-  /* create request packet */
-  map = binn_map();
-  if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_GET_TRANSACTION)==FALSE ) goto loc_failed;
-  if( binn_map_set_int64(map, PLUGIN_TID, tid)==FALSE ) goto loc_failed;
+  /* is there any block waiting to be verified? */
+  if( is_requested_txn && plugin->new_blocks ){
+    /* has the block wait timer already expired? */
+    if( !uv_is_active((uv_handle_t*)&plugin->block_wait_timer) ){
+      /* is there a winner block? does it have all the txns? */
+      choose_block_to_vote(plugin);
+    }
+  }
 
-  /* send the packet */
-  if( send_peer_message(plugin->leader_node, map, on_transaction_request_sent)==FALSE ) goto loc_failed;
-
-  binn_free(map);
-
-  return;
-loc_failed:
-  if( map ) binn_free(map);
-//  plugin->sync_down_state = DB_STATE_ERROR;
-
+  return is_requested_txn;
 }
 
 /****************************************************************************/
 
-SQLITE_PRIVATE void on_requested_remote_transaction(node *node, void *msg, int size){
-  plugin *plugin = node->plugin;
-  int rc;
-
-  SYNCTRACE("on_requested_remote_transaction\n");
-
-  if( plugin->sync_down_state!=DB_STATE_SYNCHRONIZING && plugin->sync_down_state!=DB_STATE_IN_SYNC ){
-    SYNCTRACE("--- FAILED: 'requested' remote transaction arrived while this node is not synchronizing\n");
-    return;
-  }
-
-  rc = on_new_remote_transaction(node, msg, size);
-
-  if( rc==SQLITE_OK ){
-    verify_last_block(plugin);
-  }
-
-}
-
-/****************************************************************************/
-
+#if 0
 SQLITE_PRIVATE void on_requested_transaction_not_found(node *node, void *msg, int size){
   plugin *plugin = node->plugin;
   int rc;
@@ -74,9 +64,55 @@ SQLITE_PRIVATE void on_requested_transaction_not_found(node *node, void *msg, in
     return;
   }
 
-  plugin->sync_down_state = DB_STATE_OUTDATED;
+  ...
 
-  request_state_update(plugin);
+}
+#endif
+
+SQLITE_PRIVATE void on_requested_transaction_not_found(plugin *plugin, int64 tid){
+
+  SYNCTRACE("on_requested_transaction_not_found\n");
+
+  // maybe it is disconnected from other peers...
+
+  if( plugin->sync_down_state!=DB_STATE_SYNCHRONIZING ){
+    request_state_update(plugin);
+  }
+
+}
+
+/****************************************************************************/
+/****************************************************************************/
+
+SQLITE_PRIVATE void discard_new_blocks(plugin *plugin){
+
+  SYNCTRACE("discard_new_blocks\n");
+
+  while( plugin->new_blocks ){
+    struct block *next = plugin->new_blocks->next;
+    sqlite3_free(plugin->new_blocks);
+    plugin->new_blocks = next;
+  }
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void discard_uncommitted_blocks(plugin *plugin){
+  int64 current_height = plugin->current_block ? plugin->current_block->height : 0;
+  struct block *block;
+
+  SYNCTRACE("discard_uncommitted_blocks\n");
+
+loc_again:
+
+  for( block=plugin->new_blocks; block; block=block->next ){
+    if( block->height<=current_height ){
+      llist_remove(&plugin->new_blocks, block);
+      sqlite3_free(block);
+      goto loc_again;
+    }
+  }
 
 }
 
@@ -111,8 +147,7 @@ SQLITE_PRIVATE bool add_block_vote(struct block *block, int node_id){
 /*
 ** Store the votes temporarily while the block does not arrive
 */
-SQLITE_PRIVATE void store_block_vote(node *node, int64 height, uchar *block_id){
-  plugin *plugin = node->plugin;
+SQLITE_PRIVATE void store_block_vote(plugin *plugin, int node_id, int64 height, uchar *block_id){
   struct block_vote *vote;
 
   SYNCTRACE("store_block_vote\n");
@@ -120,7 +155,7 @@ SQLITE_PRIVATE void store_block_vote(node *node, int64 height, uchar *block_id){
   /* check if the vote is already stored */
   for( vote=plugin->block_votes; vote; vote=vote->next ){
     if( vote->height==height && memcmp(vote->block_id,block_id,32)==0 &&
-        vote->node_id==node->id ){
+        vote->node_id==node_id ){
       return;
     }
   }
@@ -132,7 +167,7 @@ SQLITE_PRIVATE void store_block_vote(node *node, int64 height, uchar *block_id){
 
   vote->height = height;
   memcpy(vote->block_id, block_id, 32);
-  vote->node_id = node->id;
+  vote->node_id = node_id;
 
   llist_add(&plugin->block_votes, vote);
 
@@ -148,7 +183,7 @@ SQLITE_PRIVATE void transfer_block_votes(plugin *plugin, struct block *block){
   for( vote=plugin->block_votes; vote; vote=vote->next ){
     if( vote->height==block->height && memcmp(vote->block_id,block->id,32)==0 ){
       if( add_block_vote(block,vote->node_id) ){
-        block->ack_count++;
+        block->num_votes++;
       }
     }
   }
@@ -191,34 +226,8 @@ SQLITE_PRIVATE void clear_block_votes(plugin *plugin){
 
 /****************************************************************************/
 /****************************************************************************/
+
 #if 0
-SQLITE_PRIVATE void request_block(plugin *plugin, int64 height){
-  binn *map;
-
-  SYNCTRACE("request_block - height=%" INT64_FORMAT "\n", height);
-  assert(height>0);
-
-  if( !plugin->leader_node ) return;
-
-  /* create request packet */
-  map = binn_map();
-  if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_GET_BLOCK)==FALSE ) goto loc_failed;
-  if( binn_map_set_int64(map, PLUGIN_HEIGHT, height)==FALSE ) goto loc_failed;
-
-  /* send the packet */
-  if( send_peer_message(plugin->leader_node, map, on_transaction_request_sent)==FALSE ) goto loc_failed;
-
-  binn_free(map);
-
-  return;
-loc_failed:
-  if( map ) binn_free(map);
-//  plugin->sync_down_state = DB_STATE_ERROR;
-
-}
-
-/****************************************************************************/
-
 SQLITE_PRIVATE void on_requested_block(node *node, void *msg, int size){
   plugin *plugin = node->plugin;
   int rc;
@@ -229,6 +238,8 @@ SQLITE_PRIVATE void on_requested_block(node *node, void *msg, int size){
     SYNCTRACE("--- FAILED: 'requested' block arrived while this node is not synchronizing\n");
     return;
   }
+
+  // it can be a committed or uncommitted block(s)
 
   rc = store_new_block(node, msg, size);
 
@@ -246,19 +257,16 @@ SQLITE_PRIVATE void rollback_block(plugin *plugin){
 
   aergolite_rollback_block(this_node);
 
-  discard_block(plugin->new_block);
-  plugin->new_block = NULL;
+  plugin->open_block = NULL;
 
 }
 
 /****************************************************************************/
 
-// iterate the payload to check the transactions
-// download those that are not in the local mempool
-// when they arrive, call fn to check if it can apply
-// execute txns from the payload
-
-SQLITE_PRIVATE int verify_block(plugin *plugin, struct block *block){
+/*
+** Download the transactions that are not in the local mempool
+*/
+SQLITE_PRIVATE int check_block_transactions(plugin *plugin, struct block *block){
   aergolite *this_node = plugin->this_node;
   struct transaction *txn;
   BOOL all_present = TRUE;
@@ -268,15 +276,13 @@ SQLITE_PRIVATE int verify_block(plugin *plugin, struct block *block){
   node *node;
   int rc;
 
-  SYNCTRACE("verify_block\n");
+  SYNCTRACE("check_block_transactions\n");
 
   /* if this node is in a state update, return */
-  if( plugin->sync_down_state!=DB_STATE_IN_SYNC ) return SQLITE_BUSY;
+  //! if( plugin->sync_down_state!=DB_STATE_IN_SYNC ) return SQLITE_BUSY;
 
-  //block = plugin->new_block;
   if( !block ) return SQLITE_EMPTY;
   assert(block->height>0);
-  plugin->new_block = block;
 
   /* get the list of transactions ids */
   list = binn_map_list(block->body, BODY_TXN_IDS);  //  BLOCK_TRANSACTIONS);
@@ -305,6 +311,36 @@ SQLITE_PRIVATE int verify_block(plugin *plugin, struct block *block){
 
   if( !all_present ) return SQLITE_BUSY;
 
+  return SQLITE_OK;
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE int verify_block(plugin *plugin, struct block *block){
+  aergolite *this_node = plugin->this_node;
+  struct transaction *txn;
+  BOOL all_present = TRUE;
+  binn_iter iter;
+  binn value;
+  void *list;
+  int rc;
+
+  SYNCTRACE("verify_block\n");
+
+  /* if this node is in a state update, return */
+  //! if( plugin->sync_down_state!=DB_STATE_IN_SYNC ) return SQLITE_BUSY;
+
+  if( !block ) return SQLITE_MISUSE;
+  assert(block->height>0);
+  {
+  int64 current_height = plugin->current_block ? plugin->current_block->height : 0;
+  assert(block->height==current_height+1);
+  }
+
+  /* get the list of transactions ids */
+  list = binn_map_list(block->body, BODY_TXN_IDS);  //  BLOCK_TRANSACTIONS);
+
   /* start a new block */
   rc = aergolite_begin_block(this_node);
   if( rc ) goto loc_failed;
@@ -323,7 +359,7 @@ SQLITE_PRIVATE int verify_block(plugin *plugin, struct block *block){
       return rc;
     }
     if( (rc!=SQLITE_OK) != (value.vint64<0) ){
-      sqlite3_log(rc, "apply_block - transaction with different result");
+      sqlite3_log(rc, "verify_block - transaction with different result");
       aergolite_rollback_block(this_node);
       goto loc_failed;
     }
@@ -332,26 +368,13 @@ SQLITE_PRIVATE int verify_block(plugin *plugin, struct block *block){
   rc = aergolite_verify_block(this_node, block->header, block->body, block->id);
   if( rc ) goto loc_failed;
 
-  /* approved by this node */
-  block->ack_count++;
-
-  /* broadcast the approved block message */
-  //! it must be signed (?) - later
-  map = binn_map();
-  binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_BLOCK_APPROVED);
-  binn_map_set_int64(map, PLUGIN_HEIGHT, block->height);
-  binn_map_set_blob(map, PLUGIN_HASH, block->id, 32);
-  for( node=plugin->peers; node; node=node->next ){
-    if( node->is_authorized ){
-      send_peer_message(node, map, NULL);
-    }
-  }
-  binn_free(map);
+  plugin->open_block = block;
 
   SYNCTRACE("verify_block OK\n");
 
+// case: a block arrive after the votes
   /* check if it already has sufficient votes */
-//  if( block->ack_count >= majority(plugin->total_authorized_nodes) ){
+//  if( block->num_votes >= majority(plugin->total_authorized_nodes) ){
     /* commit the new block on this node */
 //    commit_block(plugin, block);
 //  }
@@ -360,12 +383,8 @@ SQLITE_PRIVATE int verify_block(plugin *plugin, struct block *block){
 
 loc_failed:
   SYNCTRACE("verify_block FAILED\n");
-// close connection?
-// or try again? use a timer?
   if( rc!=SQLITE_BUSY ){
     plugin->sync_down_state = DB_STATE_OUTDATED; /* it may download this block later */
-    discard_block(block);
-    plugin->new_block = NULL;
   }
   return rc;
 }
@@ -413,33 +432,32 @@ SQLITE_PRIVATE int commit_block(plugin *plugin, struct block *block){
   /* replace the previous block by the new one */
   if( plugin->current_block ) discard_block(plugin->current_block);
   plugin->current_block = block;
-  plugin->new_block = NULL;
+  llist_remove(&plugin->new_blocks, block);
+  plugin->open_block = NULL;
+
+  /* discard other blocks */
+  discard_uncommitted_blocks(plugin);
 
   /* discard old block votes */
   discard_old_block_votes(plugin);
 
   SYNCTRACE("commit_block OK\n");
 
-  if( plugin->is_leader ){
-    start_new_block_timer(plugin);
-  }
+  start_new_block_timer(plugin);
 
   return SQLITE_OK;
 
 loc_failed:
   SYNCTRACE("commit_block FAILED\n");
-// close connection?
-// or try again? use a timer?
   if( rc!=SQLITE_BUSY ){
     plugin->sync_down_state = DB_STATE_OUTDATED; /* it may download this block later */
-    discard_block(block);
-    plugin->new_block = NULL;
   }
   return rc;
 }
 
 /****************************************************************************/
 
+// it must check if all txns are in the mempool
 SQLITE_PRIVATE int apply_block(plugin *plugin, struct block *block){
   int rc;
   rc = verify_block(plugin, block);
@@ -451,10 +469,111 @@ SQLITE_PRIVATE int apply_block(plugin *plugin, struct block *block){
 
 /****************************************************************************/
 
-SQLITE_PRIVATE int verify_last_block(plugin *plugin) {
+SQLITE_PRIVATE void vote_on_block(plugin *plugin, struct block *block) {
+  struct node *node;
+  binn *map;
 
-  return verify_block(plugin, plugin->new_block);
+  /* vote from this node */
+  if( add_block_vote(block,plugin->node_id) ){
+    block->num_votes++;
+  }
 
+  /* broadcast the block vote message */
+  map = binn_map();
+  if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_BLOCK_VOTE)==FALSE ) goto loc_exit;
+  if( binn_map_set_int64(map, PLUGIN_HEIGHT, block->height)==FALSE ) goto loc_exit;
+  if( binn_map_set_blob(map, PLUGIN_HASH, block->id, 32)==FALSE ) goto loc_exit;
+  if( binn_map_set_int32(map, PLUGIN_NODE_ID, plugin->node_id)==FALSE ) goto loc_exit;
+  //! signature
+  for( node=plugin->peers; node; node=node->next ){
+    if( node->is_authorized ){
+      send_peer_message(node, map, NULL);
+    }
+  }
+loc_exit:
+  binn_free(map);
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void choose_block_to_vote(plugin *plugin){
+  struct block *block, *winner, *excluded=NULL;
+  int rc;
+
+  SYNCTRACE("choose_block_to_vote\n");
+
+  //! can it be in a state update???
+
+loc_again:
+
+  winner = NULL;
+  for( block=plugin->new_blocks; block; block=block->next ){
+    assert( block->wait_time > 0 );
+    if( !winner || block->wait_time < winner->wait_time ){
+      winner = block;
+    }
+  }
+
+  if( winner ){
+    if( winner!=plugin->open_block ){
+      if( plugin->open_block ){
+        rollback_block(plugin);
+      }
+      /* all transactions for this block must be present on mempool */
+      /* otherwise an attacker could generate a block with a fake transaction */
+      rc = check_block_transactions(plugin, winner);
+      if( rc==SQLITE_OK ){
+        /* verify if the block is correct */
+        rc = verify_block(plugin, winner);
+      }
+      if( rc ){
+        llist_remove(&plugin->new_blocks, winner);
+        llist_add(&excluded, winner);
+        goto loc_again;
+      }
+    }
+    /* the block is OK */
+    vote_on_block(plugin, winner);
+  }
+
+loc_exit:
+
+  /* restore the list of blocks */
+  //for( block=excluded; block; block=block->next ){
+  //  llist_add(&plugin->new_blocks, block);
+  if( excluded ){
+    /* concatenate one list into another */
+    llist_add(&plugin->new_blocks, excluded);
+  }
+
+  /* is there already a winner block? */
+  check_for_winner_block(plugin);
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void on_block_wait_timeout(uv_timer_t* handle) {
+  plugin *plugin = (struct plugin *) handle->loop->data;
+
+  SYNCTRACE("on_block_wait_timeout\n");
+
+  uv_timer_stop(&plugin->new_block_timer);
+
+  choose_block_to_vote(plugin);
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void start_block_wait_timer(plugin *plugin){
+  /* start the block wait timer if not yet started */
+  if( !uv_is_active((uv_handle_t*)&plugin->block_wait_timer) ){
+    int block_wait_interval = get_block_wait_interval(plugin);
+    SYNCTRACE("start_block_wait_timer\n");
+    uv_timer_start(&plugin->block_wait_timer, on_block_wait_timeout, block_wait_interval, 0);
+  }
 }
 
 /****************************************************************************/
@@ -462,6 +581,7 @@ SQLITE_PRIVATE int verify_last_block(plugin *plugin) {
 SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
   aergolite *this_node = node->this_node;
   plugin *plugin = node->plugin;
+  unsigned int wait_time;
   struct block *block;
   int64 height;
   void *header, *body;
@@ -470,14 +590,29 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
 
   header = binn_map_blob(msg, PLUGIN_HEADER, NULL);
   body   = binn_map_blob(msg, PLUGIN_BODY, NULL);
+  wait_time = binn_map_uint32(msg, PLUGIN_WAIT_TIME);
+  //proof = binn_map_blob(msg, PLUGIN_PROOF, &prooflen);
 
+  /* verify the random number */
+  //rc = xxx(seed, node->pubkey, random, proof, prooflen);
+
+  /* verify the block header */
   rc = aergolite_verify_block_header(this_node, header, body, &height, id);
 
-  SYNCTRACE("on_new_block - %s height=%" INT64_FORMAT " id=%02X%02X%02X%02X\n",
-            rc ? "INVALID BLOCK -" : "",
-            height, id[0], id[1], id[2], id[3]);
+  SYNCTRACE("on_new_block -%s height=%" INT64_FORMAT " id=%02X%02X%02X%02X "
+            "wait_time=%d\n",
+            rc ? " INVALID BLOCK -" : "",
+            height, id[0], id[1], id[2], id[3], wait_time);
 
   if( rc ) return;
+
+  /* check if the block is already on the list */
+  for( block=plugin->new_blocks; block; block=block->next ){
+    if( height==block->height && memcmp(id,block->id,32)==0 ){
+      SYNCTRACE("on_new_block ALREADY ON LIST\n");
+      return;
+    }
+  }
 
   /* if this node is not prepared to apply this block, do not acknowledge its receival */
   if( !plugin->current_block ){
@@ -497,23 +632,22 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
     return;
   }
 
+#if 0
   /* if another block is open */
-  if( plugin->new_block ){
-    if( height==plugin->new_block->height && memcmp(id,plugin->new_block->id,32)==0 ){
-      /* it is the same block */
-      return;
-    }else{
-      /* it is a different block */
-      rollback_block(plugin);
-    }
+  if( plugin->open_block ){
+    rollback_block(plugin);
   }
+#endif
+
 
   /* allocate a new block structure */
   block = sqlite3_malloc_zero(sizeof(struct block));
   if( !block ) return;  // SQLITE_NOMEM;
 
   /* store the new block data */
+  memcpy(block->id, id, 32);
   block->height = height;
+  block->wait_time = wait_time;
   block->header = sqlite3_memdup(header, binn_size(header));
   block->body   = sqlite3_memdup(body,   binn_size(body));
 
@@ -523,90 +657,130 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
     return;
   }
 
-  memcpy(block->id, id, 32);
-
   /* are there stored votes for this block? */
   transfer_block_votes(plugin, block);
 
-  /* verify if the block is correct */
-  verify_block(plugin, block);
+  /* store the new block */
+  llist_add(&plugin->new_blocks, block);
+
+
+  /* start the block wait timer if not yet started */
+  start_block_wait_timer(plugin);
+
+
+  /* download the transactions that are not in the local mempool */
+  rc = check_block_transactions(plugin, block);
+  if( rc ) return;  /* transaction not present on mempool */
+
+  /* sometimes the block arrives after the votes */
+  check_for_winner_block(plugin);
 
 }
 
 /****************************************************************************/
 
-SQLITE_PRIVATE void on_node_approved_block(node *source_node, void *msg, int size) {
+// is there a winner block?
+// if yes, does it have all the txns locally?
+
+SQLITE_PRIVATE void check_for_winner_block(plugin *plugin) {
+  struct block *block;
+  int rc;
+
+  SYNCTRACE("check_for_winner_block\n");
+
+  for( block=plugin->new_blocks; block; block=block->next ){
+    /* check if the block reached the majority of the votes */
+    if( block->num_votes >= majority(plugin->total_authorized_nodes) ){
+
+      /* is this node in a state update? */
+      if( plugin->sync_down_state==DB_STATE_SYNCHRONIZING ){
+        int64 current_height = plugin->current_block ? plugin->current_block->height : 0;
+        /* if the winner block is the next after the last one this node has */
+        if( block->height==current_height+1 ){
+          state_update_finished(plugin);
+        }else{
+          return;
+        }
+      }
+
+      /* commit the new block on this node */
+      /* is the winning block open? */
+      if( block==plugin->open_block ){
+        commit_block(plugin, block);
+      }else{
+        if( plugin->open_block ){
+          rollback_block(plugin);
+        }
+        /* are all transactions for this block present on mempool? */
+        rc = check_block_transactions(plugin, block);
+        if( rc ) return;  /* transaction not present on mempool */
+        /* verify and commit the winner block */
+        apply_block(plugin, block);
+      }
+
+      break;
+    }
+  }
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void on_block_vote(node *source_node, void *msg, int size) {
   plugin *plugin = source_node->plugin;
   struct block *block;
   int64 height;
   unsigned char *id;
+  int node_id;
 
   height = binn_map_int64(msg, PLUGIN_HEIGHT);
   id = binn_map_blob(msg, PLUGIN_HASH, NULL);
+  node_id = binn_map_int32(msg, PLUGIN_NODE_ID);
 
-  SYNCTRACE("on_node_approved_block - height=%" INT64_FORMAT " id=%02X%02X%02X%02X\n",
+  //! the vote must be signed by the sender and verified here
+
+  SYNCTRACE("on_block_vote - height=%" INT64_FORMAT " id=%02X%02X%02X%02X\n",
             height, *id, *(id+1), *(id+2), *(id+3));
 
-  /* check if we have some block to be committed */
-  block = plugin->new_block;
+  /* check if we have this block locally */
+  for( block=plugin->new_blocks; block; block=block->next ){
+    if( block->height==height && memcmp(block->id,id,32)==0 ){
+      break;
+    }
+  }
   if( !block ){
     int64 current_height = plugin->current_block ? plugin->current_block->height : 0;
-    SYNCTRACE("on_node_approved_block - no open block\n");
-    if( plugin->is_leader ) return;
+    SYNCTRACE("on_block_vote - BLOCK NOT FOUND\n");
     if( height>current_height ){
       /* store the vote for this block */
-      store_block_vote(source_node, height, id);
+      store_block_vote(plugin, node_id, height, id);
       //if( plugin->sync_down_state==DB_STATE_IN_SYNC ){
       //  /* the block is not on memory. request it */
       //! request_block(source_node, height, id);  //! if it fails, start a state update
       //}
     }
     if( height>current_height+1 ){
-      if( plugin->sync_down_state==DB_STATE_IN_SYNC ){
+      if( plugin->sync_down_state!=DB_STATE_SYNCHRONIZING ){
         request_state_update(plugin);
       }
     }
     return;
   }
 
-  if( !plugin->is_leader ){
-    /* if this node is in a state update, ignore the block commit command */
-    if( plugin->sync_down_state!=DB_STATE_IN_SYNC ) return;
-  }
-
-  /* check if the local block is the expected one */
-  if( block->height!=height || id==NULL || memcmp(block->id,id,32)!=0 ){
-    SYNCTRACE("on_node_approved_block - unexpected block - cached block height: %"
-              INT64_FORMAT " id=%02X%02X%02X%02X\n", block->height,
-              *block->id, *(block->id+1), *(block->id+2), *(block->id+3));
-    if( !plugin->is_leader ){
-      rollback_block(plugin);
-      request_state_update(plugin);
-    }
-    return;
-  }
-
   /* check if this vote was already counted */
-  if( add_block_vote(block,source_node->id)==false ){
-    SYNCTRACE("on_node_approved_block - block vote already stored\n");
+  if( add_block_vote(block,node_id)==false ){
+    SYNCTRACE("on_block_vote - block vote already stored\n");
     return;
   }
 
-  /* increment the number of nodes that approved the block */
-  block->ack_count++;
+  /* increment the number of nodes that voted on this block */
+  block->num_votes++;
 
-  SYNCTRACE("on_node_approved_block - ack_count=%d total_authorized_nodes=%d\n",
-            block->ack_count, plugin->total_authorized_nodes);
+  SYNCTRACE("on_block_vote - num_votes=%d total_authorized_nodes=%d\n",
+            block->num_votes, plugin->total_authorized_nodes);
 
-  /* check if we reached the majority of the nodes */
-  if( block->ack_count >= majority(plugin->total_authorized_nodes) ){
-    /* commit the new block on this node */
-    if( plugin->is_leader ){
-      apply_block(plugin, block);
-    }else{
-      commit_block(plugin, block);
-    }
-  }
+  /* do we have a winner block? */
+  check_for_winner_block(plugin);
 
 }
 
@@ -713,6 +887,10 @@ loc_again:
   rc = aergolite_create_block(this_node, &block->height, &block->header, &block->body, block->id);
   if( rc ) goto loc_failed2;
 
+  /* save the random number */
+  block->wait_time = plugin->random_block_interval;
+  //! block->proof = plugin->block_interval_proof;
+
   array_free(&plugin->nonces);
   SYNCTRACE("create_new_block OK\n");
   return block;
@@ -729,13 +907,12 @@ loc_failed2:
 /****************************************************************************/
 
 /*
-** Used by the leader.
 ** -start a db transaction
 ** -execute the transactions from the local mempool (without the BEGIN and COMMIT)
 ** -track which db pages were modified and their hashes
 ** -create a "block" with the transactions ids (and page hashes)
 ** -roll back the database transaction
-** -reset the block ack_count
+** -reset the block num_votes
 ** -broadcast the block to the peers
 */
 SQLITE_PRIVATE void new_block_timer_cb(uv_timer_t* handle) {
@@ -745,15 +922,9 @@ SQLITE_PRIVATE void new_block_timer_cb(uv_timer_t* handle) {
 
   SYNCTRACE("new_block_timer_cb\n");
 
-  if( !plugin->is_leader ){
-    SYNCTRACE("new_block_timer_cb not longer the leader node\n");
-    return;
-  }
-
-  /* if there is an open non-commited block */
-  if( plugin->new_block ){
-    SYNCTRACE("new_block_timer_cb OPEN BLOCK\n");
-    return;
+  /* if another block is open */
+  if( plugin->open_block ){
+    rollback_block(plugin);
   }
 
   block = create_new_block(plugin);
@@ -766,42 +937,40 @@ SQLITE_PRIVATE void new_block_timer_cb(uv_timer_t* handle) {
   if( block==(struct block *)-1 ) return;
 
   /* store the new block */
-  //llist_add(&plugin->blocks, block);
-  plugin->new_block = block;
-
-  add_block_vote(block, plugin->node_id);
-
-  /* reset the block ack_count */
-  block->ack_count = 1;  /* ack by this node */
+  llist_add(&plugin->new_blocks, block);
+  /* save the currently open block */
+  plugin->open_block = block;
 
   /* broadcast the block to the peers */
-  broadcast_new_block(plugin);
+  broadcast_new_block(plugin, block);
+
+  /* start the block wait timer if not yet started */
+  start_block_wait_timer(plugin);
 
 }
 
 /****************************************************************************/
 
 SQLITE_PRIVATE void start_new_block_timer(plugin *plugin) {
-  //if( plugin->new_block ) return;
   if( count_mempool_unused_txns(plugin)==0 ) return;
   if( !has_nodes_for_consensus(plugin) ) return;
   if( !uv_is_active((uv_handle_t*)&plugin->new_block_timer) ){
-    SYNCTRACE("start_new_block_timer\n");
-    uv_timer_start(&plugin->new_block_timer, new_block_timer_cb, plugin->block_interval, 0);
+    int interval = calculate_node_wait_interval(plugin);
+    SYNCTRACE("start_new_block_timer interval=%d\n", interval);
+    uv_timer_start(&plugin->new_block_timer, new_block_timer_cb, interval, 0);
   }
 }
 
 /****************************************************************************/
 
-SQLITE_PRIVATE binn* encode_new_block(plugin *plugin) {
-  struct block *block;
+SQLITE_PRIVATE binn* encode_new_block(plugin *plugin, struct block *block) {
   binn *map;
-  if( !plugin->new_block ) return NULL;
-  block = plugin->new_block;
   map = binn_map();
   if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_NEW_BLOCK)==FALSE ) goto loc_failed;
   if( binn_map_set_blob(map, PLUGIN_HEADER, block->header, binn_size(block->header))==FALSE ) goto loc_failed;
   if( binn_map_set_blob(map, PLUGIN_BODY, block->body, binn_size(block->body))==FALSE ) goto loc_failed;
+  if( binn_map_set_int32(map, PLUGIN_WAIT_TIME, block->wait_time)==FALSE ) goto loc_failed;
+  //! if( binn_map_set_int32(map, PLUGIN_PROOF, block->proof)==FALSE ) goto loc_failed;
   return map;
 loc_failed:
   if( map ) binn_free(map);
@@ -810,18 +979,15 @@ loc_failed:
 
 /****************************************************************************/
 
-/*
-** Used by the leader.
-*/
-SQLITE_PRIVATE void send_new_block(plugin *plugin, node *node) {
+SQLITE_PRIVATE void send_new_block(plugin *plugin, node *node, struct block *block) {
   binn *map;
 
-  if( !plugin->new_block ) return;
+  if( !block ) return;
 
-  SYNCTRACE("send_new_block - height=%" INT64_FORMAT "\n",
-            plugin->new_block->height);
+  SYNCTRACE("send_new_block - height=%" INT64_FORMAT " id=%02X%02X%02X%02X\n",
+            block->height, block->id[0], block->id[1], block->id[2], block->id[3]);
 
-  map = encode_new_block(plugin);
+  map = encode_new_block(plugin, block);
   if( map ){
     send_peer_message(node, map, NULL);
     binn_free(map);
@@ -831,19 +997,82 @@ SQLITE_PRIVATE void send_new_block(plugin *plugin, node *node) {
 
 /****************************************************************************/
 
-/*
-** Used by the leader.
-*/
-SQLITE_PRIVATE int broadcast_new_block(plugin *plugin) {
+SQLITE_PRIVATE void send_new_blocks(plugin *plugin, node *node) {
+  struct block *block;
+
+  if( !node ) return;
+
+  SYNCTRACE("send_new_blocks - node=%d\n", node->id);
+
+  for( block=plugin->new_blocks; block; block=block->next ){
+    send_new_block(plugin, node, block);
+  }
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void send_block_vote(
+  plugin *plugin,
+  node *node,
+  int64 height,
+  void *block_id,
+  int node_id
+){
+  binn *map;
+  map = binn_map();
+  if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_BLOCK_VOTE)==FALSE ) goto loc_exit;
+  if( binn_map_set_int64(map, PLUGIN_HEIGHT, height)==FALSE ) goto loc_exit;
+  if( binn_map_set_blob(map, PLUGIN_HASH, block_id, 32)==FALSE ) goto loc_exit;
+  if( binn_map_set_int32(map, PLUGIN_NODE_ID, node_id)==FALSE ) goto loc_exit;
+  //! signature?
+  send_peer_message(node, map, NULL);
+loc_exit:
+  binn_free(map);
+}
+
+/****************************************************************************/
+
+//! on gossip: these messages should not be resent to other nodes
+
+//! security: the block vote signature is not being sent...
+
+SQLITE_PRIVATE void send_block_votes(plugin *plugin, node *node) {
+  struct block *block;
+  struct block_vote *vote;
+
+  if( !node ) return;
+
+  SYNCTRACE("send_block_votes - node=%d\n", node->id);
+
+  /* send the votes for arrived blocks */
+  for( block=plugin->new_blocks; block; block=block->next ){
+    int i;
+    int count = array_count(block->votes);
+    int *node_ids = (int*) array_ptr(block->votes);
+    for( i=0; i<count; i++ ){
+      send_block_vote(plugin, node, block->height, block->id, node_ids[i]);
+    }
+  }
+
+  /* send the votes for not yet arrived blocks */
+  for( vote=plugin->block_votes; vote; vote=vote->next ){
+    send_block_vote(plugin, node, vote->height, vote->block_id, vote->node_id);
+  }
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE int broadcast_new_block(plugin *plugin, struct block *block) {
   struct node *node;
   binn *map;
 
-  SYNCTRACE("broadcast_new_block - height=%" INT64_FORMAT "\n",
-            plugin->new_block->height);
+  SYNCTRACE("broadcast_new_block - height=%" INT64_FORMAT " id=%02X%02X%02X%02X\n",
+            block->height, block->id[0], block->id[1], block->id[2], block->id[3]);
 
-  /* signal other peers that there is a new transaction */
-  map = encode_new_block(plugin);
-  if( !map ) return SQLITE_BUSY;  /* flag to retry the command later */
+  map = encode_new_block(plugin, block);
+  if( !map ) return SQLITE_NOMEM;
 
   for( node=plugin->peers; node; node=node->next ){
     if( node->is_authorized ){

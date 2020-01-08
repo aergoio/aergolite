@@ -130,7 +130,7 @@ endif
 sqlite3.o: core/sqlite3.c core/aergolite.h core/single_instance.h core/single_instance.c common/sha256.c common/sha256.h common/checksum.c common/linked_list.c common/array.c
 	$(CC) $(LIBFLAGS) -c $< -o $@
 
-plugin-mini-raft.o: plugins/mini-raft/mini-raft.c plugins/mini-raft/mini-raft.h plugins/mini-raft/node_discovery.c plugins/mini-raft/allowed_nodes.c plugins/mini-raft/leader_election.c plugins/mini-raft/state_update.c plugins/mini-raft/transactions.c plugins/mini-raft/consensus.c common/sha256.c common/sha256.h plugins/common/uv_functions.c plugins/common/uv_msg_framing.c plugins/common/uv_msg_framing.h plugins/common/uv_send_message.c plugins/common/uv_callback.c plugins/common/uv_callback.h core/sqlite3.h
+plugin-mini-raft.o: plugins/mini-raft/mini-raft.c plugins/mini-raft/mini-raft.h plugins/mini-raft/node_discovery.c plugins/mini-raft/allowed_nodes.c plugins/mini-raft/requests.c plugins/mini-raft/state_update.c plugins/mini-raft/transactions.c plugins/mini-raft/block_producer.c plugins/mini-raft/consensus.c common/sha256.c common/sha256.h plugins/common/uv_functions.c plugins/common/uv_msg_framing.c plugins/common/uv_msg_framing.h plugins/common/uv_send_message.c plugins/common/uv_callback.c plugins/common/uv_callback.h core/sqlite3.h
 	$(CC) $(LIBFLAGS) -c $< -o $@
 
 
