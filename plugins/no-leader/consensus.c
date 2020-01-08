@@ -499,23 +499,33 @@ loc_exit:
 
 SQLITE_PRIVATE void choose_block_to_vote(plugin *plugin){
   struct block *block, *winner, *excluded=NULL;
+  int64 current_height = plugin->current_block ? plugin->current_block->height : 0;
   int rc;
 
   SYNCTRACE("choose_block_to_vote\n");
 
-  //! can it be in a state update???
+  /* is it applying a state update? (some pages sent) */
+  if( plugin->is_updating_state ) return;
 
 loc_again:
 
   winner = NULL;
   for( block=plugin->new_blocks; block; block=block->next ){
     assert( block->wait_time > 0 );
-    if( !winner || block->wait_time < winner->wait_time ){
-      winner = block;
+    if( block->height==current_height+1 ){
+      if( !winner || block->wait_time < winner->wait_time ){
+        winner = block;
+      }
     }
   }
 
   if( winner ){
+    /* is it requesting a state update? */
+    if( plugin->sync_down_state==DB_STATE_SYNCHRONIZING ){
+      assert( winner->height==current_height+1 );
+      state_update_finished(plugin);
+    }
+
     if( winner!=plugin->open_block ){
       if( plugin->open_block ){
         rollback_block(plugin);
@@ -533,6 +543,7 @@ loc_again:
         goto loc_again;
       }
     }
+
     /* the block is OK */
     vote_on_block(plugin, winner);
   }
