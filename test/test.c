@@ -3076,7 +3076,7 @@ int main(){
 loc_exit:
 
   /* release global memory - to make valgrind happy */
-  //sqlite3_shutdown();
+  sqlite3_shutdown();
 
   /* delete the test db files on success */
   delete_files(200);
