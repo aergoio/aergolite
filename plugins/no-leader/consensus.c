@@ -473,10 +473,20 @@ SQLITE_PRIVATE void vote_on_block(plugin *plugin, struct block *block) {
   struct node *node;
   binn *map;
 
+  SYNCTRACE("vote_on_block - height=%" INT64_FORMAT " wait_time=%d "
+            "id=%02X%02X%02X%02X\n", block->height, block->wait_time,
+            block->id[0], block->id[1], block->id[2], block->id[3]);
+
   /* vote from this node */
   if( add_block_vote(block,plugin->node_id) ){
     block->num_votes++;
+  }else{
+    SYNCTRACE("vote_on_block - ALREADY VOTED\n");
+    return;
   }
+
+  /* flag that this node already voted on this round */
+  plugin->last_vote_height = block->height;
 
   /* broadcast the block vote message */
   map = binn_map();
@@ -503,6 +513,9 @@ SQLITE_PRIVATE void choose_block_to_vote(plugin *plugin){
   int rc;
 
   SYNCTRACE("choose_block_to_vote\n");
+
+  /* has this node already voted on this round? */
+  if( plugin->last_vote_height==current_height+1 ) return;
 
   /* is it applying a state update? (some pages sent) */
   if( plugin->is_updating_state ) return;
@@ -579,6 +592,9 @@ SQLITE_PRIVATE void on_block_wait_timeout(uv_timer_t* handle) {
 /****************************************************************************/
 
 SQLITE_PRIVATE void start_block_wait_timer(plugin *plugin){
+  int64 current_height = plugin->current_block ? plugin->current_block->height : 0;
+  /* has this node already voted on this round? */
+  if( plugin->last_vote_height==current_height+1 ) return;
   /* start the block wait timer if not yet started */
   if( !uv_is_active((uv_handle_t*)&plugin->block_wait_timer) ){
     int block_wait_interval = get_block_wait_interval(plugin);

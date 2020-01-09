@@ -294,6 +294,7 @@ struct plugin {
   struct block *new_blocks;
   struct block *open_block;
   struct block_vote *block_votes;
+  int64  last_vote_height;
 
   int block_interval;
   int random_block_interval;
