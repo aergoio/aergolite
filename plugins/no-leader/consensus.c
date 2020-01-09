@@ -919,6 +919,7 @@ loc_again:
   //! block->proof = plugin->block_interval_proof;
 
   array_free(&plugin->nonces);
+  plugin->last_created_block_height = block->height;
   SYNCTRACE("create_new_block OK\n");
   return block;
 
@@ -979,6 +980,10 @@ SQLITE_PRIVATE void new_block_timer_cb(uv_timer_t* handle) {
 /****************************************************************************/
 
 SQLITE_PRIVATE void start_new_block_timer(plugin *plugin) {
+  int64 current_height = plugin->current_block ? plugin->current_block->height : 0;
+  /* if this node already generated a block for this round
+  ** and it is not committed yet */
+  if( plugin->last_created_block_height==current_height+1 ) return;
   if( count_mempool_unused_txns(plugin)==0 ) return;
   if( !has_nodes_for_consensus(plugin) ) return;
   if( !uv_is_active((uv_handle_t*)&plugin->new_block_timer) ){
