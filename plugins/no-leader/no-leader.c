@@ -1886,6 +1886,8 @@ SQLITE_API void plugin_end(void *arg){
     plugin->discovery = next;
   }
 
+  array_free(&plugin->state_update_contacted_nodes);
+
   sqlite3_mutex_free(plugin->mutex);
 
   sqlite3_free(plugin);

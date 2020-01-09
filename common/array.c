@@ -129,7 +129,7 @@ SQLITE_PRIVATE int array_find(void *array, int(*compare_fn)(void*,void*), void *
   return -1;
 }
 
-SQLITE_PRIVATE bool in_array(void *array, int(*compare_fn)(void*,void*), void *item){
+SQLITE_PRIVATE BOOL in_array(void *array, int(*compare_fn)(void*,void*), void *item){
   return array_find(array,compare_fn,item) >= 0;
 }
 

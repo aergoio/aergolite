@@ -90,7 +90,7 @@ SQLITE_PRIVATE void discard_new_blocks(plugin *plugin){
 
   while( plugin->new_blocks ){
     struct block *next = plugin->new_blocks->next;
-    sqlite3_free(plugin->new_blocks);
+    discard_block(plugin->new_blocks);
     plugin->new_blocks = next;
   }
 
@@ -109,7 +109,7 @@ loc_again:
   for( block=plugin->new_blocks; block; block=block->next ){
     if( block->height<=current_height ){
       llist_remove(&plugin->new_blocks, block);
-      sqlite3_free(block);
+      discard_block(block);
       goto loc_again;
     }
   }
@@ -927,7 +927,7 @@ loc_failed:
   aergolite_rollback_block(this_node);
 loc_failed2:
   SYNCTRACE("create_new_block FAILED\n");
-  if( block ) sqlite3_free(block);
+  if( block ) discard_block(block);
   array_free(&plugin->nonces);
   return NULL;
 }
