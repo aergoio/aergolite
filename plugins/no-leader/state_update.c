@@ -358,6 +358,7 @@ SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
   assert(header);
   //assert(signatures);
   assert(mod_pages);
+  assert(binn_count(mod_pages)>0);
 
   /* ignore messages from invalid nodes */
   if( node->id!=plugin->contacted_node_id ){
@@ -493,10 +494,9 @@ SQLITE_PRIVATE void on_request_state_update(node *node, void *msg, int size) {
   SYNCTRACE("on_request_state_update - from height: %" INT64_FORMAT
             " current height: %" INT64_FORMAT "\n", height, current_height);
 
-  //if( height<0 ) ...
-//!  if( height>current_height ) ...
+  if( height<0 ) height = 0;
 
-  if( height==current_height ){
+  if( height>=current_height ){
     /* inform that it is up-to-date */
     SYNCTRACE("on_request_state_update - peer is up-to-date\n");
     map = binn_map();
@@ -527,6 +527,7 @@ SQLITE_PRIVATE void on_request_state_update(node *node, void *msg, int size) {
   /* get the list of modified pages since the informed height */
   rc = aergolite_get_modified_pages(this_node, height + 1, &list);
   if( rc ) goto loc_failed;
+  assert(binn_count(list)>0);
 
   /* build an array with the distinct modified pages */
   array = new_array(16, sizeof(Pgno));
