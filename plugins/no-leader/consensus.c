@@ -967,7 +967,7 @@ SQLITE_PRIVATE void new_block_timer_cb(uv_timer_t* handle) {
   /* store the new block */
   llist_add(&plugin->new_blocks, block);
   /* save the currently open block */
-  //plugin->open_block = block;  -- the block is currently created and closed
+  plugin->open_block = block;
 
   /* broadcast the block to the peers */
   broadcast_new_block(plugin, block);
