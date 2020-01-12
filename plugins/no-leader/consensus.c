@@ -384,7 +384,9 @@ SQLITE_PRIVATE int verify_block(plugin *plugin, struct block *block){
 loc_failed:
   SYNCTRACE("verify_block FAILED\n");
   if( rc!=SQLITE_BUSY ){
-    plugin->sync_down_state = DB_STATE_OUTDATED; /* it may download this block later */
+    if( plugin->sync_down_state!=DB_STATE_SYNCHRONIZING ){
+      plugin->sync_down_state = DB_STATE_OUTDATED; /* it may download this block later */
+    }
   }
   return rc;
 }
@@ -450,7 +452,9 @@ SQLITE_PRIVATE int commit_block(plugin *plugin, struct block *block){
 loc_failed:
   SYNCTRACE("commit_block FAILED\n");
   if( rc!=SQLITE_BUSY ){
-    plugin->sync_down_state = DB_STATE_OUTDATED; /* it may download this block later */
+    if( plugin->sync_down_state!=DB_STATE_SYNCHRONIZING ){
+      plugin->sync_down_state = DB_STATE_OUTDATED; /* it may download this block later */
+    }
   }
   return rc;
 }
@@ -533,12 +537,6 @@ loc_again:
   }
 
   if( winner ){
-    /* is it requesting a state update? */
-    if( plugin->sync_down_state==DB_STATE_SYNCHRONIZING ){
-      assert( winner->height==current_height+1 );
-      state_update_finished(plugin);
-    }
-
     if( winner!=plugin->open_block ){
       if( plugin->open_block ){
         rollback_block(plugin);
@@ -556,7 +554,6 @@ loc_again:
         goto loc_again;
       }
     }
-
     /* the block is OK */
     vote_on_block(plugin, winner);
   }
@@ -608,6 +605,7 @@ SQLITE_PRIVATE void start_block_wait_timer(plugin *plugin){
 SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
   aergolite *this_node = node->this_node;
   plugin *plugin = node->plugin;
+  int64 current_height = plugin->current_block ? plugin->current_block->height : 0;
   unsigned int wait_time;
   struct block *block;
   int64 height;
@@ -641,21 +639,10 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
     }
   }
 
-  /* if this node is not prepared to apply this block, do not acknowledge its receival */
-  if( !plugin->current_block ){
-    SYNCTRACE("on_new_block plugin->current_block==NULL\n");
-    if( height>1 ){
-      request_state_update(plugin);  //! what if the block is from an attacker?
-      return;
-    }
-  }else if( height<=plugin->current_block->height ){
-    SYNCTRACE("on_new_block OLD BLOCK plugin->current_block->height=%" INT64_FORMAT "\n",
-              plugin->current_block->height);
-    return;
-  }else if( height!=plugin->current_block->height+1 ){
-    SYNCTRACE("on_new_block OUTDATED STATE plugin->current_block->height=%" INT64_FORMAT "\n",
-              plugin->current_block->height);
-    request_state_update(plugin);  //! what if the block is from an attacker?
+  /* check the block height */
+  if( height<=current_height ){
+    SYNCTRACE("on_new_block OLD BLOCK current_height=%" INT64_FORMAT "\n",
+              current_height);
     return;
   }
 
@@ -691,13 +678,24 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
   llist_add(&plugin->new_blocks, block);
 
 
+  /* download the transactions that are not in the local mempool */
+  rc = check_block_transactions(plugin, block);
+
+
+  /* is this node outdated? */
+  if( height>current_height+1 ){
+    SYNCTRACE("on_new_block OUTDATED STATE current_height=%" INT64_FORMAT "\n",
+              current_height);
+    request_state_update(plugin);  //! what if the block is from an attacker?
+    return;
+  }
+
+
   /* start the block wait timer if not yet started */
   start_block_wait_timer(plugin);
 
-
-  /* download the transactions that are not in the local mempool */
-  rc = check_block_transactions(plugin, block);
-  if( rc ) return;  /* transaction not present on mempool */
+  /* transaction not present on mempool */
+  if( rc ) return;
 
   /* sometimes the block arrives after the votes */
   check_for_winner_block(plugin);
@@ -710,25 +708,19 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
 // if yes, does it have all the txns locally?
 
 SQLITE_PRIVATE void check_for_winner_block(plugin *plugin) {
+  int64 current_height = plugin->current_block ? plugin->current_block->height : 0;
   struct block *block;
   int rc;
 
   SYNCTRACE("check_for_winner_block\n");
 
+  /* is it applying a state update? (some pages sent) */
+  if( plugin->is_updating_state ) return;
+
   for( block=plugin->new_blocks; block; block=block->next ){
     /* check if the block reached the majority of the votes */
-    if( block->num_votes >= majority(plugin->total_authorized_nodes) ){
-
-      /* is this node in a state update? */
-      if( plugin->sync_down_state==DB_STATE_SYNCHRONIZING ){
-        int64 current_height = plugin->current_block ? plugin->current_block->height : 0;
-        /* if the winner block is the next after the last one this node has */
-        if( block->height==current_height+1 ){
-          state_update_finished(plugin);
-        }else{
-          return;
-        }
-      }
+    if( block->height==current_height+1 &&
+        block->num_votes >= majority(plugin->total_authorized_nodes) ){
 
       /* commit the new block on this node */
       /* is the winning block open? */

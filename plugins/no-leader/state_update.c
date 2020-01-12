@@ -97,6 +97,8 @@ SQLITE_PRIVATE void state_update_finished(plugin *plugin){
 
   SYNCTRACE("state_update_finished\n");
 
+  uv_timer_stop(&plugin->state_update_timer);
+
   array_free(&plugin->state_update_contacted_nodes);
 
   plugin->contacted_node_id = 0;
@@ -124,17 +126,13 @@ SQLITE_PRIVATE void request_state_update(plugin *plugin) {
 
   SYNCTRACE("request_state_update\n");
 
-  if( plugin->open_block){
-    rollback_block(plugin);
+  if( plugin->sync_down_state==DB_STATE_SYNCHRONIZING ){
+    SYNCTRACE("request_state_update ALREADY SENT\n");
+    return;
   }
 
   if( !plugin->peers ){
     plugin->sync_down_state = DB_STATE_UNKNOWN;
-    return;
-  }
-
-  if( plugin->sync_down_state==DB_STATE_SYNCHRONIZING ){
-    SYNCTRACE("request_state_update ALREADY SENT\n");
     return;
   }
 
@@ -172,6 +170,8 @@ SQLITE_PRIVATE void request_state_update_next(plugin *plugin) {
   int rc, count;
 
   SYNCTRACE("request_state_update_next\n");
+
+  assert( plugin->sync_down_state==DB_STATE_SYNCHRONIZING );
 
 loc_next:
 
@@ -217,6 +217,8 @@ SQLITE_PRIVATE int request_state_update_to_node(plugin *plugin, node *to_node) {
   int64 current_height;
   //char *state_hash;
   binn *map;
+
+  assert( plugin->sync_down_state==DB_STATE_SYNCHRONIZING );
 
   if( !to_node ){
     return SQLITE_ERROR;
@@ -267,6 +269,8 @@ SQLITE_PRIVATE void on_state_update_node_timeout(uv_timer_t* handle) {
 
   SYNCTRACE("on_state_update_node_timeout\n");
 
+  assert( plugin->sync_down_state==DB_STATE_SYNCHRONIZING );
+
   /* is it in the middle of an update? (some pages sent) */
   if( plugin->is_updating_state ){
     aergolite_cancel_state_update(this_node);
@@ -284,10 +288,13 @@ SQLITE_PRIVATE void on_state_update_node_timeout(uv_timer_t* handle) {
 SQLITE_PRIVATE void on_update_db_page(node *node, void *msg, int size) {
   plugin *plugin = node->plugin;
   aergolite *this_node = node->this_node;
+  int64 current_height = plugin->current_block ? plugin->current_block->height : 0;
   unsigned int pgno;
   char *data;
+  int64 height;
   int rc;
 
+  height = binn_map_uint64(msg, PLUGIN_HEIGHT);
   pgno = binn_map_uint32(msg, PLUGIN_PGNO);
   data = binn_map_blob(msg, PLUGIN_DBPAGE, &size);
 
@@ -299,10 +306,21 @@ SQLITE_PRIVATE void on_update_db_page(node *node, void *msg, int size) {
     return;
   }
 
+  /* check the block height */
+  if( height<=current_height ){
+    SYNCTRACE("on_update_db_page - OUTDATED UPDATE height=%" INT64_FORMAT
+    "current_height=%" INT64_FORMAT "\n", height, current_height);
+    return;
+  }
+
   if( plugin->sync_down_state!=DB_STATE_SYNCHRONIZING ){
     sqlite3_log(1, "on_update_db_page FAILED - the state is not synchronizing");
     //request_state_update(plugin);  -- the apply msg from the previous request can cause problems
     return;
+  }
+
+  if( plugin->open_block){
+    rollback_block(plugin);
   }
 
   if( !plugin->is_updating_state ){
@@ -340,6 +358,7 @@ loc_failed:
 SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
   plugin *plugin = node->plugin;
   aergolite *this_node = node->this_node;
+  int64 current_height = plugin->current_block ? plugin->current_block->height : 0;
   void *header, *body, *signatures, *mod_pages;
   int64 height;
   struct block *block = NULL;
@@ -363,6 +382,13 @@ SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
   /* ignore messages from invalid nodes */
   if( node->id!=plugin->contacted_node_id ){
     SYNCTRACE("on_apply_state_update - message coming from invalid node: %d\n", node->id);
+    return;
+  }
+
+  /* check the block height */
+  if( height<=current_height ){
+    SYNCTRACE("on_apply_state_update - OUTDATED UPDATE height=%" INT64_FORMAT
+    "current_height=%" INT64_FORMAT "\n", height, current_height);
     return;
   }
 
@@ -413,6 +439,7 @@ loc_exit:
 
 loc_failed:
   SYNCTRACE("on_apply_state_update - FAILED\n");
+  aergolite_cancel_state_update(this_node);
   plugin->state_update_errors++;
   goto loc_exit;
 
@@ -557,6 +584,7 @@ SQLITE_PRIVATE void on_request_state_update(node *node, void *msg, int size) {
     if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_DB_PAGE)==FALSE ) goto loc_failed;
     if( binn_map_set_uint32(map, PLUGIN_PGNO, pgno)==FALSE ) goto loc_failed;
     if( binn_map_set_blob(map, PLUGIN_DBPAGE, data, size)==FALSE ) goto loc_failed;
+    if( binn_map_set_int64(map, PLUGIN_HEIGHT, current_height)==FALSE ) goto loc_failed;
     if( send_peer_message(node, map, NULL)==FALSE ) goto loc_failed;
     binn_free(map); map = NULL;
   }

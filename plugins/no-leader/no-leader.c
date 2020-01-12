@@ -404,6 +404,8 @@ SQLITE_PRIVATE void on_peer_info_changed(
 
 SQLITE_PRIVATE void reset_node_state(plugin *plugin){
 
+  SYNCTRACE("reset_node_state\n");
+
   if( plugin->sync_down_state==DB_STATE_SYNCHRONIZING || plugin->sync_down_state==DB_STATE_IN_SYNC ){
     plugin->sync_down_state = DB_STATE_UNKNOWN;
   }
