@@ -1,13 +1,14 @@
 /*
 
-requests.c
+Requests:
 
-transactions
-blocks
+-> transactions
+-> blocks
 
-each txn/block request with its own structure
+Each transaction/block request with its own structure,
 its own timer and its own list of contacted nodes.
-send to a new random node at each 500 ms interval
+
+Send to a new random node at each 500 ms interval
 until some of them sends the requested object
 
 */

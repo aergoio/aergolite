@@ -11981,7 +11981,7 @@ int aergolite_sign(aergolite *this_node, char *msg, int msglen,
 int aergolite_verify(aergolite *this_node, char *msg, int msglen,
                      char *pubkey, int pklen,
                      char *signature, int siglen);
-char * aergolite_pubkey(aergolite *this_node, int *ppklen);
+void * aergolite_pubkey(aergolite *this_node, char **ppubkey, int *ppklen, unsigned char **pprivkey);
 
 
 /*

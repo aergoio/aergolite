@@ -241,14 +241,13 @@ SQLITE_API void print_node_list(void *arg, void *vdbe) {
   aergolite *this_node = plugin->this_node;
   struct node *node;
   char hostname[256], cpu[256], os[256], app[256], *node_info;
-  char *pubkey, hexpubkey[72], address[32];
+  char hexpubkey[72], address[32];
   int pklen;
 
   /* add this node to the list of nodes (always the first one) */
 
-  pubkey = aergolite_pubkey(this_node, &pklen);
-  if( pubkey )
-    to_hex(pubkey, pklen, hexpubkey);
+  if( plugin->pubkey )
+    to_hex(plugin->pubkey, plugin->pklen, hexpubkey);
   else
     hexpubkey[0] = 0;
   sprintf(address, "%s:%d", plugin->bind->host, plugin->bind->port);
@@ -2090,7 +2089,8 @@ void * plugin_init(aergolite *this_node, char *uri) {
 
   plugin->node_id = aergolite_get_node_id(this_node);
 
-  plugin->pubkey = aergolite_pubkey(this_node, &plugin->pklen);
+  plugin->pubkey_obj = aergolite_pubkey(this_node, &plugin->pubkey, &plugin->pklen, &plugin->privkey);
+
 
   /* is this an authorizated node? */
   rc = is_node_authorized(this_node, plugin->pubkey, plugin->pklen, &plugin->is_authorized);

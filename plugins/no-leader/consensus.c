@@ -524,8 +524,18 @@ SQLITE_PRIVATE void choose_block_to_vote(plugin *plugin){
   /* is it applying a state update? (some pages sent) */
   if( plugin->is_updating_state ) return;
 
+  /* calculate the blocks wait times */
+  for( block=plugin->new_blocks; block; block=block->next ){
+    if( block->height==current_height+1 ){
+      block->wait_time = calculate_wait_interval(block->vrf_output,
+          plugin->total_authorized_nodes, plugin->block_interval);
+    }
+  }
+
+
 loc_again:
 
+  /* select the block with the lower wait time */
   winner = NULL;
   for( block=plugin->new_blocks; block; block=block->next ){
     assert( block->wait_time > 0 );
@@ -606,20 +616,16 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
   aergolite *this_node = node->this_node;
   plugin *plugin = node->plugin;
   int64 current_height = plugin->current_block ? plugin->current_block->height : 0;
-  unsigned int wait_time;
+  unsigned char *proof, vrf_output[32];
   struct block *block;
   int64 height;
   void *header, *body;
   uchar id[32]={0};
-  int rc;
+  int rc, prooflen;
 
   header = binn_map_blob(msg, PLUGIN_HEADER, NULL);
   body   = binn_map_blob(msg, PLUGIN_BODY, NULL);
-  wait_time = binn_map_uint32(msg, PLUGIN_WAIT_TIME);
-  //proof = binn_map_blob(msg, PLUGIN_PROOF, &prooflen);
-
-  /* verify the random number */
-  //rc = xxx(seed, node->pubkey, random, proof, prooflen);
+  proof  = binn_map_blob(msg, PLUGIN_PROOF, &prooflen);
 
   /* verify the block header */
   rc = aergolite_verify_block_header(this_node, header, body, &height, id);
@@ -630,6 +636,17 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
             height, id[0], id[1], id[2], id[3], wait_time);
 
   if( rc ) return;
+
+  /* verify the VRF proof */
+  if( proof && prooflen==81 ){
+    rc = verify_proof(plugin, height, node->id, proof, prooflen, vrf_output);
+  }else{
+    rc = SQLITE_ERROR;
+  }
+  if( rc ){
+    SYNCTRACE("on_new_block INVALID VRF PROOF\n");
+    return;
+  }
 
   /* check if the block is already on the list */
   for( block=plugin->new_blocks; block; block=block->next ){
@@ -660,8 +677,8 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
 
   /* store the new block data */
   memcpy(block->id, id, 32);
+  memcpy(block->vrf_output, vrf_output, sizeof block->vrf_output);
   block->height = height;
-  block->wait_time = wait_time;
   block->header = sqlite3_memdup(header, binn_size(header));
   block->body   = sqlite3_memdup(body,   binn_size(body));
 
@@ -906,9 +923,9 @@ loc_again:
   rc = aergolite_create_block(this_node, &block->height, &block->header, &block->body, block->id);
   if( rc ) goto loc_failed2;
 
-  /* save the random number */
-  block->wait_time = plugin->random_block_interval;
-  //! block->proof = plugin->block_interval_proof;
+  /* save the random wait interval and proof */
+  memcpy(block->vrf_proof, plugin->block_vrf_proof, sizeof block->vrf_proof);
+  memcpy(block->vrf_output, plugin->block_vrf_output, sizeof block->vrf_output);
 
   array_free(&plugin->nonces);
   plugin->last_created_block_height = block->height;
@@ -951,7 +968,7 @@ SQLITE_PRIVATE void new_block_timer_cb(uv_timer_t* handle) {
   if( !block ){
     SYNCTRACE("create_new_block FAILED. restarting the timer\n");
     /* restart the timer */
-    uv_timer_start(&plugin->new_block_timer, new_block_timer_cb, NEW_BLOCK_WAIT_INTERVAL, 0);
+    uv_timer_start(&plugin->new_block_timer, new_block_timer_cb, plugin->block_interval, 0);
     return;
   }
   if( block==(struct block *)-1 ) return;
@@ -979,7 +996,7 @@ SQLITE_PRIVATE void start_new_block_timer(plugin *plugin) {
   if( count_mempool_unused_txns(plugin)==0 ) return;
   if( !has_nodes_for_consensus(plugin) ) return;
   if( !uv_is_active((uv_handle_t*)&plugin->new_block_timer) ){
-    int interval = calculate_node_wait_interval(plugin);
+    int interval = calculate_node_wait_interval(plugin, current_height+1);
     SYNCTRACE("start_new_block_timer interval=%d\n", interval);
     uv_timer_start(&plugin->new_block_timer, new_block_timer_cb, interval, 0);
   }
@@ -993,8 +1010,7 @@ SQLITE_PRIVATE binn* encode_new_block(plugin *plugin, struct block *block) {
   if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_NEW_BLOCK)==FALSE ) goto loc_failed;
   if( binn_map_set_blob(map, PLUGIN_HEADER, block->header, binn_size(block->header))==FALSE ) goto loc_failed;
   if( binn_map_set_blob(map, PLUGIN_BODY, block->body, binn_size(block->body))==FALSE ) goto loc_failed;
-  if( binn_map_set_int32(map, PLUGIN_WAIT_TIME, block->wait_time)==FALSE ) goto loc_failed;
-  //! if( binn_map_set_int32(map, PLUGIN_PROOF, block->proof)==FALSE ) goto loc_failed;
+  if( binn_map_set_blob(map, PLUGIN_PROOF, block->vrf_proof, sizeof block->vrf_proof)==FALSE ) goto loc_failed;
   return map;
 loc_failed:
   if( map ) binn_free(map);

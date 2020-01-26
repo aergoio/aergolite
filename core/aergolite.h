@@ -1,4 +1,4 @@
-#include "secp256k1.h"
+#include "secp256k1-vrf.h"
 #include "single_instance.h"
 
 typedef unsigned char uchar;
@@ -99,6 +99,7 @@ struct aergolite {
   char admin_pubkey[36];      /* the blockchain admin public key */
   size_t admin_pklen;         /* the blockchain admin public key length */
   secp256k1_context *ecdsa;   /* the ECDSA context */
+  secp256k1_pubkey pubkey_obj; /* the public key object */
 
   aergolite_plugin *plugin_functions; /* Which plugin is being used */
   void *plugin_instance;      /* The instance of the plugin related to this db connection */

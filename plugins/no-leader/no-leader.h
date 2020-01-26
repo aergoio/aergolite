@@ -7,11 +7,10 @@
 #include "../../core/sqlite3.h"
 #define SQLITE_PRIVATE static
 #include "../../common/sha256.h"
+#include "secp256k1-vrf.h"
 
 
-
-#define NEW_BLOCK_WAIT_INTERVAL  3000  /* 3 seconds - it should be a variable! */
-
+#define NEW_BLOCK_WAIT_INTERVAL  3000  /* default = 3 seconds */
 
 
 /* peer communication */
@@ -83,7 +82,6 @@
 #define PLUGIN_MOD_PAGES           0xc0de019
 #define PLUGIN_HASH                0xc0de020
 
-#define PLUGIN_WAIT_TIME           0xc0de031
 #define PLUGIN_PROOF               0xc0de032
 
 
@@ -238,7 +236,8 @@ struct block {
   void *header;
   void *body;
   void *signatures;
-
+  unsigned char vrf_proof[81];
+  unsigned char vrf_output[32];
   unsigned int wait_time;
   void *votes;
   int  num_votes;
@@ -268,8 +267,11 @@ struct request {
 
 struct plugin {
   int node_id;                /* Node id */
+
+  unsigned char *privkey;     /* the private key for this node */
   char *pubkey;               /* the public key for this node */
   int pklen;                  /* public key length */
+  secp256k1_pubkey *pubkey_obj; /* the public key object */
 
   aergolite *this_node;       /* Reference to the aergolite instance */
 
@@ -298,7 +300,9 @@ struct plugin {
   int64  last_vote_height;
 
   int block_interval;
-  int random_block_interval;
+
+  unsigned char block_vrf_proof[81];
+  unsigned char block_vrf_output[32];
 
 #if TARGET_OS_IPHONE
   uv_callback_t worker_cb;    /* callback handle to send msg to the worker thread */
