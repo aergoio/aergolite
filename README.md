@@ -91,10 +91,10 @@ make
 sudo make install
 cd ..
 
-# Install libsecp256k1
+# Install libsecp256k1-vrf
 
-git clone --depth=1 https://github.com/bitcoin-core/secp256k1
-cd secp256k1
+git clone --depth=1 https://github.com/aergoio/secp256k1-vrf
+cd secp256k1-vrf
 ./autogen.sh
 ./configure
 make
@@ -131,10 +131,10 @@ cd binn
 make
 cd ..
 
-# Compile libsecp256k1
+# Compile libsecp256k1-vrf
 
-git clone --depth=1 https://github.com/bitcoin-core/secp256k1
-cd secp256k1
+git clone --depth=1 https://github.com/aergoio/secp256k1-vrf
+cd secp256k1-vrf
 ./autogen.sh
 ./configure
 make
