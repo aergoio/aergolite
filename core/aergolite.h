@@ -93,7 +93,7 @@ struct aergolite {
   char *node_info;            /* User defined information about this node */
 
   BOOL has_privkey;           /* if the private key for this node is available */
-  char privkey[32];           /* the private key for this node */
+  unsigned char privkey[32];  /* the private key for this node */
   char pubkey[36];            /* the public key for this node */
   size_t pklen;               /* public key length */
   char admin_pubkey[36];      /* the blockchain admin public key */
