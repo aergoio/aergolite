@@ -168,6 +168,9 @@ SQLITE_PRIVATE Pager * getPagerFromiDb(sqlite3 *db, int iDb);
 
 SQLITE_PRIVATE int  disable_aergolite(Pager *pPager);
 
+SQLITE_API void to_hex(char *source, int size, char *dest);
+SQLITE_API void from_hex(char *source, int size, char *dest);
+
 SQLITE_PRIVATE void aergoliteCheckUserCommand(sqlite3 *db, Vdbe *p, char *zTrace);
 SQLITE_PRIVATE void aergoliteProcessUserCommand(sqlite3 *db, int iDb, Pager *pPager, char *zSql);
 SQLITE_PRIVATE int  aergoliteCheckExecResult(sqlite3 *db, int rc);
@@ -185,6 +188,8 @@ SQLITE_PRIVATE int  aergoliteCheckSignTransaction(Pager *pPager);
 
 SQLITE_PRIVATE int  sign_txn_by_user(aergolite *this_node, binn *log);
 SQLITE_PRIVATE int  sign_txn_by_node(aergolite *this_node, binn *log);
+
+SQLITE_PRIVATE int  get_ledger_public_key(aergolite *this_node, char *pubkey);
 
 SQLITE_PRIVATE void add_local_txn_status(aergolite *this_node, int64 nonce, char *status);
 SQLITE_PRIVATE BOOL is_special_transaction(binn *log);
