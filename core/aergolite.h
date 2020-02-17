@@ -98,6 +98,7 @@ struct aergolite {
   size_t pklen;               /* public key length */
   char admin_pubkey[36];      /* the blockchain admin public key */
   size_t admin_pklen;         /* the blockchain admin public key length */
+  BOOL use_ledger;            /* if this node should communicate with a local Ledger Nano S */
   secp256k1_context *ecdsa;   /* the ECDSA context */
   secp256k1_pubkey pubkey_obj; /* the public key object */
 
