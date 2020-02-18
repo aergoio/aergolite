@@ -41,7 +41,7 @@ SQLITE_PRIVATE unsigned int calculate_wait_interval(
   upper = block_interval / 2 * total_authorized_nodes;
 
   /* calculate the wait interval */
-  n = *(int*) &vrf_output[10];
+  n = *(unsigned int*) &vrf_output[10];
   val = ((double)n) / 0xFFFFFFFF;
   random_block_interval = val * (upper - lower) + lower;
 

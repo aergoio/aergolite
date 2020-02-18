@@ -538,8 +538,8 @@ loc_again:
   /* select the block with the lower wait time */
   winner = NULL;
   for( block=plugin->new_blocks; block; block=block->next ){
-    assert( block->wait_time > 0 );
     if( block->height==current_height+1 ){
+      assert( block->wait_time > 0 );
       if( !winner || block->wait_time < winner->wait_time ){
         winner = block;
       }
