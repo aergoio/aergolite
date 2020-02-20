@@ -222,7 +222,7 @@ The blockchain administrator can:
 
 * Add nodes to the blockchain network
 * Remove nodes from the blockchain network
-* Execute all SQL commands
+* Execute reserved SQL commands
 
 In future versions it will also be able to:
 
@@ -277,9 +277,18 @@ Example:
 
 The password can be different on each node.
 
-The blockchain administrator is responsible for storing its private key in a secure way. We recommend not storing it on one of the blockchain nodes and not in plain format. It should be encrypted and stored on an external device or media. A paper wallet is also a good idea.
+The blockchain administrator is responsible for storing its private key in a secure way. We recommend not storing it on one of the blockchain nodes and not in plain format. It should be encrypted and stored on an external device or media. A paper wallet is also a good idea. The best option is to use a hardware wallet.
 
-Future versions will include support for signing admin transactions using a hardware wallet.
+
+## Hardware wallet
+
+![ledger-app-aergolite](https://user-images.githubusercontent.com/7624275/73798570-ec639280-4791-11ea-8a1f-7cb3ea836ec8.jpg)
+
+For the higher level of security the blockchain administrator can protect its private key using a Ledger Nano S.
+
+On this case he/she would use the device to sign its transactions.
+
+For more details check the [instructions](https://github.com/aergoio/aergolite/wiki/Using-a-Hardware-Wallet)
 
 
 ## Node discovery
