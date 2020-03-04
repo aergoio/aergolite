@@ -282,7 +282,7 @@ The blockchain administrator is responsible for storing its private key in a sec
 
 ## Hardware wallet
 
-![ledger-app-aergolite](https://user-images.githubusercontent.com/7624275/73798570-ec639280-4791-11ea-8a1f-7cb3ea836ec8.jpg)
+![ledger-app-aergolite-sql](https://user-images.githubusercontent.com/7624275/75842624-98a79180-5daf-11ea-8427-f0c3e7788f41.jpg)
 
 For the higher level of security the blockchain administrator can protect its private key using a Ledger Nano S.
 
