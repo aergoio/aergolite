@@ -18,7 +18,9 @@ Once the consensus is reached, the internal previous states are deleted.
 
 AergoLite uses **special blockchain technology** focused on **resource constrained devices**.
 
-It is not like Bitcoin! No proof-of-work is used and the nodes do not need to keep all the history of blocks and transactions.
+It is not like Bitcoin (that consumes a lot of energy). No proof-of-work is used and the nodes do not need to keep all the history of blocks and transactions.
+
+The consensus algorithm uses a *Verifiable Random Function (VRF)* to determine which node will produce the next block, and the nodes cannot discover which node is selected ahead of time. Making it safe against Denial of Service (DoS) attacks.
 
 AergoLite uses *absolute finality*. Once the nodes reach consensus on a new block they can discard the previous one. Only the last block is kept on the nodes. Optionally we can setup some nodes to keep all the history for audit reasons.
 
@@ -65,13 +67,15 @@ Most of these languages are supported via wrappers.
 
 ### On Linux and Mac
 
-Copy and paste this on a terminal:
+First install the required tools with this command:
 
 ```
-# Install tools
-
 sudo apt-get install git gcc make automake libtool libreadline-dev -y
+```
 
+Then copy and paste this on a terminal:
+
+```
 # Install libuv
 
 git clone --depth=1 https://github.com/libuv/libuv
@@ -249,8 +253,9 @@ Example:
 
 ## Immutability
 
-Trust based solutions are not secure as an attacker having control of a single node can delete and
-overwrite data on the database.
+Trust based solutions allow specific users or nodes to execute any SQL command on the database.
+They are not secure because an attacker acquiring control of a single node can delete and/or
+overwrite data on the entire network.
 
 A real trustless and immutable blockchain should control what nodes can do.
 
@@ -259,6 +264,9 @@ Only the administrator is able to execute all the SQL commands.
 
 Future versions may allow nodes to execute smart contracts created by the administrator that can
 include any SQL command.
+
+All of this enforces the requirement for an attacker of controlling the majority of the nodes on
+the network to be able to defeat it.
 
 
 ## Private key protection
@@ -299,7 +307,7 @@ We specify the node discovery method using the `discovery` URI parameter.
 
 There are 2 options of node discovery:
 
-### Local UDP broadcast
+### 1. Local UDP broadcast
 
 This method sends an UDP broadcast packet on the local area network to the specified port.
 
@@ -311,7 +319,7 @@ Example:
 "file:test.db?blockchain=on&discovery=local:4329"
 ```
 
-### Known nodes
+### 2. Known nodes
 
 On this method some nodes have a fixed IP address and the other nodes connect to them.
 
@@ -339,7 +347,7 @@ We can also specify the addresses of more known nodes:
 
 Once a connection is established and the node is accepted they exchange a list of active nodes addresses. 
 
-### Mixing both methods
+### 3. Mixing both methods
 
 We can also use the 2 above methods at the same time. This can be useful when we have some nodes on the LAN and others that are outside.
 
@@ -389,7 +397,7 @@ The first node to be authorized must be the one in which the command is being ex
 
 The authorizations for new nodes must be executed on nodes that are already authorized.
 
-The above command will fire the user transaction signature callback where the transaction must be signed using the blockchain administrator private key.
+The above command will be sent to the Ledger device to be signed if the device is connected, otherwise it will fire the user transaction signature callback where the transaction must be signed using the blockchain administrator private key.
 
 
 ## Signing transactions
@@ -405,9 +413,9 @@ Two entities can sign transactions:
 * the administrator
 * each authorized node
 
-If the transaction requires special rights, the AergoLite library will fire the user transaction sign callback function. Otherwise it will automatically sign it using the node's private key.
+If the transaction requires special rights, the AergoLite library will send it to be signed by the adminstrator. Otherwise it will automatically sign it using the node's private key.
 
-At least one node on your network need to register a function that will be used to sign transactions from the administrator
+If no Ledger device is used on your network, then at least one node needs to register a function that will be used to sign transactions from the administrator
 
 Example in Python:
 
@@ -423,7 +431,7 @@ con.create_function("sign_transaction", 1, on_sign_transaction)
 > **ATTENTION:** The callback function is called by the **worker thread**!!
 > Your application must sign the transaction and return as fast as possible!
 
-If a special command that requires admin privilege is executed on a node but not signed by him then the transaction will be rejected.
+If a special command that requires admin privilege is executed on a node but it is not signed by him then the transaction will be rejected.
 
 
 ## Retrieving status
@@ -474,7 +482,7 @@ PRAGMA protocol_status
 
 The information returned depends on the selected consensus protocol.
 
-For the `mini-raft` consensus protocol the result is in this format:
+For the `no-leader` consensus protocol the result is in this format:
 
 ```
 {
