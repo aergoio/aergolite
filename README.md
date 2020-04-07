@@ -116,16 +116,17 @@ cd -
 
 ### On Windows using MinGW
 
-Copy and paste this on a MinGW terminal:
+Copy and paste this on a MSYS2 MinGW terminal:
 
 ```
 # Compile libuv
 
 git clone --depth=1 https://github.com/libuv/libuv
 cd libuv
-sh autogen.sh
+./autogen.sh
 ./configure
 make
+make install
 cd ..
 
 # Compile binn
@@ -133,6 +134,7 @@ cd ..
 git clone --depth=1 https://github.com/liteserver/binn
 cd binn
 make
+make install
 cd ..
 
 # Compile libsecp256k1-vrf
@@ -142,6 +144,7 @@ cd secp256k1-vrf
 ./autogen.sh
 ./configure
 make
+make install
 cd ..
 
 # Compile AergoLite
@@ -149,7 +152,7 @@ cd ..
 git clone --depth=1 https://github.com/aergoio/aergolite
 cd aergolite
 make
-cd -
+make install
 ```
 
 ### For Android
