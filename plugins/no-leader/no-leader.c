@@ -2179,8 +2179,10 @@ void * plugin_init(aergolite *this_node, char *uri) {
   SYNCTRACE("worker thread socket address: %s\n", plugin->worker_address);
 #endif
 
+#ifndef _WIN32
   /* ignore SIGPIPE signals */
   signal(SIGPIPE, SIG_IGN);
+#endif
 
   /* start the worker thread */
   SYNCTRACE("starting worker thread\n");
