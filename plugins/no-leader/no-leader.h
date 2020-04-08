@@ -19,84 +19,91 @@
 
 #define PLUGIN_VERSION_NUMBER      1
 
-/* peer message commands */
 
-#define PLUGIN_VERSION             0xcd00
+/* message commands */
 
-#define PLUGIN_CMD_ID              0xcd01     /* peer identification */
-//#define PLUGIN_REQUEST_NODE_ID     0xcd02     /* request a node id */
-//#define PLUGIN_NEW_NODE_ID         0xcd03     /* send the new node id */
-#define PLUGIN_RANDOM              0xcd02
-#define PLUGIN_ID_CONFLICT         0xcd03     /* there is another node with the same id */
+#define PLUGIN_VERSION             0xCD00
 
-#define PLUGIN_GET_PEERS           0xcd04     /* request the list of peers */
-#define PLUGIN_PEERS               0xcd05     /* list of peers */
+#define PLUGIN_CMD_ID              0xCD01     /* peer identification */
+//#define PLUGIN_REQUEST_NODE_ID     0xCD02     /* request a node id */
+//#define PLUGIN_NEW_NODE_ID         0xCD03     /* send the new node id */
+#define PLUGIN_ID_CONFLICT         0xCD04     /* there is another node with the same id */
 
-#define PLUGIN_CMD_PING            0xcd06     /* check if alive */
-#define PLUGIN_CMD_PONG            0xcd07     /* I am alive */
+#define PLUGIN_GET_PEERS           0xCD11     /* request the list of peers */
+#define PLUGIN_PEERS               0xCD12     /* list of peers */
 
-#define PLUGIN_TEXT                0xcd08     /* text message via TCP */
+#define PLUGIN_CMD_PING            0xCD21     /* check if alive */
+#define PLUGIN_CMD_PONG            0xCD22     /* I am alive */
 
-
-#define PLUGIN_REQUEST_STATE_DIFF  0xdb01
-#define PLUGIN_UPTODATE            0xdb02
-#define PLUGIN_DB_PAGE             0xdb03
-#define PLUGIN_APPLY_UPDATE        0xdb04
-
-#define PLUGIN_NEW_TRANSACTION     0xdb12     /* follower <- leader -> follower (broadcast) */
-#define PLUGIN_TRANSACTION_FAILED  0xdb13     /* follower <- leader (response) */
-
-#define PLUGIN_NEW_BLOCK           0xdb21     /* follower <- leader */
-#define PLUGIN_BLOCK_VOTE          0xdb22     /* follower -> all (broadcast) */
-
-#define PLUGIN_GET_MEMPOOL         0xdb51     /* any -> any (request) */
-
-#define PLUGIN_GET_TRANSACTION     0xdb31     /* follower -> leader (request) */
-#define PLUGIN_REQUESTED_TRANSACTION  0xdb32     /* follower <- leader (response) */
-#define PLUGIN_TXN_NOTFOUND        0xdb33     /* follower <- leader (response) */
-
-#define PLUGIN_GET_BLOCK           0xdb41     /* follower -> leader (request) */
-#define PLUGIN_REQUESTED_BLOCK     0xdb42     /* follower <- leader (response) */
-#define PLUGIN_BLOCK_NOTFOUND      0xdb43     /* follower <- leader (response) */
-
-//#define PLUGIN_LOG_EXISTS          0xdb20     /* follower <- leader (response) */
-
-#define PLUGIN_PUBKEY              0xdb51
-#define PLUGIN_SIGNATURE           0xdb52
-
-#define PLUGIN_AUTHORIZATION       0xdb53
-
-#define PLUGIN_CPU                 0xc0de021
-#define PLUGIN_OS                  0xc0de022
-#define PLUGIN_HOSTNAME            0xc0de023
-#define PLUGIN_APP                 0xc0de024
-
-#define PLUGIN_CONTENT             0xc0de011
-#define PLUGIN_PGNO                0xc0de012
-#define PLUGIN_DBPAGE              0xc0de013
-#define PLUGIN_STATE               0xc0de014
-#define PLUGIN_HEIGHT              0xc0de015
-#define PLUGIN_HEADER              0xc0de016
-#define PLUGIN_BODY                0xc0de017
-#define PLUGIN_SIGNATURES          0xc0de018
-#define PLUGIN_MOD_PAGES           0xc0de019
-#define PLUGIN_HASH                0xc0de020
-
-#define PLUGIN_PROOF               0xc0de032
+#define PLUGIN_TEXT                0xCD31     /* text message via TCP */
 
 
-/* peer message parameters */
-#define PLUGIN_OK                  0xc0de001  /*  */
-#define PLUGIN_ERROR               0xc0de002  /*  */
+#define PLUGIN_REQUEST_STATE_DIFF  0xDB01
+#define PLUGIN_UPTODATE            0xDB02
+#define PLUGIN_DB_PAGE             0xDB03
+#define PLUGIN_APPLY_UPDATE        0xDB04
 
-#define PLUGIN_NODE_ID             0xc0de003  /*  */
-#define PLUGIN_NODE_INFO           0xc0de004  /*  */
-#define PLUGIN_PORT                0xc0de005  /*  */
 
-#define PLUGIN_SEQ                 0xc0de006  /*  */
-#define PLUGIN_TID                 0xc0de007  /*  */
-#define PLUGIN_NONCE               0xc0de008  /*  */
-#define PLUGIN_SQL_CMDS            0xc0de009  /*  */
+#define PLUGIN_NEW_TRANSACTION     0x7001     /* follower <- leader -> follower (broadcast) */
+#define PLUGIN_TRANSACTION_FAILED  0x7002     /* follower <- leader (response) */
+
+#define PLUGIN_GET_MEMPOOL         0x7011     /* any -> any (request) */
+
+#define PLUGIN_GET_TRANSACTION     0x7031     /* follower -> leader (request) */
+#define PLUGIN_REQUESTED_TRANSACTION  0x7032     /* follower <- leader (response) */
+#define PLUGIN_TXN_NOTFOUND        0x7033     /* follower <- leader (response) */
+
+
+#define PLUGIN_NEW_BLOCK           0xB021     /* follower <- leader */
+#define PLUGIN_BLOCK_VOTE          0xB022     /* follower -> all (broadcast) */
+
+#define PLUGIN_GET_BLOCK           0xB041     /* follower -> leader (request) */
+#define PLUGIN_REQUESTED_BLOCK     0xB042     /* follower <- leader (response) */
+#define PLUGIN_BLOCK_NOTFOUND      0xB043     /* follower <- leader (response) */
+
+
+#define PLUGIN_AUTHORIZATION       0xA001
+
+
+
+/* message parameters */
+
+#define PLUGIN_OK                  0xC0DE001  /*  */
+#define PLUGIN_ERROR               0xC0DE002  /*  */
+
+#define PLUGIN_PORT                0xC0DE101  /*  */
+#define PLUGIN_NODE_ID             0xC0DE102  /*  */
+#define PLUGIN_NODE_INFO           0xC0DE103  /*  */
+
+#define PLUGIN_CPU                 0xC0DE201  /*  */
+#define PLUGIN_OS                  0xC0DE202  /*  */
+#define PLUGIN_HOSTNAME            0xC0DE203  /*  */
+#define PLUGIN_APP                 0xC0DE204  /*  */
+
+#define PLUGIN_RANDOM              0xC0DE301  /*  */
+
+#define PLUGIN_PUBKEY              0xC0DE401  /*  */
+#define PLUGIN_SIGNATURE           0xC0DE402  /*  */
+
+#define PLUGIN_SEQ                 0xC0DE601  /*  */
+#define PLUGIN_TID                 0xC0DE602  /*  */
+#define PLUGIN_NONCE               0xC0DE603  /*  */
+#define PLUGIN_SQL_CMDS            0xC0DE604  /*  */
+
+#define PLUGIN_CONTENT             0xC0DE801
+#define PLUGIN_PGNO                0xC0DE802
+#define PLUGIN_DBPAGE              0xC0DE803
+#define PLUGIN_STATE               0xC0DE804
+#define PLUGIN_HEIGHT              0xC0DE805
+#define PLUGIN_HEADER              0xC0DE806
+#define PLUGIN_BODY                0xC0DE807
+#define PLUGIN_SIGNATURES          0xC0DE808  //! maybe use another name?
+#define PLUGIN_MOD_PAGES           0xC0DE809
+#define PLUGIN_HASH                0xC0DE80A
+
+#define PLUGIN_PROOF               0xC0DE901
+
+
 
 
 //#define BLOCK_HEIGHT    0x34
