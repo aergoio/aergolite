@@ -58,7 +58,7 @@ SQLITE_PRIVATE int send_authorizations(node *node, void *log){
   if( binn_map_set_list(map, PLUGIN_AUTHORIZATION, list)==FALSE ) goto loc_failed;
 
   if( send_peer_message(node, map, NULL)==FALSE ){
-    sqlite3_log(1, "send_node_identification: send_peer_message failed");
+    sqlite3_log(1, "send_authorizations: send_peer_message failed");
     goto loc_failed;
   }
 
@@ -72,7 +72,7 @@ loc_exit:
   return rc;
 
 loc_failed:
-  sqlite3_log(1, "send_node_identification FAILED");
+  sqlite3_log(1, "send_authorizations FAILED");
   rc = SQLITE_NOMEM;
   goto loc_exit;
 
@@ -511,6 +511,8 @@ SQLITE_PRIVATE void on_node_identification(node *node, void *msg, int size) {
   char *cpu, *os, *host, *app, *pubkey;
   int rc, version, siglen=0, pklen, pklen_int=0, pklen_ext=0;
 
+  SYNCTRACE("on_node_identification\n");
+
   version = binn_map_int32(msg, PLUGIN_VERSION);
   if( version!=PLUGIN_VERSION_NUMBER ){
     sqlite3_log(1, "on_node_identification: wrong protocol version: %d", version);
@@ -646,6 +648,8 @@ SQLITE_PRIVATE BOOL send_node_identification(plugin *plugin, node *node) {
   BOOL ret=FALSE;
   int rc, siglen;
 
+  SYNCTRACE("send_node_identification\n");
+
   /* send the identification to the other peer */
 
   map = binn_map();
@@ -671,8 +675,8 @@ SQLITE_PRIVATE BOOL send_node_identification(plugin *plugin, node *node) {
 
   /* sign the message content */
 
-  sprintf(msg, "%d:%d:%s:%s:%s:%s", plugin->node_id, plugin->bind->port,
-          cpu_info, os_info, hostname, app_info);
+  snprintf(msg, sizeof(msg), "%d:%d:%s:%s:%s:%s", plugin->node_id,
+           plugin->bind->port, cpu_info, os_info, hostname, app_info);
 
   rc = aergolite_sign(this_node, msg, strlen(msg), signature, &siglen);
   if( rc ){

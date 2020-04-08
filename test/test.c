@@ -1,6 +1,6 @@
 
 #include "db_functions.c"
-#include "secp256k1.h"
+#include "secp256k1-vrf.h"
 
 #include "../common/sha256.c"
 
