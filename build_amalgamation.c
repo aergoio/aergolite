@@ -108,7 +108,7 @@ int main() {
 
   process_file("core", "sqlite3.h", "amalgamation/sqlite3.h");
   process_file("core", "sqlite3.c", "amalgamation/sqlite3.c");
-  process_file("plugins/mini-raft", "mini-raft.c", "amalgamation/sqlite3.c");
+  process_file("plugins/no-leader", "no-leader.c", "amalgamation/sqlite3.c");
 
 #ifdef _WIN32
   system("del core\\binn.c");
