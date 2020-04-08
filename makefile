@@ -24,18 +24,17 @@ else
         LIBNICK1 = libaergolite.dylib
         LIBNICK2 = libsqlite3.0.dylib
         LIBNICK3 = libsqlite3.dylib
-        INSTNAME = $(LIBPATH2)/libsqlite3.dylib
+        INSTNAME = $(LIBPATH)/$(LIBNICK1)
         CURR_VERSION   = 1.0.0
         COMPAT_VERSION = 1.0.0
         prefix  ?= /usr/local
     else
-#        IMPLIB   = aergolite
         LIBRARY  = libaergolite.so.0.0.1
         LIBNICK1 = libaergolite.so.0
         LIBNICK2 = libaergolite.so
         LIBNICK3 = libsqlite3.so.0
         LIBNICK4 = libsqlite3.so
-        SONAME   = libsqlite3.so.0
+        SONAME   = $(LIBNICK2)
         prefix  ?= /usr/local
     endif
     LIBPATH  = $(prefix)/lib
@@ -47,6 +46,7 @@ else
     LDFLAGS  += -lpthread
     DEBUGFLAGS = -rdynamic
     SHELLFLAGS = -DHAVE_READLINE
+    IMPLIB   = aergolite
 endif
 
 CC    = gcc
@@ -138,9 +138,9 @@ $(SSHELL): shell.o $(LIBRARY)
 ifeq ($(OS),Windows_NT)
 	$(CC) $< -o $@ -L. -l$(IMPLIB) $(LFLAGS) -lbinn-1.0
 else ifeq ($(OS),OSX)
-	$(CC) $< -o $@ -L. -lsqlite3 -ldl -lbinn -lreadline
+	$(CC) $< -o $@ -L. -l$(IMPLIB) -ldl -lbinn -lreadline
 else
-	$(CC) $< -o $@ -Wl,-rpath,$(LIBPATH) -L. -lsqlite3 -lbinn -lreadline -ldl
+	$(CC) $< -o $@ -Wl,-rpath,$(LIBPATH) -L. -l$(IMPLIB) -lbinn -lreadline -ldl
 endif
 	strip $(SSHELL)
 
@@ -171,7 +171,7 @@ clean:
 	rm -f *.o libaergolite.a libaergolite.dylib $(LIBRARY) $(LIBNICK1) $(LIBNICK2) $(LIBNICK3) $(LIBNICK4) $(SSHELL) test/runtest
 
 test/runtest: test/test.c test/db_functions.c
-	$(CC) -std=c99 $< -o $@ -L. -lsqlite3 -lsecp256k1-vrf
+	$(CC) -std=c99 $< -o $@ -L. -l$(IMPLIB) -lsecp256k1-vrf
 
 test: test/runtest
 ifeq ($(OS),OSX)
@@ -214,19 +214,6 @@ else	# Linux
 endif
 endif
 
-tests: test.o seatest.o sqlite3dbg.o
-	gcc -g $^ -o $@ -lbinn -luv -ldl
-	cp tests test/tests
-	cd test && ./tests
-
-test.o: test/test.c
-	gcc -c $< -o $@
-
-seatest.o: ../common/seatest.c
-	gcc -c $< -o $@
-
-sqlite3dbg.o: sqlite3.c
-	gcc -g -DSQLITE_DEBUG=1 -DDEBUGPRINT -DSQLITE_HAS_CODEC -DSQLITE_USE_URI=1 -DSQLITE_THREADSAFE=1 -DHAVE_USLEEP -DSQLITE_ENABLE_COLUMN_METADATA -c $< -o $@
 
 # variables:
 #   $@  output
