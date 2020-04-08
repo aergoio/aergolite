@@ -226,7 +226,7 @@ SQLITE_PRIVATE int print_allowed_node_cb(
 
   /* print the offline node */
   to_hex(pubkey, pklen, hexpubkey);
-  node_list_add(data->vdbe, node_id, hexpubkey, "", "", "", "", "", "", "");
+  node_list_add(data->vdbe, node_id, hexpubkey, "(offline)", "", "", "", "", "", "");
 
 loc_exit:
   return SQLITE_OK;
@@ -234,7 +234,7 @@ loc_exit:
 
 /****************************************************************************/
 
-// node_id | pubkey | address | CPU | OS | hostname | app | extra_info | external |
+// node_id | pubkey | address | hostname | CPU | OS | app | extra_info | external |
 
 SQLITE_API void print_node_list(void *arg, void *vdbe) {
   plugin *plugin = (struct plugin *) arg;
@@ -258,9 +258,9 @@ SQLITE_API void print_node_list(void *arg, void *vdbe) {
      plugin->node_id,
      hexpubkey,
      address,
+     hostname,
      cpu,
      os,
-     hostname,
      app,
      node_info ? node_info : "",
      plugin->is_authorized ? "" : "yes");
@@ -277,9 +277,9 @@ SQLITE_API void print_node_list(void *arg, void *vdbe) {
        node->id,
        hexpubkey,
        address,
+       node->hostname,
        node->cpu,
        node->os,
-       node->hostname,
        node->app,
        node->info ? node->info : "",
        node->is_authorized ? "" : "yes");
