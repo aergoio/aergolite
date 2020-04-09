@@ -11,6 +11,7 @@ SQLITE_PRIVATE int broadcast_transaction(plugin *plugin, struct transaction *txn
 
 /****************************************************************************/
 
+#ifndef AERGOLITE_AMALGAMATION
 SQLITE_PRIVATE int txn_sql_count(void *log){
   binn_iter iter;
   binn value;
@@ -24,6 +25,7 @@ SQLITE_PRIVATE int txn_sql_count(void *log){
 
   return count;
 }
+#endif
 
 /****************************************************************************/
 

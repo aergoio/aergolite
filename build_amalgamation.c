@@ -105,6 +105,9 @@ int main() {
   system("rm amalgamation/*");
 
   system("echo \"#define AERGOLITE_AMALGAMATION  1\" > amalgamation/sqlite3.c");
+  system("echo \"#define HAVE_STDINT_H  1\" >> amalgamation/sqlite3.c");
+  system("echo \"#define HAVE_INTTYPES_H  1\" >> amalgamation/sqlite3.c");
+  system("echo \"#define HAVE_USLEEP  1\" >> amalgamation/sqlite3.c");
 
   process_file("core", "sqlite3.h", "amalgamation/sqlite3.h");
   process_file("core", "sqlite3.c", "amalgamation/sqlite3.c");

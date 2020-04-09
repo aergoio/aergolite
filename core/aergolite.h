@@ -57,8 +57,11 @@ struct block {
   BOOL verify_ok;
 #ifdef AERGOLITE_AMALGAMATION
   unsigned char id[32];
+  unsigned char vrf_proof[81];
+  unsigned char vrf_output[32];
+  unsigned int wait_time;
   void *votes;
-  int  ack_count;
+  int  num_votes;
   int  downloading_txns;
 #endif
 };
