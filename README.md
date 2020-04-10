@@ -1,4 +1,6 @@
-# AergoLite: SQLite with blockchain!
+<p align="center"><img width="65%" src="http://gensis.com.br/upload/aergolite-github-2.svg" alt="AergoLite logo"></p>
+
+<h1 align="center">SQLite with blockchain</h1>
 
 > *The easiest way to deploy a blockchain for data storage on your app or device*
 
