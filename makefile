@@ -12,10 +12,10 @@ ifeq ($(OS),Windows_NT)
     LDFLAGS  += -static-libgcc -static-libstdc++
 else ifeq ($(PLATFORM),iPhoneOS)
     LIBRARY = libaergolite.dylib
-    CFLAGS += -fPIC
+    CFLAGS += -fPIC -fvisibility=hidden
 else ifeq ($(PLATFORM),iPhoneSimulator)
     LIBRARY = libaergolite.dylib
-    CFLAGS += -fPIC
+    CFLAGS += -fPIC -fvisibility=hidden
 else
     UNAME_S := $(shell uname -s)
     ifeq ($(UNAME_S),Darwin)
@@ -42,7 +42,7 @@ else
     INCPATH  = $(prefix)/include
     EXEPATH  = $(prefix)/bin
    #LIBFLAGS += -fPIC $(CFLAGS)
-    LIBFLAGS += -fPIC
+    LIBFLAGS += -fPIC -fvisibility=hidden
     LDFLAGS  += -lpthread
     DEBUGFLAGS = -rdynamic
     SHELLFLAGS = -DHAVE_READLINE
