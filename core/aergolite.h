@@ -1,6 +1,10 @@
 #include "secp256k1-vrf.h"
 #include "single_instance.h"
 
+#ifndef AERGOLITE_API
+#define AERGOLITE_API
+#endif
+
 typedef unsigned char uchar;
 
 
@@ -217,7 +221,7 @@ SQLITE_PRIVATE int  open_main_db_connection2(aergolite *this_node);
 SQLITE_PRIVATE int  open_worker_db(aergolite *this_node);
 
 
-SQLITE_API int read_authorized_pubkey(void *log, char *pubkey, int *ppklen);
+AERGOLITE_API int read_authorized_pubkey(void *log, char *pubkey, int *ppklen);
 
 
 SQLITE_PRIVATE int add_node_command(
@@ -238,12 +242,12 @@ SQLITE_PRIVATE void update_authorizations(aergolite *this_node);
 SQLITE_PRIVATE void save_auth_nonces(aergolite *this_node);
 SQLITE_PRIVATE void reload_auth_nonces(aergolite *this_node);
 
-SQLITE_API int aergolite_verify_authorization(
+AERGOLITE_API int aergolite_verify_authorization(
   aergolite *this_node,
   void *log
 );
 
-SQLITE_API int aergolite_get_authorization(
+AERGOLITE_API int aergolite_get_authorization(
   aergolite *this_node,
   int node_id,
   char *pubkey,
@@ -252,7 +256,7 @@ SQLITE_API int aergolite_get_authorization(
   int64 *plast_nonce
 );
 
-SQLITE_API int aergolite_insert_allowed_node(
+AERGOLITE_API int aergolite_insert_allowed_node(
   aergolite *this_node,
   int node_id,
   char *pubkey,
@@ -261,7 +265,7 @@ SQLITE_API int aergolite_insert_allowed_node(
   int64 last_nonce
 );
 
-SQLITE_API int aergolite_get_allowed_node(
+AERGOLITE_API int aergolite_get_allowed_node(
   aergolite *this_node,
   int node_id,
   char *pubkey,
@@ -279,14 +283,14 @@ typedef void (*on_allowed_node_cb)(
   int64 last_nonce
 );
 
-SQLITE_API int aergolite_iterate_allowed_nodes(
+AERGOLITE_API int aergolite_iterate_allowed_nodes(
   aergolite *this_node,
   on_allowed_node_cb cb,
   void *arg
 );
 
 
-SQLITE_API int aergolite_load_current_state(
+AERGOLITE_API int aergolite_load_current_state(
   aergolite *this_node,
   int64 *pblock_height,
   void **pheader,
