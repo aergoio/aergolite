@@ -1,6 +1,6 @@
 /***************************************************************************/
 /*** LIBUV MESSAGES ********************************************************/
-/****************************************************************************/
+/***************************************************************************/
 
 SQLITE_PRIVATE void uv_close2(uv_handle_t* handle, uv_close_cb close_cb) {
   if( handle && !uv_is_closing(handle) ){
@@ -185,9 +185,9 @@ SQLITE_PRIVATE void on_msg_sent(send_message_t *req, int status) {
 
  if ( status < 0 ) {
   sqlite3_log(status, "send message failed");
-  SYNCTRACE("message send failed: %s   user_data: %d\n", (char*)req->msg, (int)req->data);
+  SYNCTRACE("message send failed: %s   user_data: %p\n", (char*)req->msg, req->data);
  } else {
-  SYNCTRACE("message sent: %s   user_data: %d\n", (char*)req->msg, (int)req->data);
+  SYNCTRACE("message sent: %s   user_data: %p\n", (char*)req->msg, req->data);
  }
 
 }

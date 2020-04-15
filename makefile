@@ -6,7 +6,7 @@
 
 ifeq ($(OS),Windows_NT)
     CFLAGS   = -I../libuv/include -I../binn/src
-    LFLAGS   = -L../libuv/Release -L../binn/src/win32/Release
+    LFLAGS   = -L../libuv/.libs -L../binn
     IMPLIB   = aergolite-0.1
     LIBRARY  = aergolite-0.1.dll
     LDFLAGS  += -static-libgcc -static-libstdc++
@@ -145,7 +145,7 @@ endif
 	strip $(SSHELL)
 
 shell.o: shell/shell.c
-	$(CC) -c $(SHELLFLAGS) $< -o $@
+	$(CC) -c $(CFLAGS) $(SHELLFLAGS) $< -o $@
 
 amalgamation:
 	$(CC) build_amalgamation.c -o build_amalgamation
@@ -168,7 +168,7 @@ endif
 	cp $(SSHELL) $(EXEPATH)
 
 clean:
-	rm -f *.o libaergolite.a libaergolite.dylib $(LIBRARY) $(LIBNICK1) $(LIBNICK2) $(LIBNICK3) $(LIBNICK4) $(SSHELL) test/runtest
+	rm -f *.o libaergolite.a libaergolite.dylib $(LIBRARY) $(LIBNICK1) $(LIBNICK2) $(LIBNICK3) $(LIBNICK4) $(IMPLIB).lib $(SSHELL) test/runtest
 
 test/runtest: test/test.c test/db_functions.c
 	$(CC) -std=c99 $< -o $@ -L. -l$(IMPLIB) -lsecp256k1-vrf

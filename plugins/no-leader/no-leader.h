@@ -9,6 +9,11 @@
 #include "../../common/sha256.h"
 #include "secp256k1-vrf.h"
 
+#ifndef MIN
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
+#endif
+
 
 #define NEW_BLOCK_WAIT_INTERVAL  3000  /* default = 3 seconds */
 
