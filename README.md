@@ -1,8 +1,8 @@
 <p align="center"><img width="65%" src="http://gensis.com.br/upload/aergolite-github-2.svg" alt="AergoLite logo"></p>
 
-<h1 align="center">SQLite with blockchain</h1>
+<h1 align="center">SQLite with Blockchain</h1>
 
-> *The easiest way to deploy a blockchain for data storage on your app or device*
+<blockquote align="center"><p><em>The easiest way to deploy a blockchain for relational data storage on your app or device</em></p></blockquote>
 
 AergoLite allows us to have a replicated SQLite database secured by a private and lightweight blockchain.
 
@@ -144,7 +144,7 @@ cd ..
 git clone --depth=1 https://github.com/aergoio/secp256k1-vrf
 cd secp256k1-vrf
 ./autogen.sh
-./configure
+./configure --with-bignum=no
 make
 make install
 cd ..
@@ -225,7 +225,7 @@ AergoLite implements a private blockchain. This means that you or your organizat
 your own private blockchain(s) in which you have control of what can happen.
 
 The entity who has the control over the blockchain is called the blockchain administrator. It
-is an user that is identified by a private + public key pair.
+is an user that has its own private + public key pair.
 
 The blockchain administrator can:
 
@@ -289,6 +289,14 @@ Example:
 ```
 
 The password can be different on each node.
+
+Optionally your application can be responsible for generating and storing the private key for each node. In this case it can inform the private key in hex format to the library via URI using the `privkey` parameter:
+
+```
+"file:test.db?blockchain=on&admin=95F9AB75CA1...&privkey=AABBCCDD..."
+```
+
+This can be useful when using AergoLite on containers, where each instance must have a different private key.
 
 The blockchain administrator is responsible for storing its private key in a secure way. We recommend not storing it on one of the blockchain nodes and not in plain format. It should be encrypted and stored on an external device or media. A paper wallet is also a good idea. The best option is to use a hardware wallet.
 
@@ -391,7 +399,7 @@ It will list all authorized nodes, connected or not, and also connected nodes th
 After listing the connected nodes with the above command the blockchain administrator can authorize nodes using the command:
 
 ```
-PRAGMA add_node=<public key>
+PRAGMA add_node="<public key>"
 ```
 
 The public key must be in hex format.
@@ -681,10 +689,10 @@ If the block interval is not specified then the library will use a default value
 
 ## Limitations
 
-This first version uses a fully connected network for communication between the nodes.
+This first version uses a fully connected network for communication between the nodes. It works with up to 200 nodes on the automated tests. Future versions will also contain a gossip based protocol to support thousands of nodes.
 
-It works with up to 100 nodes on the automated tests.
+Only 1 connection to each database file. If there are many applications needing to access the db file, each application must have its own copy of the database, configured as a separate node.
 
-Future versions will also contain a gossip based protocol to support thousands of nodes.
+The numbering of rows in rowid tables (those who use an integer as the primary key) is different from SQLite. The first 32-bit are the node id and the remaining 32-bit are sequential per node. This also means that each node can create up to 2^32 rows on each rowid table.
 
-Each node can create 2^32 rows on each rowid table.
+As in any multi-master replication system, conflicts can happen. The entire transaction can be aborted in some cases, so take this into consideration. See above how the app can check the status of the transaction.
