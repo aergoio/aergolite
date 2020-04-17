@@ -102,9 +102,9 @@
 #define PLUGIN_HEIGHT              0xC0DE805
 #define PLUGIN_HEADER              0xC0DE806
 #define PLUGIN_BODY                0xC0DE807
-#define PLUGIN_SIGNATURES          0xC0DE808  //! maybe use another name?
-#define PLUGIN_MOD_PAGES           0xC0DE809
-#define PLUGIN_HASH                0xC0DE80A
+#define PLUGIN_MOD_PAGES           0xC0DE808
+#define PLUGIN_HASH                0xC0DE809
+#define PLUGIN_VOTES               0xC0DE80A
 
 #define PLUGIN_PROOF               0xC0DE901
 
@@ -247,11 +247,10 @@ struct block {
   unsigned char id[32];
   void *header;
   void *body;
-  void *signatures;
+  void *votes;
   unsigned char vrf_proof[81];
   unsigned char vrf_output[32];
   unsigned int wait_time;
-  void *votes;
   int  num_votes;
   int  downloading_txns;
 };
@@ -259,9 +258,10 @@ struct block {
 
 struct block_vote {
   struct block_vote *next;
+  int   node_id;
   int64 height;
   uchar block_id[32];
-  int node_id;
+  uchar sig[64];
 };
 
 struct txn_list {

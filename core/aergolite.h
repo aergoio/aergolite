@@ -41,7 +41,7 @@ struct block {
   struct block *next;
   blob header;
   blob body;
-  blob signatures;
+  blob votes;
 };
 */
 
@@ -55,7 +55,7 @@ struct block {
   int txn_count;
   void *header;
   void *body;
-  void *signatures;
+  void *votes;
   int  header_id;
   int  body_id;
   BOOL verify_ok;
@@ -63,8 +63,7 @@ struct block {
   unsigned char id[32];
   unsigned char vrf_proof[81];
   unsigned char vrf_output[32];
-  unsigned int wait_time;
-  void *votes;
+  unsigned int  wait_time;
   int  num_votes;
   int  downloading_txns;
 #endif
@@ -306,7 +305,8 @@ SQLITE_PRIVATE int read_block_header(
   int64 *ptimestamp,
   int64 *pblock_height,
   char **ptxns_hash,
-  char **pstate_hash
+  char **pstate_hash,
+  void *id
 );
 
 SQLITE_PRIVATE int save_block(

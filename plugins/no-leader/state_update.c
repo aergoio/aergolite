@@ -62,7 +62,7 @@ SQLITE_PRIVATE int load_current_state(plugin *plugin) {
 
   /* load and verify the current local database state */
   rc = aergolite_load_current_state(this_node, &block->height,
-            &block->header, &block->body, &block->signatures);
+            &block->header, &block->body, &block->votes);
   if( rc ){
     sqlite3_free(block);
     plugin->current_block = NULL;
@@ -359,15 +359,15 @@ SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
   plugin *plugin = node->plugin;
   aergolite *this_node = node->this_node;
   int64 current_height = plugin->current_block ? plugin->current_block->height : 0;
-  void *header, *body, *signatures, *mod_pages;
+  void *header, *body, *votes, *mod_pages;
   int64 height;
   struct block *block = NULL;
   int rc;
 
   height = binn_map_uint64(msg, PLUGIN_HEIGHT);
   header = binn_map_map(msg, PLUGIN_STATE);
-  //body = binn_map_blob(msg, PLUGIN_BODY, &body_size);
-  signatures = binn_map_list(msg, PLUGIN_SIGNATURES);
+  //body = binn_map_blob(msg, PLUGIN_BODY, &body_size);  //! needed on full nodes?
+  votes = binn_map_list(msg, PLUGIN_VOTES);
   mod_pages = binn_map_list(msg, PLUGIN_MOD_PAGES);
 
   SYNCTRACE("on_apply_state_update - height: %" INT64_FORMAT
@@ -375,7 +375,7 @@ SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
 
   assert(height>0);
   assert(header);
-  //assert(signatures);
+  assert(votes);
   assert(mod_pages);
   assert(binn_count(mod_pages)>0);
 
@@ -400,8 +400,8 @@ SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
   }
 
   /* commit the new state */
-  //rc = aergolite_apply_state_update(this_node, header, body, signatures);
-  rc = aergolite_apply_state_update(this_node, header, signatures, mod_pages);
+  //rc = aergolite_apply_state_update(this_node, header, body, votes);
+  rc = aergolite_apply_state_update(this_node, header, votes, mod_pages);
   if( rc ) goto loc_failed;
 
   /* keep the new state on the memory */
@@ -410,11 +410,11 @@ SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
 
   block->height = height;
   block->header = sqlite3_memdup(header, binn_size(header));
-  //block->body = sqlite3_memdup(body, body_size);  // needed on full nodes?
-  block->signatures = sqlite3_memdup(signatures, binn_size(signatures));
+  //block->body = sqlite3_memdup(body, body_size);  //! needed on full nodes?
+  block->votes = binn_copy(votes);
 
   if( !block->header ) goto loc_failed2;
-//  if( !block->signatures ) goto loc_failed2;
+  if( !block->votes ) goto loc_failed2;
 
   /* replace the previous block by the new one */
   discard_block(plugin->current_block);
@@ -469,6 +469,8 @@ SQLITE_PRIVATE void on_uptodate_message(node *node, void *msg, int size) {
   /* disable the timer */
   uv_timer_stop(&plugin->state_update_timer);
 
+  // it could also verify the header and votes it received from the peer
+
   /* check on next node */
   request_state_update_next(plugin);
 
@@ -498,7 +500,7 @@ SQLITE_PRIVATE int compare_pgno(void *item1, void *item2){
 SQLITE_PRIVATE void on_request_state_update(node *node, void *msg, int size) {
   plugin *plugin = node->plugin;
   aergolite *this_node = node->this_node;
-  void *header, *body, *signatures;
+  void *header, *body, *votes;
   int64 height, current_height;
   binn *map=NULL, *list=NULL;
   binn_iter iter;
@@ -511,11 +513,11 @@ SQLITE_PRIVATE void on_request_state_update(node *node, void *msg, int size) {
   if( plugin->current_block ){
     current_height = plugin->current_block->height;
     header = plugin->current_block->header;
-    signatures = plugin->current_block->signatures;
+    votes = plugin->current_block->votes;
   }else{
     current_height = 0;
     header = NULL;
-    signatures = NULL;
+    votes = NULL;
   }
 
   SYNCTRACE("on_request_state_update - from height: %" INT64_FORMAT
@@ -531,7 +533,7 @@ SQLITE_PRIVATE void on_request_state_update(node *node, void *msg, int size) {
     if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_UPTODATE)==FALSE ) goto loc_failed;
     if( current_height>0 ){
       if( binn_map_set_map(map, PLUGIN_STATE, header)==FALSE ) goto loc_failed;
-      //if( binn_map_set_list(map, PLUGIN_SIGNATURES, signatures)==FALSE ) goto loc_failed;
+      if( binn_map_set_list(map, PLUGIN_VOTES, votes)==FALSE ) goto loc_failed;
     }
     if( send_peer_message(node, map, NULL)==FALSE ) goto loc_failed;
     binn_free(map); map = NULL;
@@ -601,7 +603,7 @@ SQLITE_PRIVATE void on_request_state_update(node *node, void *msg, int size) {
   if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_APPLY_UPDATE)==FALSE ) goto loc_failed;
   if( binn_map_set_int64(map, PLUGIN_HEIGHT, current_height)==FALSE ) goto loc_failed;
   if( binn_map_set_map(map, PLUGIN_STATE, header)==FALSE ) goto loc_failed;
-  //if( binn_map_set_list(map, PLUGIN_SIGNATURES, signatures)==FALSE ) goto loc_failed;
+  if( binn_map_set_list(map, PLUGIN_VOTES, votes)==FALSE ) goto loc_failed;
   if( binn_map_set_list(map, PLUGIN_MOD_PAGES, list)==FALSE ) goto loc_failed;
   if( send_peer_message(node, map, NULL)==FALSE ) goto loc_failed;
   binn_free(map); map = NULL;

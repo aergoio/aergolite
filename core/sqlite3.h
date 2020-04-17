@@ -11980,11 +11980,17 @@ SQLITE_API void from_hex(char *source, int size, char *dest);
 ** Digital signatures
 */
 
-int aergolite_sign(aergolite *this_node, char *msg, int msglen,
-                   char *signature, int *psiglen);
-int aergolite_verify(aergolite *this_node, char *msg, int msglen,
-                     char *pubkey, int pklen,
-                     char *signature, int siglen);
+AERGOLITE_API int aergolite_sign_raw(aergolite *this_node, unsigned char *hash,
+                                     char *signature, int *psiglen);
+AERGOLITE_API int aergolite_sign(aergolite *this_node, char *msg, int msglen,
+                                 char *signature, int *psiglen);
+AERGOLITE_API int aergolite_verify_raw(aergolite *this_node, unsigned char *hash,
+                                       char *pubkey, int pklen,
+                                       char *signature, int siglen);
+AERGOLITE_API int aergolite_verify(aergolite *this_node, char *msg, int msglen,
+                                   char *pubkey, int pklen,
+                                   char *signature, int siglen);
+
 void * aergolite_pubkey(aergolite *this_node, char **ppubkey, int *ppklen, unsigned char **pprivkey);
 
 

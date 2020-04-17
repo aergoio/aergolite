@@ -330,7 +330,7 @@ SQLITE_PRIVATE void on_get_block(node *node, void *msg, int size) {
   map = binn_map();
   if (!map) goto loc_failed;
 
-  rc = aergolite_get_block(this_node, height, &block->header, &block->body, &block->signatures);
+  rc = aergolite_get_block(this_node, height, &block->header, &block->body, &block->votes);
 
   switch( rc ){
   case SQLITE_NOTFOUND: /* there is no record with the given prev_tid */
@@ -339,9 +339,9 @@ SQLITE_PRIVATE void on_get_block(node *node, void *msg, int size) {
   case SQLITE_OK:
     binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_REQUESTED_BLOCK);
     binn_map_set_int64(map, PLUGIN_HEIGHT, height);
-    binn_map_set_blob(map, PLUGIN_HEADER, block->header, binn_size(block->header));
-    binn_map_set_blob(map, PLUGIN_BODY, block->body, binn_size(block->body));
-    binn_map_set_blob(map, PLUGIN_SIGNATURES, block->signatures, binn_size(block->signatures));
+    binn_map_set_map(map, PLUGIN_HEADER, block->header);
+    binn_map_set_map(map, PLUGIN_BODY, block->body);  //! is it a map?
+    binn_map_set_list(map, PLUGIN_VOTES, block->votes);
     break;
   default:
     sqlite3_log(rc, "on_get_block: get_block failed");
