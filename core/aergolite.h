@@ -294,7 +294,7 @@ AERGOLITE_API int aergolite_load_current_state(
   int64 *pblock_height,
   void **pheader,
   void **pbody,
-  void **psignatures
+  void **pvotes
 );
 
 SQLITE_PRIVATE int check_page(aergolite *this_node, Pgno pgno, void *data, int size);
