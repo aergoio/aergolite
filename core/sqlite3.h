@@ -11871,6 +11871,7 @@ AERGOLITE_API int aergolite_insert_allowed_node(
   char *pubkey,
   int pklen,
   void *authorization,
+  char *type,
   int64 last_nonce
 );
 

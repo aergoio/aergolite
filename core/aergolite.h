@@ -219,8 +219,11 @@ SQLITE_PRIVATE int  open_detached_worker_db(aergolite *this_node, sqlite3 **pwor
 SQLITE_PRIVATE int  open_main_db_connection2(aergolite *this_node);
 SQLITE_PRIVATE int  open_worker_db(aergolite *this_node);
 
+SQLITE_PRIVATE BOOL is_valid_node_type(char *type);
+SQLITE_PRIVATE int  read_node_authorization(char *sql, char *type, char *pubkey, int *ppklen);
+AERGOLITE_API  int  read_authorized_pubkey(void *log, char *pubkey, int *ppklen);
 
-AERGOLITE_API int read_authorized_pubkey(void *log, char *pubkey, int *ppklen);
+SQLITE_PRIVATE int  pragma_add_node(Pager *pPager, char *zRight, Parse *pParse);
 
 
 SQLITE_PRIVATE int add_node_command(
@@ -261,6 +264,7 @@ AERGOLITE_API int aergolite_insert_allowed_node(
   char *pubkey,
   int pklen,
   void *authorization,
+  char *type,
   int64 last_nonce
 );
 

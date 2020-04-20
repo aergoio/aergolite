@@ -128,11 +128,11 @@ SQLITE_PRIVATE int verify_proof(
 
   /* get the node's public key */
   rc = aergolite_get_authorization(plugin->this_node, node_id, pubkey, &pklen, NULL, NULL);
-  if( rc ) return SQLITE_ERROR;
+  if( rc ) return rc;
 
   /* verify the proof */
   success = secp256k1_vrf_verify(output, proof, (uchar*) pubkey, msg, msglen);
 
   if( success ) return SQLITE_OK;
-  return SQLITE_ERROR;
+  return SQLITE_INVALID;
 }

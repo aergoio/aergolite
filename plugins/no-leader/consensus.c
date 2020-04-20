@@ -663,7 +663,11 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
     rc = SQLITE_ERROR;
   }
   if( rc ){
-    SYNCTRACE("on_new_block INVALID VRF PROOF\n");
+    if( rc==SQLITE_INVALID ){
+      SYNCTRACE("on_new_block INVALID VRF PROOF\n");
+    }else{
+      SYNCTRACE("on_new_block INVALID NODE\n");
+    }
     return;
   }
 
