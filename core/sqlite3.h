@@ -11917,6 +11917,7 @@ AERGOLITE_API char * aergolite_get_blockchain_status(aergolite *this_node);
 AERGOLITE_API void node_list_add(void *vdbe,
   int node_id,
   char *pubkey,
+  char *type,
   char *address,
   char *cpu,
   char *os,
