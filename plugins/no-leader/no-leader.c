@@ -209,6 +209,7 @@ SQLITE_PRIVATE int print_allowed_node_cb(
   char *pubkey,
   int pklen,
   void *authorization,
+  BOOL is_full_node,
   int64 last_nonce
 ){
   struct print_node *data = (struct print_node *) arg;
@@ -2071,6 +2072,7 @@ void * plugin_init(aergolite *this_node, char *uri) {
   struct tcp_address *addr;
   plugin *plugin;
   char *discovery, *bind, *block_interval;
+  BOOL  is_full_node;
   int64 random_no;
   int rc;
 
@@ -2092,8 +2094,12 @@ void * plugin_init(aergolite *this_node, char *uri) {
 
 
   /* is this an authorizated node? */
-  rc = is_node_authorized(this_node, plugin->pubkey, plugin->pklen, &plugin->is_authorized);
-  if( rc ) goto loc_failed;
+  rc = aergolite_get_authorization(this_node, plugin->node_id, NULL, NULL, NULL,
+                                   &is_full_node, NULL);
+  if( rc==SQLITE_OK ){
+    plugin->is_authorized = TRUE;
+    plugin->is_full_node = is_full_node;
+  }
 
 
   /* parse the node discovery parameter */

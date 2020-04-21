@@ -22,6 +22,7 @@ SQLITE_PRIVATE int send_auth_cb(
   char *pubkey,
   int   pklen,
   void *log,
+  BOOL  is_full_node,
   int64 last_nonce
 ){
   binn *list = (binn*) arg;
@@ -110,13 +111,14 @@ SQLITE_PRIVATE void on_new_accepted_node(node *node) {
 SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log, BOOL from_network){
   aergolite *this_node = plugin->this_node;
   node *node, *authorized_node=NULL;
+  BOOL is_full_node;
   char pubkey[36];
   int rc, pklen;
 
   SYNCTRACE("on_new_authorization\n");
 
   /* verify and store the authorization */
-  rc = aergolite_new_authorization(this_node, log, pubkey, &pklen);
+  rc = aergolite_new_authorization(this_node, log, pubkey, &pklen, &is_full_node);
   if( rc ) return rc;
 
   /* update the number of authorized nodes */
@@ -124,11 +126,13 @@ SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log, BOOL from_net
 
   if( plugin->pklen==pklen && memcmp(plugin->pubkey,pubkey,pklen)==0 ){
     plugin->is_authorized = TRUE;
+    plugin->is_full_node = is_full_node;
   }
 
   for( node=plugin->peers; node; node=node->next ){
     if( node->pklen==pklen && memcmp(node->pubkey,pubkey,pklen)==0 ){
       node->is_authorized = TRUE;
+      node->is_full_node = is_full_node;
       authorized_node = node;
       if( !from_network ){
         /* send all the authorizations to the new node */
@@ -510,6 +514,7 @@ SQLITE_PRIVATE void on_node_identification(node *node, void *msg, int size) {
   char *signature, pubkey_int[96], *pubkey_ext, msg2[2048];
   char *cpu, *os, *host, *app, *pubkey;
   int rc, version, siglen=0, pklen, pklen_int=0, pklen_ext=0;
+  BOOL is_full_node=FALSE;
 
   SYNCTRACE("on_node_identification\n");
 
@@ -551,7 +556,8 @@ SQLITE_PRIVATE void on_node_identification(node *node, void *msg, int size) {
   }
 
   /* load the public key from the allowed nodes table */
-  rc = aergolite_get_authorization(this_node, node->id, pubkey_int, &pklen_int, NULL, NULL);
+  rc = aergolite_get_authorization(this_node, node->id, pubkey_int, &pklen_int,
+                                   NULL, &is_full_node, NULL);
   if( rc==SQLITE_OK ){
     if( pubkey_ext ){
       if( pklen_int!=pklen_ext || memcmp(pubkey_int, pubkey_ext, pklen_int)!=0 ){
@@ -595,12 +601,10 @@ SQLITE_PRIVATE void on_node_identification(node *node, void *msg, int size) {
 
   /* store the node state */
   if( pklen_int>0 ){
-    /* authorization stored on the blockchain */
     node->is_authorized = TRUE;
+    node->is_full_node = is_full_node;
   }else{
-    /* check for authorization */
-    rc = is_node_authorized(this_node, pubkey, pklen, &node->is_authorized);
-    //if( rc ) xxx
+    node->is_authorized = FALSE;
   }
 
   if( pklen_ext==0 ){

@@ -220,6 +220,7 @@ struct node {
 
   BOOL    is_authorized;
   BOOL    authorization_sent;
+  BOOL    is_full_node;
 
   /* used for the query status */
   int     db_state;
@@ -296,6 +297,7 @@ struct plugin {
   int total_authorized_nodes; /* Including those that are currently off-line */
 
   BOOL is_authorized;         /* Whether this node is authorized on the network */
+  BOOL is_full_node;
 
   struct request *requests;
 

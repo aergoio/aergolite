@@ -11827,14 +11827,16 @@ AERGOLITE_API int aergolite_verify_block_header(aergolite *this_node, void *head
 ** Allowed nodes
 */
 
-AERGOLITE_API int read_authorized_pubkey(void *log, char *pubkey, int *ppklen);
+AERGOLITE_API int read_authorized_pubkey(void *log, char *pubkey, int *ppklen, char *type);
 
 AERGOLITE_API int aergolite_verify_authorization(
   aergolite *this_node,
   void *log
 );
 
-AERGOLITE_API int aergolite_new_authorization(aergolite *this_node, void *log, char *pubkey, int *ppklen);
+AERGOLITE_API int aergolite_new_authorization(
+  aergolite *this_node, void *log, char *pubkey, int *ppklen, BOOL *pis_full_node
+);
 
 typedef int (*auth_cb)(
   void *arg,
@@ -11842,6 +11844,7 @@ typedef int (*auth_cb)(
   char *pubkey,
   int   pklen,
   void *authorization,
+  BOOL is_full_node,
   int64 last_nonce
 );
 
@@ -11857,6 +11860,7 @@ AERGOLITE_API int aergolite_get_authorization(
   char *pubkey,
   int *ppklen,
   void **pauthorization,
+  BOOL *pis_full_node,
   int64 *plast_nonce
 );
 
@@ -11881,6 +11885,7 @@ AERGOLITE_API int aergolite_get_allowed_node(
   char *pubkey,
   int *ppklen,
   void **pauthorization,
+  char *type,
   int64 *plast_nonce
 );
 
@@ -11890,6 +11895,7 @@ typedef void (*on_allowed_node_cb)(
   char *pubkey,
   int pklen,
   void *authorization,
+  char *type,
   int64 last_nonce
 );
 

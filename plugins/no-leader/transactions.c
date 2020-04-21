@@ -309,6 +309,7 @@ SQLITE_PRIVATE int build_last_nonce_array_cb(
   char *pubkey,
   int pklen,
   void *authorization,
+  BOOL is_full_node,
   int64 last_nonce
 ){
   struct plugin *plugin = (struct plugin *) arg;
@@ -351,6 +352,7 @@ SQLITE_PRIVATE int check_mempool_transaction_cb(
   char *pubkey,
   int pklen,
   void *authorization,
+  BOOL is_full_node,
   int64 last_nonce
 ){
   struct plugin *plugin = (struct plugin *) arg;
@@ -405,7 +407,7 @@ SQLITE_PRIVATE int store_transaction_on_mempool(
   }
 
   /* check if transaction was already included on a block */
-  rc = aergolite_get_authorization(this_node, node_id, NULL, NULL, NULL, &last_nonce);
+  rc = aergolite_get_authorization(this_node, node_id, NULL, NULL, NULL, NULL, &last_nonce);
   if( rc!=SQLITE_OK ) return rc;
   if( nonce<=last_nonce ){
     SYNCTRACE("store_transaction_on_mempool - transaction nonce is old\n");
@@ -558,7 +560,7 @@ loc_next:
     int rc, pklen;
 
     /* is it an authorization? */
-    rc = read_authorized_pubkey(txn->log, pubkey, &pklen);
+    rc = read_authorized_pubkey(txn->log, pubkey, &pklen, NULL);
     if( rc==SQLITE_OK ){
       rc = on_new_authorization(plugin, txn->log, FALSE);
     }

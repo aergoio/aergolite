@@ -23,6 +23,7 @@ struct nodeauth {
   char pk[36];
   int  pklen;
   int  node_id;
+  BOOL is_full_node;
   int64 last_nonce;
   int64 saved_nonce;
   void *log;
@@ -127,6 +128,8 @@ struct aergolite {
 
   nodeauth *authorizations;   /* List of node authorizations */
 
+  BOOL is_full_node;
+
   int64 block_height;         /* ... */
   struct block active_block;  /* ... */
   void *txn_ids;              /* The transactions on a specific block */
@@ -220,8 +223,8 @@ SQLITE_PRIVATE int  open_main_db_connection2(aergolite *this_node);
 SQLITE_PRIVATE int  open_worker_db(aergolite *this_node);
 
 SQLITE_PRIVATE BOOL is_valid_node_type(char *type);
-SQLITE_PRIVATE int  read_node_authorization(char *sql, char *type, char *pubkey, int *ppklen);
-AERGOLITE_API  int  read_authorized_pubkey(void *log, char *pubkey, int *ppklen);
+SQLITE_PRIVATE int  read_node_authorization(char *sql, char *pubkey, int *ppklen, char *type);
+AERGOLITE_API  int  read_authorized_pubkey(void *log, char *pubkey, int *ppklen, char *type);
 
 SQLITE_PRIVATE int  pragma_add_node(Pager *pPager, char *zRight, Parse *pParse);
 
@@ -235,6 +238,9 @@ SQLITE_PRIVATE int add_node_command(
   int pklen
 );
 SQLITE_PRIVATE int process_node_commands(aergolite *this_node, void *node_commands);
+
+SQLITE_PRIVATE int  update_node_type(aergolite *this_node, int node_id, char *type);
+SQLITE_PRIVATE void update_auth_type(aergolite *this_node, int node_id, char *type);
 
 SQLITE_PRIVATE int  update_node_last_nonce(aergolite *this_node, int node_id, int64 nonce);
 SQLITE_PRIVATE void update_auth_last_nonce(aergolite *this_node, int node_id, int64 nonce);
@@ -255,6 +261,7 @@ AERGOLITE_API int aergolite_get_authorization(
   char *pubkey,
   int *ppklen,
   void **pauthorization,
+  BOOL *pis_full_node,
   int64 *plast_nonce
 );
 
@@ -274,6 +281,7 @@ AERGOLITE_API int aergolite_get_allowed_node(
   char *pubkey,
   int *ppklen,
   void **pauthorization,
+  char *type,
   int64 *plast_nonce
 );
 
@@ -283,6 +291,7 @@ typedef void (*on_allowed_node_cb)(
   char *pubkey,
   int pklen,
   void *authorization,
+  char *type,
   int64 last_nonce
 );
 
