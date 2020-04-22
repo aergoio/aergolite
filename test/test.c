@@ -83,6 +83,32 @@ static void on_sign_transaction(sqlite3_context *context, int argc, sqlite3_valu
 /****************************************************************************/
 /****************************************************************************/
 
+void check_limit_of_open_files() {
+  char *cmd = "ulimit -Sn";
+  char buf[64];
+  FILE *fp;
+
+  /* Open the command for reading. */
+  if ((fp = popen(cmd, "r")) == NULL) {
+    printf("Failed to run command\n" );
+    exit(1);
+  }
+
+  /* Read the output */
+  if (fgets(buf, sizeof(buf), fp) != NULL) {
+    if( atoi(buf)<4096 ){
+      puts("\nrun the command bellow to increase the limit of open files:\n\n"
+           "    ulimit -Sn 4096\n");
+      exit(1);
+    }
+  }
+
+  /* close */
+  pclose(fp);
+}
+
+/****************************************************************************/
+
 void delete_files(int n){
   int i;
   for(i=1; i<=n; i++){
@@ -2693,6 +2719,11 @@ loc_exit:
 /****************************************************************************/
 
 int main(){
+
+#ifndef _WIN32
+  check_limit_of_open_files();
+#endif
+
 
 //  test_5_nodes(0);
 //  test_5_nodes(1);
