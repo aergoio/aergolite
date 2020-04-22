@@ -171,7 +171,7 @@ clean:
 	rm -f *.o libaergolite.a libaergolite.dylib $(LIBRARY) $(LIBNICK1) $(LIBNICK2) $(LIBNICK3) $(LIBNICK4) $(IMPLIB).lib $(SSHELL) test/runtest
 
 test/runtest: test/test.c test/db_functions.c
-	$(CC) -std=gnu99 $< -o $@ -L. -l$(IMPLIB) -lsecp256k1-vrf
+	$(CC) -std=gnu99 $(CFLAGS) $< -o $@ -L. -l$(IMPLIB) -lsecp256k1-vrf
 
 test: test/runtest
 ifeq ($(OS),OSX)
