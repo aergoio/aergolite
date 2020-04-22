@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include "secp256k1-vrf.h"
 #include "single_instance.h"
 

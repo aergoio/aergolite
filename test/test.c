@@ -3027,8 +3027,11 @@ int main(){
     /* num_txns_on_online_nodes,   */ 9,
     /* active_online_nodes[],      */ (int[]){3,8,11,25,35,45,0},
     /* num_txns_on_reconnect,      */ 12,
-    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,20,25,44,45,0}
-  );
+    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,20,25,44,45,0},
+    /* wait_between_add_nodes      */ 250,
+    /* check_connections           */ false,
+    /* exec_while_adding           */ true
+   );
 
   test_reconnection(200, false, 5000,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,55,66,77,88,95,0},
@@ -3037,8 +3040,11 @@ int main(){
     /* num_txns_on_online_nodes,   */ 9,
     /* active_online_nodes[],      */ (int[]){3,8,11,25,35,45,0},
     /* num_txns_on_reconnect,      */ 12,
-    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,20,25,44,45,0}
-  );
+    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,20,25,44,45,0},
+    /* wait_between_add_nodes      */ 250,
+    /* check_connections           */ false,
+    /* exec_while_adding           */ true
+   );
 #endif
 
 
