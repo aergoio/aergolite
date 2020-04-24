@@ -227,7 +227,12 @@ SQLITE_PRIVATE BOOL is_valid_node_type(char *type);
 SQLITE_PRIVATE int  read_node_authorization(char *sql, char *pubkey, int *ppklen, char *type);
 AERGOLITE_API  int  read_authorized_pubkey(void *log, char *pubkey, int *ppklen, char *type);
 
+SQLITE_PRIVATE int  read_pragma_node_type(
+  aergolite *this_node, char *sql, char *type, void **pnode_list, bool *pmake_default
+);
+
 SQLITE_PRIVATE int  pragma_add_node(Pager *pPager, char *zRight, Parse *pParse);
+SQLITE_PRIVATE int  pragma_node_type(Pager *pPager, char *zRight, Parse *pParse);
 
 
 SQLITE_PRIVATE int add_node_command(
@@ -238,7 +243,7 @@ SQLITE_PRIVATE int add_node_command(
   char *pubkey,
   int pklen
 );
-SQLITE_PRIVATE int process_node_commands(aergolite *this_node, void *node_commands);
+SQLITE_PRIVATE int  process_node_commands(aergolite *this_node, void *node_commands);
 
 SQLITE_PRIVATE int  update_node_type(aergolite *this_node, int node_id, char *type);
 SQLITE_PRIVATE void update_auth_type(aergolite *this_node, int node_id, char *type);
@@ -250,6 +255,8 @@ SQLITE_PRIVATE void update_authorizations(aergolite *this_node);
 
 SQLITE_PRIVATE void save_auth_nonces(aergolite *this_node);
 SQLITE_PRIVATE void reload_auth_nonces(aergolite *this_node);
+
+AERGOLITE_API int is_node_authorized(aergolite *this_node, char *pubkey, int pklen, int *pnode_id);
 
 AERGOLITE_API int aergolite_verify_authorization(
   aergolite *this_node,
