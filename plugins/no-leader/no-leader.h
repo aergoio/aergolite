@@ -448,3 +448,5 @@ SQLITE_PRIVATE void on_peer_list_received(node *node, void *msg, int size);
 
 SQLITE_PRIVATE int  on_new_authorization(plugin *plugin, void *log, BOOL from_network);
 SQLITE_PRIVATE void count_authorized_nodes(plugin *plugin);
+
+SQLITE_PRIVATE void plugin_update_nodes_types(plugin *plugin);

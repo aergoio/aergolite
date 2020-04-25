@@ -427,6 +427,9 @@ SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
   /* remove old transactions from mempool */
   check_mempool_transactions(plugin);
 
+  /* update the nodes types on memory */
+  plugin_update_nodes_types(plugin);
+
   SYNCTRACE("on_apply_state_update - OK\n");
 
 loc_exit:

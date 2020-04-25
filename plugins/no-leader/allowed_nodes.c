@@ -713,3 +713,40 @@ loc_failed:
   sqlite3_log(1, "send_node_identification: binn failed. probably out of memory");
   goto loc_exit;
 }
+
+/****************************************************************************/
+
+SQLITE_PRIVATE int plugin_update_nodes_types_cb(
+  void *arg,
+  int node_id,
+  char *pubkey,
+  int pklen,
+  void *authorization,
+  BOOL is_full_node,
+  int64 last_nonce
+){
+  plugin *plugin = (struct plugin*) arg;
+  struct node *node;
+
+  SYNCTRACE("plugin_update_node_type node_id=%d is_full=%d\n", node_id, is_full_node);
+
+  for( node=plugin->peers; node; node=node->next ){
+    if( node->id==node_id ){
+      node->is_full_node = is_full_node;
+      return SQLITE_OK;
+    }
+  }
+
+  if( plugin->node_id==node_id ){
+    plugin->is_full_node = is_full_node;
+  }
+
+  return SQLITE_OK;
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void plugin_update_nodes_types(plugin *plugin){
+  aergolite *this_node = plugin->this_node;
+  aergolite_iterate_authorizations(this_node, plugin_update_nodes_types_cb, plugin);
+}

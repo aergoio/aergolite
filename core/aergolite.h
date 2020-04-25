@@ -130,6 +130,7 @@ struct aergolite {
   nodeauth *authorizations;   /* List of node authorizations */
 
   BOOL is_full_node;
+  BOOL changed_node_type;
 
   int64 block_height;         /* ... */
   struct block active_block;  /* ... */
@@ -252,6 +253,7 @@ SQLITE_PRIVATE int  update_node_last_nonce(aergolite *this_node, int node_id, in
 SQLITE_PRIVATE void update_auth_last_nonce(aergolite *this_node, int node_id, int64 nonce);
 
 SQLITE_PRIVATE void update_authorizations(aergolite *this_node);
+SQLITE_PRIVATE void update_auth_types(aergolite *this_node);
 
 SQLITE_PRIVATE void save_auth_nonces(aergolite *this_node);
 SQLITE_PRIVATE void reload_auth_nonces(aergolite *this_node);

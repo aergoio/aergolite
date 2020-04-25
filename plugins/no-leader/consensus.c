@@ -455,6 +455,9 @@ SQLITE_PRIVATE int commit_block(plugin *plugin, struct block *block){
   /* discard old block votes */
   discard_old_block_votes(plugin);
 
+  /* update the nodes types on memory */
+  plugin_update_nodes_types(plugin);
+
   SYNCTRACE("commit_block OK\n");
 
   start_new_block_timer(plugin);
