@@ -6,6 +6,10 @@
 
 #define majority(X)  X / 2 + 1
 
+#define USE_ADD_NODE       11
+#define USE_NODE_TYPE      12
+#define USE_NODE_TYPE_ALL  13
+
 const int wait_time = 150000;
 
 /*
@@ -128,6 +132,12 @@ void delete_log(){
   char fname[256];
   sprintf(fname, "log-%d", getpid());
   unlink(fname);
+}
+
+/****************************************************************************/
+
+void errorLogCallback(void *pArg, int iErrCode, const char *zMsg){
+  fprintf(stderr, "(%d) %s\n", iErrCode, zMsg);
 }
 
 /****************************************************************************/
@@ -983,6 +993,9 @@ loc_again2:
 
 void test_reconnection(
   int n, bool bind_to_random_ports, int block_interval,
+  /* full nodes */
+  int full_nodes[],
+  int node_type_setting,
   /* nodes that should be disconnected */
   int disconnect_nodes[],
   /* transactions executed on disconnected nodes while in split */
@@ -1004,16 +1017,19 @@ void test_reconnection(
   char node_pubkey[512][72];
   sqlite3_stmt *stmt=NULL;
   int rc, i, j, node, count, done;
+  int num_full_nodes, num_light_nodes;
   int last_nonce[512];
 
   printf("----------------------------------------------------------\n"
          "test_reconnection(\n"
          "  nodes=%d\n", n);
   printf("  random_ports=%s\n", bind_to_random_ports ? "yes" : "no");
+  print_nodes("  full_nodes", full_nodes);
   print_nodes("  disconnect_nodes", disconnect_nodes);
   print_nodes("  active_offline_nodes", active_offline_nodes);
   print_nodes("  active_online_nodes", active_online_nodes);
   print_nodes("  active_nodes_on_reconnect", active_nodes_on_reconnect);
+  printf("  node_type_setting=%d\n", node_type_setting);
   printf("  num_txns_on_offline_nodes=%d\n", num_txns_on_offline_nodes);
   printf("  num_txns_on_online_nodes=%d\n", num_txns_on_online_nodes);
   printf("  num_txns_on_reconnect=%d\n", num_txns_on_reconnect);
@@ -1024,6 +1040,9 @@ void test_reconnection(
   fflush(stdout);
 
   assert(n>=5 && n<512);
+
+  num_full_nodes = len_array_list(full_nodes);
+  num_light_nodes = n - num_full_nodes;
 
   /* delete the db files if they exist */
   delete_files(n);
@@ -1124,9 +1143,38 @@ loc_again1:
   for(node=1; node<=n; node++){
     char cmd[128];
     printf("adding node %d to the network\n", node);
-    sprintf(cmd, "pragma add_node='%s'", node_pubkey[node]);
+    if( node_type_setting==USE_ADD_NODE && in_array_list(node,full_nodes) ){
+      sprintf(cmd, "pragma add_node='full:%s'", node_pubkey[node]);
+    }else{
+      sprintf(cmd, "pragma add_node='%s'", node_pubkey[node]);
+    }
     db_execute(db[add_from_node], cmd);
     usleep(wait_between_add_nodes * 1000);
+  }
+
+
+  last_nonce[add_from_node] = n;
+
+  for(i=1; i<=n; i++){
+    db_check_int(db[i], "PRAGMA last_nonce", last_nonce[i]);
+  }
+
+
+  if( node_type_setting==USE_NODE_TYPE ){
+    for(node=1; node<=n; node++){
+      char cmd[128];
+      if( in_array_list(node,full_nodes) ){
+        printf("setting node %d as full node\n", node);
+        sprintf(cmd, "pragma node_type='full:%s'", node_pubkey[node]);
+        db_execute(db[add_from_node], cmd);
+        last_nonce[add_from_node]++;
+        //usleep(wait_between_add_nodes * 1000);
+      }
+    }
+  }else if( node_type_setting==USE_NODE_TYPE_ALL ){
+    printf("setting all nodes as full nodes\n");
+    db_execute(db[add_from_node], "pragma node_type='full:*'");
+    last_nonce[add_from_node]++;
   }
 
 
@@ -1178,31 +1226,37 @@ loc_again2:
     }
   }
 
+
   bool has_external;
+  bool missing_node_type;
 
 loc_check_conns:
   has_external = false;
+  missing_node_type = false;
 
   /* count how many peers each node is connected to */
   for(i=1; i<=n; i++){
-    int nauths = 0, npeers = 0, nexternal = 0;
+    int nauths = 0, npeers = 0, nexternal = 0, nfull = 0;
     rc = sqlite3_prepare_v2(db[i], "pragma nodes", -1, &stmt, NULL);
     assert( rc==SQLITE_OK );
     assert( stmt!=NULL );
     while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
+      char *type = (char*)sqlite3_column_text(stmt, 2);
       char *address = (char*)sqlite3_column_text(stmt, 3);
       char *external = (char*)sqlite3_column_text(stmt, 9);
       if( address[0]!='(' ) npeers++;
       if( external[0]=='y' ) nexternal++;
       else nauths++;
+      if( strcmp(type,"full")==0 ) nfull++;
     }
     assert( rc==SQLITE_DONE || rc==SQLITE_OK );
     sqlite3_finalize(stmt); stmt = NULL;
-    printf("node %d connected to %d nodes (%d external). total of %d authorized nodes\n", i, npeers-1, nexternal, nauths);
+    printf("node %d connected to %d nodes (%d external). total of %d authorized nodes (%d full)\n", i, npeers-1, nexternal, nauths, nfull);
     if( nexternal>0 ) has_external = true;
+    if( nfull!=num_full_nodes ) missing_node_type = true;
   }
 
-  if( has_external ){
+  if( has_external || missing_node_type ){
     usleep(2000000);
     puts("");
     goto loc_check_conns;
@@ -1211,8 +1265,6 @@ loc_check_conns:
   }  // if( check_connections )
 
 
-
-  last_nonce[add_from_node] = n;
 
   for(i=1; i<=n; i++){
     db_check_int(db[i], "PRAGMA last_nonce", last_nonce[i]);
@@ -2724,6 +2776,8 @@ int main(){
   check_limit_of_open_files();
 #endif
 
+  //sqlite3_config(SQLITE_CONFIG_LOG, errorLogCallback, NULL);
+
 
 //  test_5_nodes(0);
 //  test_5_nodes(1);
@@ -2760,6 +2814,8 @@ int main(){
 
 
   test_reconnection(10, false, 500,
+    /* full_nodes[]                */ (int[]){0},
+    /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
     /* num_txns_on_offline_nodes,  */ 0,
     /* active_offline_nodes[],     */ (int[]){0},
@@ -2773,6 +2829,8 @@ int main(){
   );
 
   test_reconnection(10, false, 500,
+    /* full_nodes[]                */ (int[]){0},
+    /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
     /* num_txns_on_offline_nodes,  */ 0,
     /* active_offline_nodes[],     */ (int[]){0},
@@ -2786,6 +2844,8 @@ int main(){
   );
 
   test_reconnection(10, false, 500,
+    /* full_nodes[]                */ (int[]){0},
+    /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
     /* num_txns_on_offline_nodes,  */ 0,
     /* active_offline_nodes[],     */ (int[]){0},
@@ -2799,6 +2859,8 @@ int main(){
   );
 
   test_reconnection(10, false, 500,
+    /* full_nodes[]                */ (int[]){0},
+    /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
     /* num_txns_on_offline_nodes,  */ 0,
     /* active_offline_nodes[],     */ (int[]){0},
@@ -2812,6 +2874,8 @@ int main(){
   );
 
   test_reconnection(10, false, 500,
+    /* full_nodes[]                */ (int[]){0},
+    /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
     /* num_txns_on_offline_nodes,  */ 3,
     /* active_offline_nodes[],     */ (int[]){4,10,0},
@@ -2824,7 +2888,90 @@ int main(){
     /* exec_while_adding           */ false
   );
 
+  /* all light nodes */
   test_reconnection(10, false, 500,
+    /* full_nodes[]                */ (int[]){0},
+    /* node_type_setting,          */ USE_ADD_NODE,
+    /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
+    /* num_txns_on_offline_nodes,  */ 3,
+    /* active_offline_nodes[],     */ (int[]){4,10,0},
+    /* num_txns_on_online_nodes,   */ 3,
+    /* active_online_nodes[],      */ (int[]){3,8,0},
+    /* num_txns_on_reconnect,      */ 5,
+    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ true,
+    /* exec_while_adding           */ false
+  );
+
+  /* all full nodes - using add_node */
+  test_reconnection(10, false, 500,
+    /* full_nodes[]                */ (int[]){1,2,3,4,5,6,7,8,9,10,0},
+    /* node_type_setting,          */ USE_ADD_NODE,
+    /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
+    /* num_txns_on_offline_nodes,  */ 3,
+    /* active_offline_nodes[],     */ (int[]){4,10,0},
+    /* num_txns_on_online_nodes,   */ 3,
+    /* active_online_nodes[],      */ (int[]){3,8,0},
+    /* num_txns_on_reconnect,      */ 5,
+    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ true,
+    /* exec_while_adding           */ false
+  );
+
+  /* all full nodes - using node_type */
+  test_reconnection(10, false, 500,
+    /* full_nodes[]                */ (int[]){1,2,3,4,5,6,7,8,9,10,0},
+    /* node_type_setting,          */ USE_NODE_TYPE,
+    /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
+    /* num_txns_on_offline_nodes,  */ 3,
+    /* active_offline_nodes[],     */ (int[]){4,10,0},
+    /* num_txns_on_online_nodes,   */ 3,
+    /* active_online_nodes[],      */ (int[]){3,8,0},
+    /* num_txns_on_reconnect,      */ 5,
+    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ true,
+    /* exec_while_adding           */ false
+  );
+
+  /* all full nodes - using node_type=* */
+  test_reconnection(10, false, 500,
+    /* full_nodes[]                */ (int[]){1,2,3,4,5,6,7,8,9,10,0},
+    /* node_type_setting,          */ USE_NODE_TYPE_ALL,
+    /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
+    /* num_txns_on_offline_nodes,  */ 3,
+    /* active_offline_nodes[],     */ (int[]){4,10,0},
+    /* num_txns_on_online_nodes,   */ 3,
+    /* active_online_nodes[],      */ (int[]){3,8,0},
+    /* num_txns_on_reconnect,      */ 5,
+    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ true,
+    /* exec_while_adding           */ false
+  );
+
+  /* some full nodes - using node_type */
+  test_reconnection(10, false, 500,
+    /* full_nodes[]                */ (int[]){1,5,10,0},
+    /* node_type_setting,          */ USE_ADD_NODE,
+    /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
+    /* num_txns_on_offline_nodes,  */ 3,
+    /* active_offline_nodes[],     */ (int[]){4,10,0},
+    /* num_txns_on_online_nodes,   */ 3,
+    /* active_online_nodes[],      */ (int[]){3,8,0},
+    /* num_txns_on_reconnect,      */ 5,
+    /* active_nodes_on_reconnect[] */ (int[]){2,3,6,7,0},
+    /* wait_between_add_nodes      */ 50,
+    /* check_connections           */ true,
+    /* exec_while_adding           */ false
+  );
+
+  /* some full nodes - using node_type */
+  test_reconnection(10, false, 500,
+    /* full_nodes[]                */ (int[]){1,5,10,0},
+    /* node_type_setting,          */ USE_NODE_TYPE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
     /* num_txns_on_offline_nodes,  */ 3,
     /* active_offline_nodes[],     */ (int[]){4,10,0},
@@ -2838,6 +2985,8 @@ int main(){
   );
 
   test_reconnection(25, false, 1000,
+    /* full_nodes[]                */ (int[]){2,10,20,0},
+    /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,0},
     /* num_txns_on_offline_nodes,  */ 6,
     /* active_offline_nodes[],     */ (int[]){2,7,15,23,0},
@@ -2851,6 +3000,8 @@ int main(){
   );
 
   test_reconnection(25, false, 1000,   // majority disconnected
+    /* full_nodes[]                */ (int[]){0},
+    /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,4,6,8,10,12,14,16,18,20,22,23,24,0},
     /* num_txns_on_offline_nodes,  */ 9,
     /* active_offline_nodes[],     */ (int[]){2,8,16,22,0},
@@ -2864,6 +3015,8 @@ int main(){
   );
 
   test_reconnection(25, false, 1000,   // all disconnected - node 2 reconnects first
+    /* full_nodes[]                */ (int[]){0},
+    /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,1,0},
     /* num_txns_on_offline_nodes,  */ 9,
     /* active_offline_nodes[],     */ (int[]){1,5,15,17,23,0},
@@ -2877,6 +3030,8 @@ int main(){
   );
 
   test_reconnection(25, false, 1000,   // all disconnected - main nodes reconnect later
+    /* full_nodes[]                */ (int[]){0},
+    /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0},
     /* num_txns_on_offline_nodes,  */ 9,
     /* active_offline_nodes[],     */ (int[]){1,5,15,17,23,0},
@@ -2890,6 +3045,8 @@ int main(){
   );
 
   test_reconnection(25, false, 1000,   // all disconnected - main nodes reconnect in the middle
+    /* full_nodes[]                */ (int[]){0},
+    /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){25,24,23,22,21,20,19,18,17,2,16,15,14,13,1,12,11,10,9,8,7,6,5,4,3,0},
     /* num_txns_on_offline_nodes,  */ 9,
     /* active_offline_nodes[],     */ (int[]){1,5,15,17,23,0},
@@ -2904,6 +3061,8 @@ int main(){
 
 #if 0
   test_reconnection(50, false, 1000,
+    /* full_nodes[]                */ (int[]){0},
+    /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,0},
     /* num_txns_on_offline_nodes,  */ 9,
     /* active_offline_nodes[],     */ (int[]){4,10,20,33,38,49,0},
@@ -2917,6 +3076,8 @@ int main(){
   );
 
   test_reconnection(50, false, 1000,
+    /* full_nodes[]                */ (int[]){1,10,20,30,0},
+    /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,0},
     /* num_txns_on_offline_nodes,  */ 9,
     /* active_offline_nodes[],     */ (int[]){4,10,20,33,38,49,0},
@@ -2930,6 +3091,8 @@ int main(){
   );
 
   test_reconnection(50, false, 1000,
+    /* full_nodes[]                */ (int[]){1,10,20,30,0},
+    /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){49,44,38,37,33,23,20,15,10,7,4,2,0},
     /* num_txns_on_offline_nodes,  */ 9,
     /* active_offline_nodes[],     */ (int[]){4,10,20,33,38,49,0},
@@ -2943,6 +3106,8 @@ int main(){
   );
 
   test_reconnection(50, false, 1000,  // majority disconnected
+    /* full_nodes[]                */ (int[]){2,10,20,30,0},
+    /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){50,48,46,44,42,40,38,36,34,32,30,28,26,24,22,20,18,16,14,12,10,8,6,4,2,0},
     /* num_txns_on_offline_nodes,  */ 9,
     /* active_offline_nodes[],     */ (int[]){4,10,20,32,38,48,0},
@@ -2956,6 +3121,8 @@ int main(){
   );
 
   test_reconnection(50, false, 1000,  // all disconnected
+    /* full_nodes[]                */ (int[]){2,10,20,30,0},
+    /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){50,49,48,47,46,45,44,43,42,41,40,39,38,37,36,35,34,33,32,31,30,29,28,27,26,25,1,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,0},
     /* num_txns_on_offline_nodes,  */ 9,
     /* active_offline_nodes[],     */ (int[]){4,10,20,1,32,38,48,0},
@@ -2969,6 +3136,8 @@ int main(){
   );
 
   test_reconnection(50, false, 1000,
+    /* full_nodes[]                */ (int[]){2,10,20,30,0},
+    /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){49,44,38,37,33,23,20,15,10,7,4,2,0},
     /* num_txns_on_offline_nodes,  */ 9,
     /* active_offline_nodes[],     */ (int[]){20,33,2,38,49,10,0},
@@ -2982,6 +3151,8 @@ int main(){
   );
 
   test_reconnection(100, false, 3000,
+    /* full_nodes[]                */ (int[]){2,27,55,99,0},
+    /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,55,66,77,88,95,0},
     /* num_txns_on_offline_nodes,  */ 9,
     /* active_offline_nodes[],     */ (int[]){4,10,20,33,38,49,0},
@@ -2995,6 +3166,8 @@ int main(){
   );
 
   test_reconnection(100, false, 3000,
+    /* full_nodes[]                */ (int[]){2,44,55,95,0},
+    /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,55,66,77,88,95,0},
     /* num_txns_on_offline_nodes,  */ 9,
     /* active_offline_nodes[],     */ (int[]){4,10,20,33,38,49,0},
@@ -3008,6 +3181,8 @@ int main(){
   );
 
   test_reconnection(100, false, 3000,
+    /* full_nodes[]                */ (int[]){2,44,55,95,0},
+    /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,55,66,77,88,95,0},
     /* num_txns_on_offline_nodes,  */ 9,
     /* active_offline_nodes[],     */ (int[]){4,10,20,33,38,49,0},
@@ -3021,6 +3196,8 @@ int main(){
   );
 
   test_reconnection(150, false, 3000,
+    /* full_nodes[]                */ (int[]){2,44,50,99,0},
+    /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,55,66,77,88,95,0},
     /* num_txns_on_offline_nodes,  */ 9,
     /* active_offline_nodes[],     */ (int[]){4,10,20,33,38,49,0},
@@ -3034,6 +3211,8 @@ int main(){
    );
 
   test_reconnection(200, false, 5000,
+    /* full_nodes[]                */ (int[]){2,95,150,199,0},
+    /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,55,66,77,88,95,0},
     /* num_txns_on_offline_nodes,  */ 9,
     /* active_offline_nodes[],     */ (int[]){4,10,20,33,38,49,0},
