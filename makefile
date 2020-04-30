@@ -84,7 +84,7 @@ valgrind: export LIBFLAGS := -g -DSQLITE_DEBUG=1 $(DEBUGFLAGS) $(LIBFLAGS)
 OBJECTS = sqlite3.o plugin-no-leader.o
 
 aergolite-0.1.dll: $(OBJECTS)
-	$(CC) -shared -Wl,--out-implib,$(IMPLIB).lib $^ -o $@ $(LFLAGS) -lbinn-1.0 -llibuv -lsecp256k1-vrf -lws2_32
+	$(CC) -shared -Wl,--out-implib,$(IMPLIB).lib $^ -o $@ $(LFLAGS) -lbinn-3.0 -llibuv -lsecp256k1-vrf -lws2_32
 ifeq ($(MAKECMDGOALS),valgrind)
 else ifeq ($(MAKECMDGOALS),debug)
 else
@@ -98,7 +98,7 @@ else ifeq ($(MAKECMDGOALS),debug)
 else
 	$(STRIP) -x $@
 endif
-	install_name_tool -change libbinn.1.dylib /usr/local/lib/libbinn.1.dylib $@
+	install_name_tool -change libbinn.3.dylib /usr/local/lib/libbinn.3.dylib $@
 	ln -sf $(LIBRARY) $(LIBNICK1)
 	ln -sf $(LIBRARY) $(LIBNICK2)
 	ln -sf $(LIBRARY) $(LIBNICK3)
@@ -136,7 +136,7 @@ plugin-no-leader.o: plugins/no-leader/no-leader.c plugins/no-leader/no-leader.h 
 
 $(SSHELL): shell.o $(LIBRARY)
 ifeq ($(OS),Windows_NT)
-	$(CC) $< -o $@ -L. -l$(IMPLIB) $(LFLAGS) -lbinn-1.0
+	$(CC) $< -o $@ -L. -l$(IMPLIB) $(LFLAGS) -lbinn-3.0
 else ifeq ($(OS),OSX)
 	$(CC) $< -o $@ -L. -l$(IMPLIB) -ldl -lbinn -lreadline
 else
