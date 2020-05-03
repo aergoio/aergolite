@@ -1,25 +1,36 @@
-# The SONAME sets the api version compatibility.
-# It is using the same SONAME from the pre-installed sqlite3 library so
-# the library can be loaded by existing applications as python. For this
-# we can set the LD_LIBRARY_PATH when opening the app or set the rpath
-# in the executable.
+ifneq ($(OS_NAME),)
+  TARGET_OS = $(OS_NAME)
+else
+  ifeq ($(OS),Windows_NT)
+    TARGET_OS = Windows
+  else ifeq ($(PLATFORM),iPhoneOS)
+    TARGET_OS = iPhoneOS
+  else ifeq ($(PLATFORM),iPhoneSimulator)
+    TARGET_OS = iPhoneSimulator
+  else
+    UNAME_S := $(shell uname -s)
+    ifeq ($(UNAME_S),Darwin)
+      TARGET_OS = Mac
+    else
+      TARGET_OS = Linux
+    endif
+  endif
+endif
 
-ifeq ($(OS),Windows_NT)
+ifeq ($(TARGET_OS),Windows)
     CFLAGS   = -I../libuv/include -I../binn/src
     LFLAGS   = -L../libuv/.libs -L../binn
     IMPLIB   = aergolite-0.1
     LIBRARY  = aergolite-0.1.dll
     LDFLAGS  += -static-libgcc -static-libstdc++
-else ifeq ($(PLATFORM),iPhoneOS)
+else ifeq ($(TARGET_OS),iPhoneOS)
     LIBRARY = libaergolite.dylib
     CFLAGS += -fPIC -fvisibility=hidden
-else ifeq ($(PLATFORM),iPhoneSimulator)
+else ifeq ($(TARGET_OS),iPhoneSimulator)
     LIBRARY = libaergolite.dylib
     CFLAGS += -fPIC -fvisibility=hidden
 else
-    UNAME_S := $(shell uname -s)
-    ifeq ($(UNAME_S),Darwin)
-        OS = OSX
+    ifeq ($(TARGET_OS),Mac)
         LIBRARY  = libaergolite.0.dylib
         LIBNICK1 = libaergolite.dylib
         LIBNICK2 = libsqlite3.0.dylib
@@ -56,7 +67,7 @@ AR    = ar
 SHORT = sqlite3
 
 # the item below cannot be called SHELL because it's a reserved name
-ifeq ($(OS),Windows_NT)
+ifeq ($(TARGET_OS),Windows)
     SSHELL = sqlite3.exe
 else
     SSHELL = sqlite3
@@ -135,9 +146,9 @@ plugin-no-leader.o: plugins/no-leader/no-leader.c plugins/no-leader/no-leader.h 
 
 
 $(SSHELL): shell.o $(LIBRARY)
-ifeq ($(OS),Windows_NT)
+ifeq ($(TARGET_OS),Windows)
 	$(CC) $< -o $@ -L. -l$(IMPLIB) $(LFLAGS) -lbinn-3.0
-else ifeq ($(OS),OSX)
+else ifeq ($(TARGET_OS),Mac)
 	$(CC) $< -o $@ -L. -l$(IMPLIB) -ldl -lbinn -lreadline
 else
 	$(CC) $< -o $@ -Wl,-rpath,$(LIBPATH) -L. -l$(IMPLIB) -lbinn -lreadline -ldl
@@ -156,7 +167,7 @@ install:
 	mkdir -p $(LIBPATH2)
 	cp $(LIBRARY) $(LIBPATH)/
 	cd $(LIBPATH) && ln -sf $(LIBRARY) $(LIBNICK1)
-ifeq ($(OS),OSX)
+ifeq ($(TARGET_OS),Mac)
 	cd $(LIBPATH2) && ln -sf ../$(LIBNICK1) $(LIBNICK2)
 	cd $(LIBPATH2) && ln -sf $(LIBNICK2) $(LIBNICK3)
 else
@@ -174,21 +185,21 @@ test/runtest: test/test.c test/db_functions.c
 	$(CC) -std=gnu99 $(CFLAGS) $< -o $@ -L. -l$(IMPLIB) -lsecp256k1-vrf
 
 test: test/runtest
-ifeq ($(OS),OSX)
+ifeq ($(TARGET_OS),Mac)
 	cd test && DYLD_LIBRARY_PATH=..:/usr/local/lib ./runtest
 else
 	cd test && LD_LIBRARY_PATH=..:/usr/local/lib ./runtest
 endif
 
 valgrind: $(LIBRARY) test/runtest
-ifeq ($(OS),OSX)
+ifeq ($(TARGET_OS),Mac)
 	cd test && DYLD_LIBRARY_PATH=..:/usr/local/lib valgrind --leak-check=full --show-leak-kinds=all ./runtest
 else
 	cd test && LD_LIBRARY_PATH=..:/usr/local/lib valgrind --leak-check=full --show-leak-kinds=all ./runtest
 endif
 
 test2: test/test.py
-ifeq ($(OS),Windows_NT)
+ifeq ($(TARGET_OS),Windows)
 ifeq ($(PY_HOME),)
 	@echo "PY_HOME is not set"
 else
@@ -197,7 +208,7 @@ else
 	cd test && python test.py -v
 endif
 else
-ifeq ($(OS),OSX)
+ifeq ($(TARGET_OS),Mac)
 #ifneq ($(shell python -c "import pysqlite2.dbapi2" 2> /dev/null; echo $$?),0)
 #ifneq ($(shell [ -d $(LIBPATH2) ]; echo $$?),0)
 #	@echo "run 'sudo make install' first"
