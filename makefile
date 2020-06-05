@@ -94,6 +94,13 @@ valgrind: export LIBFLAGS := -g -DSQLITE_DEBUG=1 $(DEBUGFLAGS) $(LIBFLAGS)
 
 OBJECTS = sqlite3.o plugin-no-leader.o
 
+
+# Static library
+libaergolite.a: $(OBJECTS)
+	$(AR) rcs $@ $^
+
+
+# Windows
 aergolite-0.1.dll: $(OBJECTS)
 	$(CC) -shared -Wl,--out-implib,$(IMPLIB).lib $^ -o $@ $(LFLAGS) -lbinn-3.0 -llibuv -lsecp256k1-vrf -lws2_32
 ifeq ($(MAKECMDGOALS),valgrind)
@@ -102,6 +109,7 @@ else
 	$(STRIP) $@
 endif
 
+# OSX
 libaergolite.0.dylib: $(OBJECTS)
 	$(CC) -dynamiclib -install_name "$(INSTNAME)" -current_version $(CURR_VERSION) -compatibility_version $(COMPAT_VERSION) $^ -o $@ $(LDFLAGS) -lbinn -luv -lsecp256k1-vrf -ldl
 ifeq ($(MAKECMDGOALS),valgrind)
@@ -114,9 +122,7 @@ endif
 	ln -sf $(LIBRARY) $(LIBNICK2)
 	ln -sf $(LIBRARY) $(LIBNICK3)
 
-libaergolite.a: $(OBJECTS)
-	$(AR) rcs $@ $^
-
+# iOS
 libaergolite.dylib: $(OBJECTS)
 	$(CC) -dynamiclib -o $@ $^ $(LDFLAGS) -lbinn -luv -lsecp256k1-vrf -ldl
 ifeq ($(MAKECMDGOALS),valgrind)
@@ -125,6 +131,7 @@ else
 	$(STRIP) -x $@
 endif
 
+# Linux / Unix
 libaergolite.so.0.0.1: $(OBJECTS)
 	$(CC) -shared -Wl,-soname,$(SONAME) $^ -o $@ $(LDFLAGS) -lbinn -luv -lsecp256k1-vrf -ldl
 ifeq ($(MAKECMDGOALS),valgrind)

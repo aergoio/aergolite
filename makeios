@@ -41,7 +41,7 @@ buildit()
     export STRIP="$(xcrun -sdk iphoneos -find strip)"
     export LD="$(xcrun -sdk iphoneos -find ld)"
     export CPP="$CC -E"
-    export CFLAGS="-arch ${target} -isysroot $PLATFORMPATH/$platform.platform/Developer/SDKs/$platform$SDKVERSION.sdk -miphoneos-version-min=$SDKMINVERSION -I../binn/src -I../libuv/include"
+    export CFLAGS="-arch ${target} -isysroot $PLATFORMPATH/$platform.platform/Developer/SDKs/$platform$SDKVERSION.sdk -miphoneos-version-min=$SDKMINVERSION -I../binn/src -I../libuv/include -I../secp256k1-vrf/include"
     export AR=$(xcrun -sdk iphoneos -find ar)
     export RANLIB=$(xcrun -sdk iphoneos -find ranlib)
     export CPPFLAGS="-arch ${target} -isysroot $PLATFORMPATH/$platform.platform/Developer/SDKs/$platform$SDKVERSION.sdk -miphoneos-version-min=$SDKMINVERSION"
@@ -64,9 +64,12 @@ cp ../binn/ios/libbinn.a .
 cp ../binn/ios/libbinn.dylib .
 cp ../libuv/ios/libuv.a .
 cp ../libuv/ios/libuv.1.dylib libuv.dylib
+cp ../secp256k1-vrf/ios/libsecp256k1-vrf.a .
+cp ../secp256k1-vrf/ios/libsecp256k1-vrf.dylib .
 
 install_name_tool -id @rpath/libuv.dylib libuv.dylib
 install_name_tool -id @rpath/libbinn.dylib libbinn.dylib
+install_name_tool -id @rpath/libsecp256k1-vrf.dylib libsecp256k1-vrf.dylib
 
 findLatestSDKVersion iPhoneOS
 SDKMINVERSION="8.0"
@@ -89,12 +92,15 @@ $LIPO -create $pwd/ios/armv7/libaergolite.dylib  $pwd/ios/armv7s/libaergolite.dy
 
 install_name_tool -id @rpath/libaergolite.dylib libaergolite.dylib
 
-cp libbinn.a $pwd/ios/
-cp libbinn.dylib $pwd/ios/
-cp libuv.a $pwd/ios/
-cp libuv.1.dylib libuv.dylib $pwd/ios/
-cp libaergolite.a $pwd/ios/
-cp libaergolite.dylib $pwd/ios/
+mv libbinn.a $pwd/ios/
+mv libbinn.dylib $pwd/ios/
+mv libuv.a $pwd/ios/
+mv libuv.1.dylib libuv.dylib $pwd/ios/
+mv libsecp256k1-vrf.a $pwd/ios/
+mv libsecp256k1-vrf.dylib $pwd/ios/
+mv libaergolite.a $pwd/ios/
+mv libaergolite.dylib $pwd/ios/
 make clean
 
-echo "done."
+echo ""
+echo "done. files in the ios folder"
