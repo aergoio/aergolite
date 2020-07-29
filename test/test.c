@@ -119,6 +119,7 @@ void delete_files(int n){
     unlinkf("db%d.db", i);
     unlinkf("db%d.db-loc", i);
     unlinkf("db%d.db-con", i);
+    unlinkf("db%d.db-rot", i);
     unlinkf("db%d.db-shm", i);
     unlinkf("db%d.db-state", i);
     unlinkf("db%d.db-state-wal", i);
@@ -2967,21 +2968,21 @@ loc_again1:
   }
 
 
-//  puts("waiting...");
-//  usleep(block_interval * 1000 * 2);
+  //puts("waiting...");
+  //usleep(block_interval * 1000 * 2);
 
 
   /* check whether at least some data was replicated to all the nodes */
 
-  for(i=3; i<=n; i++){
+  for(i=1; i<=n; i++){
     int result;
-    char *str;
+    //char *str;
 
     printf("checking node %d\n", i); fflush(stdout);
 
-    db_query_str(&str, db[i], "pragma blockchain_status");
-    puts(str);
-    sqlite3_free(str);
+    //db_query_str(&str, db[i], "pragma blockchain_status");
+    //puts(str);
+    //sqlite3_free(str);
 
     rc = db_query_int32(&result, db[i], "select count(*) from t1");
     assert(rc==SQLITE_OK);
@@ -3006,6 +3007,29 @@ loc_again1:
 
   }
 
+  /* wait until all the transactions are processed */
+
+  int num_rows = n * num_insertions;
+
+  for(i=1; i<=n; i++){
+
+    printf("checking node %d\n", i); fflush(stdout);
+
+    done = 0;
+    for(count=0; !done && count<100; count++){
+      int result;
+      if( count>0 ) usleep(wait_time);
+      rc = db_query_int32(&result, db[i], "select count(*) from t1");
+      assert(rc==SQLITE_OK);
+      done = (result==num_rows);
+    }
+    assert(done);
+
+    db_check_int(db[i], "select count(*) from t1", num_rows);
+    db_check_int(db[i], "select count(*) from t2", 0);
+    db_check_int(db[i], "select count(*) from t3", 0);
+
+  }
 
   for(i=1; i<=n; i++){
     sqlite3_close(db[i]);
@@ -3038,19 +3062,6 @@ int main(){
 //  test_n_nodes(100, true);
 
 
-  test_incoming_txn_visibility(
-    /* total nodes         */ 5,
-    /* txn interval        */ 1000,
-    /* block interval      */ 2000,
-    /* bind to random port */ true);
-
-  test_incoming_txn_visibility(
-    /* total nodes         */ 5,
-    /* txn interval        */ 500,
-    /* block interval      */ 1000,
-    /* bind to random port */ true);
-
-
   test_invalid_admin(12, 1, true, 500);
 
 
@@ -3074,6 +3085,19 @@ int main(){
     /* add from this node  */ 1,
     /* bind to random port */ true,
     /* block interval      */ 500);
+
+
+  test_incoming_txn_visibility(
+    /* total nodes         */ 5,
+    /* txn interval        */ 1000,
+    /* block interval      */ 2000,
+    /* bind to random port */ true);
+
+  test_incoming_txn_visibility(
+    /* total nodes         */ 5,
+    /* txn interval        */ 500,
+    /* block interval      */ 1000,
+    /* bind to random port */ true);
 
 
   test_reconnection(10, false, 500,
