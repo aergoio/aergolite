@@ -347,7 +347,7 @@ struct plugin {
   bool is_updating_state;
   int  contacted_node_id;
   void *state_update_contacted_nodes;
-  int  state_update_errors;
+  void *state_update_failed_nodes;
 
   int sync_down_state;        /* downstream synchronization state */
   int sync_up_state;          /* upstream synchronization state */

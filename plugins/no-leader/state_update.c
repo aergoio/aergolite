@@ -100,6 +100,7 @@ SQLITE_PRIVATE void state_update_finished(plugin *plugin){
   uv_timer_stop(&plugin->state_update_timer);
 
   array_free(&plugin->state_update_contacted_nodes);
+  array_free(&plugin->state_update_failed_nodes);
 
   plugin->contacted_node_id = 0;
 
@@ -138,8 +139,6 @@ SQLITE_PRIVATE void request_state_update(plugin *plugin) {
 
   plugin->sync_down_state = DB_STATE_SYNCHRONIZING;
 
-  plugin->state_update_errors = 0;
-
   request_state_update_next(plugin);
 
 }
@@ -169,7 +168,9 @@ SQLITE_PRIVATE void request_state_update_next(plugin *plugin) {
   struct node *node;
   int rc, count;
 
-  SYNCTRACE("request_state_update_next\n");
+  SYNCTRACE("request_state_update_next contacted=%d failed=%d\n",
+            array_count(plugin->state_update_contacted_nodes),
+            array_count(plugin->state_update_failed_nodes));
 
   assert( plugin->sync_down_state==DB_STATE_SYNCHRONIZING );
 
@@ -177,7 +178,7 @@ loc_next:
 
   /* check if majority of nodes were already contacted */
   count_authorized_nodes(plugin);  /* including off-line nodes */
-  count = array_count(plugin->state_update_contacted_nodes) - plugin->state_update_errors;
+  count = array_count(plugin->state_update_contacted_nodes) + 1;  /* including this node */
   if( count >= majority(plugin->total_authorized_nodes) ){
     SYNCTRACE("request_state_update_next - majority already contacted\n");
     state_update_finished(plugin);
@@ -188,12 +189,33 @@ loc_next:
   if( !plugin->state_update_contacted_nodes ){
     plugin->state_update_contacted_nodes = new_array(plugin->total_authorized_nodes, sizeof(int));
   }
+  /* create the array of failed nodes */
+  if( !plugin->state_update_failed_nodes ){
+    plugin->state_update_failed_nodes = new_array(plugin->total_authorized_nodes, sizeof(int));
+  }
 
   /* select a random connected node */
   node = select_random_connected_node_not_in_list(plugin, plugin->state_update_contacted_nodes);
   if( !node ){
+    count = array_count(plugin->state_update_failed_nodes);
+    if( count>0 ){
+      SYNCTRACE("request_state_update_next - retrying failed nodes\n");
+      /* remove the failed nodes from the list of contacted nodes */
+      int i;
+      for(i=0; i<count; i++){
+        int *pid = (int*) array_get(plugin->state_update_failed_nodes, i);
+        array_remove(&plugin->state_update_contacted_nodes, compare_int, pid);
+      }
+      /* clear the list of failed nodes */
+      array_clear(&plugin->state_update_failed_nodes);
+      /* retry the state update with the failed nodes */
+      goto loc_next;
+    }
     SYNCTRACE("request_state_update_next - no remaining nodes\n");
-    state_update_finished(plugin);
+    /* no failed nodes to retry */
+    plugin->contacted_node_id = 0;
+    /* activate the timer to connect to another node */
+    uv_timer_start(&plugin->state_update_timer, on_state_update_node_timeout, 1500, 0);
     return;
   }
 
@@ -205,7 +227,7 @@ loc_next:
   if( rc ) goto loc_next;
 
   /* activate the timer to wait for answer */
-  uv_timer_start(&plugin->state_update_timer, on_state_update_node_timeout, 3000, 0);
+  uv_timer_start(&plugin->state_update_timer, on_state_update_node_timeout, 9000, 0);
   // if the node answered with pages, restart the timer
   // if the node answered with finish, disable the timer
 
@@ -254,7 +276,8 @@ SQLITE_PRIVATE int request_state_update_to_node(plugin *plugin, node *to_node) {
 
 loc_failed:
   if( map ) binn_free(map);
-  plugin->state_update_errors++;
+  /* mark the node as failed */
+  array_append(&plugin->state_update_failed_nodes, &to_node->id);
   return SQLITE_ERROR;
 }
 
@@ -277,7 +300,10 @@ SQLITE_PRIVATE void on_state_update_node_timeout(uv_timer_t* handle) {
     plugin->is_updating_state = false;
   }
 
-  plugin->state_update_errors++;
+  if( plugin->contacted_node_id!=0 ){
+    /* mark the node as failed */
+    array_append(&plugin->state_update_failed_nodes, &plugin->contacted_node_id);
+  }
 
   request_state_update_next(plugin);
 
@@ -339,13 +365,14 @@ SQLITE_PRIVATE void on_update_db_page(node *node, void *msg, int size) {
   }
 
   /* update the timer to wait for the next message */
-  uv_timer_start(&plugin->state_update_timer, on_state_update_node_timeout, 3000, 0);
+  uv_timer_start(&plugin->state_update_timer, on_state_update_node_timeout, 9000, 0);
 
   return;
 
 loc_failed:
   plugin->is_updating_state = false;
-  plugin->state_update_errors++;
+  /* mark the node as failed */
+  array_append(&plugin->state_update_failed_nodes, &node->id);
   /* disable the timer */
   uv_timer_stop(&plugin->state_update_timer);
   /* check on next node */
@@ -443,11 +470,14 @@ loc_exit:
 loc_failed:
   SYNCTRACE("on_apply_state_update - FAILED\n");
   aergolite_cancel_state_update(this_node);
-  plugin->state_update_errors++;
+  /* mark the node as failed */
+  array_append(&plugin->state_update_failed_nodes, &node->id);
   goto loc_exit;
 
 loc_failed2:
   SYNCTRACE("on_apply_state_update - FAILED 2\n");
+  /* mark the node as failed */
+  array_append(&plugin->state_update_failed_nodes, &node->id);
   /* force to reload the current state */
   discard_block(plugin->current_block);
   plugin->current_block = NULL;

@@ -76,6 +76,12 @@ SQLITE_PRIVATE void * array_copy(void *array){
   return copy;
 }
 
+SQLITE_PRIVATE void array_clear(void *array){
+  uint16_t *pshort = (uint16_t *) array;
+  if( !array ) return;
+  pshort[2] = 0;          /* used items */
+}
+
 SQLITE_PRIVATE int array_count(void *array){
   uint16_t *pshort = (uint16_t *) array;
   if( !array ) return -1;
@@ -131,6 +137,30 @@ SQLITE_PRIVATE int array_find(void *array, int(*compare_fn)(void*,void*), void *
 
 SQLITE_PRIVATE BOOL in_array(void *array, int(*compare_fn)(void*,void*), void *item){
   return array_find(array,compare_fn,item) >= 0;
+}
+
+SQLITE_PRIVATE void array_remove(void *array, int(*compare_fn)(void*,void*), void *item){
+  uint16_t *pshort = (uint16_t *) array;
+  int item_size, used_items, pos, size;
+  char *base, *source, *dest;
+
+  pos = array_find(array, compare_fn, item);
+  if( pos<0 ) return;
+
+  item_size  = pshort[0];
+  used_items = pshort[2];
+  base       = (char*) &pshort[4];  /* array base */
+
+  assert( pos<used_items );
+
+  /* remove the item from the array */
+  dest   = base + (pos * item_size);
+  pos++;
+  source = base + (pos * item_size);
+  size   = (used_items - pos) * item_size;
+  memmove(dest, source, size);
+  /* update the used items */
+  pshort[2] = used_items - 1;
 }
 
 /* increases the array size automatically if needed */
