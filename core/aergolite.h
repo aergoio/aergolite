@@ -147,7 +147,6 @@ struct aergolite {
   int   wal_consensus_empty;  /* the state of the wal-consensus file */
 
   binn *processed_local_txns; /* local transactions processed on the blockchain */
-  void *current_log;          /* local transaction being re-executed on wal-rotation */
 
   BOOL   useSqliteRowids;     /* do not use node id in the rowids */
 
