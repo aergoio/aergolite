@@ -325,6 +325,7 @@ SQLITE_PRIVATE int check_page(aergolite *this_node, Pgno pgno, void *data, int s
 SQLITE_PRIVATE int read_block_header(
   aergolite *this_node,
   void *header,
+  int  *pnode_id,
   int64 *ptimestamp,
   int64 *pblock_height,
   char **ptxns_hash,

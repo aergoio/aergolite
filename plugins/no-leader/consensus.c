@@ -643,14 +643,14 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
   int64 height;
   void *header, *body;
   uchar id[32]={0};
-  int rc, prooflen, wait_time;
+  int rc, node_id, prooflen, wait_time;
 
   header = binn_map_blob(msg, PLUGIN_HEADER, NULL);
   body   = binn_map_blob(msg, PLUGIN_BODY, NULL);
   proof  = binn_map_blob(msg, PLUGIN_PROOF, &prooflen);
 
   /* verify the block header */
-  rc = aergolite_verify_block_header(this_node, header, body, &height, id);
+  rc = aergolite_verify_block_header(this_node, header, body, &node_id, &height, id);
 
   SYNCTRACE("on_new_block -%s height=%" INT64_FORMAT " id=%02X%02X%02X%02X "
             "wait_time=%d\n",
@@ -661,15 +661,15 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
 
   /* verify the VRF proof */
   if( proof && prooflen==81 ){
-    rc = verify_proof(plugin, height, node->id, proof, prooflen, vrf_output);
+    rc = verify_proof(plugin, height, node_id, proof, prooflen, vrf_output);
   }else{
     rc = SQLITE_ERROR;
   }
   if( rc ){
-    if( rc==SQLITE_INVALID ){
-      SYNCTRACE("on_new_block INVALID VRF PROOF\n");
-    }else{
+    if( rc==SQLITE_NOTFOUND ){
       SYNCTRACE("on_new_block INVALID NODE\n");
+    }else{
+      SYNCTRACE("on_new_block INVALID VRF PROOF\n");
     }
     return;
   }

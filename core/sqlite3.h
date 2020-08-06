@@ -11820,7 +11820,7 @@ AERGOLITE_API int aergolite_verify_block(aergolite *this_node, void *header, voi
 AERGOLITE_API int aergolite_commit_block(aergolite *this_node, void *header, void *body, void *votes);
 AERGOLITE_API int aergolite_apply_block(aergolite *this_node, void *header, void *body, void *votes);
 AERGOLITE_API int aergolite_rollback_block(aergolite *this_node);
-AERGOLITE_API int aergolite_verify_block_header(aergolite *this_node, void *header, void *body, int64 *pheight, void *id);
+AERGOLITE_API int aergolite_verify_block_header(aergolite *this_node, void *header, void *body, int *pnode_id, int64 *pheight, void *id);
 
 
 /*
