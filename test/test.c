@@ -10,7 +10,17 @@
 #define USE_NODE_TYPE      12
 #define USE_NODE_TYPE_ALL  13
 
+#ifdef __APPLE__
+#define BLOCK_INTERVAL   1000
+#else
+#define BLOCK_INTERVAL   3000
+#endif
+
+#ifdef __APPLE__
 const int wait_time = 150000;
+#else
+const int wait_time = 250000;
+#endif
 
 /*
 ** Private and public keys for the blockchain admin
@@ -3062,7 +3072,7 @@ int main(){
 //  test_n_nodes(100, true);
 
 
-  test_invalid_admin(12, 1, true, 500);
+  test_invalid_admin(12, 1, true, BLOCK_INTERVAL);
 
 
   test_add_nodes(
@@ -3070,37 +3080,37 @@ int main(){
     /* added at each time  */ 3,
     /* add from this node  */ 1,
     /* bind to random port */ true,
-    /* block interval      */ 500);
+    /* block interval      */ BLOCK_INTERVAL);
 
   test_add_nodes(
     /* total nodes         */ 12,
     /* added at each time  */ 4,
     /* add from this node  */ 2,
     /* bind to random port */ true,
-    /* block interval      */ 500);
+    /* block interval      */ BLOCK_INTERVAL);
 
   test_add_nodes(
     /* total nodes         */ 12,
     /* added at each time  */ 12,
     /* add from this node  */ 1,
     /* bind to random port */ true,
-    /* block interval      */ 500);
+    /* block interval      */ BLOCK_INTERVAL);
 
 
   test_incoming_txn_visibility(
     /* total nodes         */ 5,
-    /* txn interval        */ 1000,
-    /* block interval      */ 2000,
+    /* txn interval        */ BLOCK_INTERVAL / 2,
+    /* block interval      */ BLOCK_INTERVAL,
     /* bind to random port */ true);
 
   test_incoming_txn_visibility(
     /* total nodes         */ 5,
-    /* txn interval        */ 500,
-    /* block interval      */ 1000,
+    /* txn interval        */ BLOCK_INTERVAL / 4,
+    /* block interval      */ BLOCK_INTERVAL / 2,
     /* bind to random port */ true);
 
 
-  test_reconnection(10, false, 500,
+  test_reconnection(10, false, BLOCK_INTERVAL,
     /* full_nodes[]                */ (int[]){0},
     /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
@@ -3115,7 +3125,7 @@ int main(){
     /* exec_while_adding           */ false
   );
 
-  test_reconnection(10, false, 500,
+  test_reconnection(10, false, BLOCK_INTERVAL,
     /* full_nodes[]                */ (int[]){0},
     /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
@@ -3130,7 +3140,7 @@ int main(){
     /* exec_while_adding           */ false
   );
 
-  test_reconnection(10, false, 500,
+  test_reconnection(10, false, BLOCK_INTERVAL,
     /* full_nodes[]                */ (int[]){0},
     /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
@@ -3145,7 +3155,7 @@ int main(){
     /* exec_while_adding           */ false
   );
 
-  test_reconnection(10, false, 500,
+  test_reconnection(10, false, BLOCK_INTERVAL,
     /* full_nodes[]                */ (int[]){0},
     /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
@@ -3160,7 +3170,7 @@ int main(){
     /* exec_while_adding           */ false
   );
 
-  test_reconnection(10, false, 500,
+  test_reconnection(10, false, BLOCK_INTERVAL,
     /* full_nodes[]                */ (int[]){0},
     /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
@@ -3176,7 +3186,7 @@ int main(){
   );
 
   /* all light nodes */
-  test_reconnection(10, false, 500,
+  test_reconnection(10, false, BLOCK_INTERVAL,
     /* full_nodes[]                */ (int[]){0},
     /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
@@ -3192,7 +3202,7 @@ int main(){
   );
 
   /* all full nodes - using add_node */
-  test_reconnection(10, false, 500,
+  test_reconnection(10, false, BLOCK_INTERVAL,
     /* full_nodes[]                */ (int[]){1,2,3,4,5,6,7,8,9,10,0},
     /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
@@ -3208,7 +3218,7 @@ int main(){
   );
 
   /* all full nodes - using node_type */
-  test_reconnection(10, false, 500,
+  test_reconnection(10, false, BLOCK_INTERVAL,
     /* full_nodes[]                */ (int[]){1,2,3,4,5,6,7,8,9,10,0},
     /* node_type_setting,          */ USE_NODE_TYPE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
@@ -3224,7 +3234,7 @@ int main(){
   );
 
   /* all full nodes - using node_type=* */
-  test_reconnection(10, false, 500,
+  test_reconnection(10, false, BLOCK_INTERVAL,
     /* full_nodes[]                */ (int[]){1,2,3,4,5,6,7,8,9,10,0},
     /* node_type_setting,          */ USE_NODE_TYPE_ALL,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
@@ -3240,7 +3250,7 @@ int main(){
   );
 
   /* some full nodes - using node_type */
-  test_reconnection(10, false, 500,
+  test_reconnection(10, false, BLOCK_INTERVAL,
     /* full_nodes[]                */ (int[]){1,5,10,0},
     /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
@@ -3256,7 +3266,7 @@ int main(){
   );
 
   /* some full nodes - using node_type */
-  test_reconnection(10, false, 500,
+  test_reconnection(10, false, BLOCK_INTERVAL,
     /* full_nodes[]                */ (int[]){1,5,10,0},
     /* node_type_setting,          */ USE_NODE_TYPE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,0},
@@ -3271,7 +3281,7 @@ int main(){
     /* exec_while_adding           */ false
   );
 
-  test_reconnection(25, false, 1000,
+  test_reconnection(25, false, BLOCK_INTERVAL,
     /* full_nodes[]                */ (int[]){2,10,20,0},
     /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,0},
@@ -3286,7 +3296,7 @@ int main(){
     /* exec_while_adding           */ false
   );
 
-  test_reconnection(25, false, 1000,   // majority disconnected
+  test_reconnection(25, false, BLOCK_INTERVAL,   // majority disconnected
     /* full_nodes[]                */ (int[]){0},
     /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,4,6,8,10,12,14,16,18,20,22,23,24,0},
@@ -3301,7 +3311,7 @@ int main(){
     /* exec_while_adding           */ false
   );
 
-  test_reconnection(25, false, 1000,   // all disconnected - node 2 reconnects first
+  test_reconnection(25, false, BLOCK_INTERVAL,   // all disconnected - node 2 reconnects first
     /* full_nodes[]                */ (int[]){0},
     /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,1,0},
@@ -3316,7 +3326,7 @@ int main(){
     /* exec_while_adding           */ false
   );
 
-  test_reconnection(25, false, 1000,   // all disconnected - main nodes reconnect later
+  test_reconnection(25, false, BLOCK_INTERVAL,   // all disconnected - main nodes reconnect later
     /* full_nodes[]                */ (int[]){0},
     /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0},
@@ -3331,7 +3341,7 @@ int main(){
     /* exec_while_adding           */ false
   );
 
-  test_reconnection(25, false, 1000,   // all disconnected - main nodes reconnect in the middle
+  test_reconnection(25, false, BLOCK_INTERVAL,   // all disconnected - main nodes reconnect in the middle
     /* full_nodes[]                */ (int[]){0},
     /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){25,24,23,22,21,20,19,18,17,2,16,15,14,13,1,12,11,10,9,8,7,6,5,4,3,0},
@@ -3347,7 +3357,7 @@ int main(){
   );
 
 #if 0
-  test_reconnection(50, false, 1000,
+  test_reconnection(50, false, 2*BLOCK_INTERVAL,
     /* full_nodes[]                */ (int[]){0},
     /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,0},
@@ -3362,7 +3372,7 @@ int main(){
     /* exec_while_adding           */ false
   );
 
-  test_reconnection(50, false, 1000,
+  test_reconnection(50, false, 2*BLOCK_INTERVAL,
     /* full_nodes[]                */ (int[]){1,10,20,30,0},
     /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){2,4,7,10,15,20,23,33,37,38,44,49,0},
@@ -3377,7 +3387,7 @@ int main(){
     /* exec_while_adding           */ false
   );
 
-  test_reconnection(50, false, 1000,
+  test_reconnection(50, false, 2*BLOCK_INTERVAL,
     /* full_nodes[]                */ (int[]){1,10,20,30,0},
     /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){49,44,38,37,33,23,20,15,10,7,4,2,0},
@@ -3392,7 +3402,7 @@ int main(){
     /* exec_while_adding           */ false
   );
 
-  test_reconnection(50, false, 1000,  // majority disconnected
+  test_reconnection(50, false, 2*BLOCK_INTERVAL,  // majority disconnected
     /* full_nodes[]                */ (int[]){2,10,20,30,0},
     /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){50,48,46,44,42,40,38,36,34,32,30,28,26,24,22,20,18,16,14,12,10,8,6,4,2,0},
@@ -3407,7 +3417,7 @@ int main(){
     /* exec_while_adding           */ false
   );
 
-  test_reconnection(50, false, 1000,  // all disconnected
+  test_reconnection(50, false, 2*BLOCK_INTERVAL,  // all disconnected
     /* full_nodes[]                */ (int[]){2,10,20,30,0},
     /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){50,49,48,47,46,45,44,43,42,41,40,39,38,37,36,35,34,33,32,31,30,29,28,27,26,25,1,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,0},
@@ -3422,7 +3432,7 @@ int main(){
     /* exec_while_adding           */ false
   );
 
-  test_reconnection(50, false, 1000,
+  test_reconnection(50, false, 2*BLOCK_INTERVAL,
     /* full_nodes[]                */ (int[]){2,10,20,30,0},
     /* node_type_setting,          */ USE_ADD_NODE,
     /* disconnect_nodes[]          */ (int[]){49,44,38,37,33,23,20,15,10,7,4,2,0},
@@ -3526,7 +3536,7 @@ int main(){
   test_new_nodes(
     /* n_before,              */ 10,
     /* bind_to_random_ports,  */ true,
-    /* block interval         */ 500,
+    /* block interval         */ BLOCK_INTERVAL,
     /* starting_node,         */ 2,
     /* n_new_no_content,      */ 1,
     /* n_new_with_content,    */ 1,
@@ -3544,7 +3554,7 @@ int main(){
   test_new_nodes( /* total_nodes=14 */
     /* n_before,              */ 10,
     /* bind_to_random_ports,  */ true,
-    /* block interval         */ 500,
+    /* block interval         */ BLOCK_INTERVAL,
     /* starting_node,         */ 2,
     /* n_new_no_content,      */ 1,
     /* n_new_with_content,    */ 1,
@@ -3561,7 +3571,7 @@ int main(){
   test_new_nodes( /* total_nodes=14 */
     /* n_before,              */ 10,
     /* bind_to_random_ports,  */ true,
-    /* block interval         */ 500,
+    /* block interval         */ BLOCK_INTERVAL,
     /* starting_node,         */ 2,
     /* n_new_no_content,      */ 1,
     /* n_new_with_content,    */ 1,
