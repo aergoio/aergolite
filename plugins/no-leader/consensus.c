@@ -659,6 +659,8 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
 
   if( rc ) return;
 
+  assert( header && body && proof && prooflen>0 );
+
   /* verify the VRF proof */
   if( proof && prooflen==81 ){
     rc = verify_proof(plugin, height, node_id, proof, prooflen, vrf_output);
@@ -706,6 +708,7 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
   /* store the new block data */
   memcpy(block->id, id, 32);
   memcpy(block->vrf_output, vrf_output, sizeof block->vrf_output);
+  memcpy(block->vrf_proof, proof, sizeof block->vrf_proof);
   block->height = height;
   block->header = sqlite3_memdup(header, binn_size(header));
   block->body   = sqlite3_memdup(body,   binn_size(body));
