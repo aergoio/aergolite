@@ -1677,7 +1677,7 @@ SQLITE_PRIVATE void node_thread(void *arg) {
 #if TARGET_OS_IPHONE
   /* initialize a callback to receive notifications from the main thread */
   uv_callback_init(&loop, &plugin->worker_cb, worker_thread_on_thread_message, UV_DEFAULT);
-  plugin->worker_cb.data = this_node;
+  plugin->worker_cb.data = plugin;
 #else
   /* create a socket to communicate with the caller thread */
   rc = uv_msg_init(&loop, &insock, UV_NAMED_PIPE);
