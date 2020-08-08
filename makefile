@@ -18,17 +18,17 @@ else
 endif
 
 ifeq ($(TARGET_OS),Windows)
-    CFLAGS   = -I../libuv/include -I../binn/src
+    CFLAGS   = -I../libuv/include -I../binn/src -DUSE_UV_CALLBACK
     LFLAGS   = -L../libuv/.libs -L../binn
     IMPLIB   = aergolite-0.1
     LIBRARY  = aergolite-0.1.dll
     LDFLAGS  += -static-libgcc -static-libstdc++
 else ifeq ($(TARGET_OS),iPhoneOS)
     LIBRARY = libaergolite.dylib
-    CFLAGS += -fPIC -fvisibility=hidden
+    CFLAGS += -fPIC -fvisibility=hidden -DUSE_UV_CALLBACK
 else ifeq ($(TARGET_OS),iPhoneSimulator)
     LIBRARY = libaergolite.dylib
-    CFLAGS += -fPIC -fvisibility=hidden
+    CFLAGS += -fPIC -fvisibility=hidden -DUSE_UV_CALLBACK
 else
     ifeq ($(TARGET_OS),Mac)
         LIBRARY  = libaergolite.0.dylib

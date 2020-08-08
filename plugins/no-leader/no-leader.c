@@ -1059,7 +1059,7 @@ SQLITE_PRIVATE void worker_thread_on_close(uv_handle_t *handle) {
   default:  /* also to avoid compiler warning about not listed enum elements */
     SYNCTRACE("worker_thread_on_(handle)_close - UNKNOWN TYPE: (%d) %s\n",
               handle->type, uv_handle_type_name(handle->type));
-#if TARGET_OS_IPHONE
+#ifdef USE_UV_CALLBACK
     //if (uv_is_callback(handle)) {
     //  uv_callback_release((uv_callback_t*) handle);
     //}
@@ -1222,13 +1222,12 @@ SQLITE_PRIVATE void worker_thread_on_peer_message(uv_msg_t *stream, void *msg, i
 
 /****************************************************************************/
 
-#if TARGET_OS_IPHONE
+#ifdef USE_UV_CALLBACK
 
 SQLITE_PRIVATE void* worker_thread_on_thread_message(uv_callback_t *callback, void *data) {
   plugin *plugin = callback->data;
-  int cmd, size = sizeof(int);
-
-  cmd = (int)data;
+  uintptr_t cmd = (uintptr_t)data;
+  int size = sizeof(uintptr_t);
 
 #else
 
@@ -1268,14 +1267,14 @@ SQLITE_PRIVATE void worker_thread_on_thread_message(uv_msg_t *stream, void *msg,
    }
   }
 
-#if TARGET_OS_IPHONE
+#ifdef USE_UV_CALLBACK
   return NULL;
 #endif
 }
 
 /****************************************************************************/
 
-#if !defined(TARGET_OS_IPHONE) || TARGET_OS_IPHONE==0
+#ifndef USE_UV_CALLBACK
 
 SQLITE_PRIVATE void worker_thread_on_pipe_connection(uv_stream_t *server, int status) {
   uv_msg_t *client;
@@ -1641,7 +1640,7 @@ SQLITE_PRIVATE void node_thread(void *arg) {
   plugin *plugin = (struct plugin *) arg;
   aergolite *this_node;
   uv_loop_t loop;
-#if !defined(TARGET_OS_IPHONE) || TARGET_OS_IPHONE==0
+#ifndef USE_UV_CALLBACK
   uv_msg_t insock;
 #endif
   struct tcp_address *address;
@@ -1674,7 +1673,7 @@ SQLITE_PRIVATE void node_thread(void *arg) {
   register_tcp_message("node_info", on_peer_info_changed);
 
 
-#if TARGET_OS_IPHONE
+#ifdef USE_UV_CALLBACK
   /* initialize a callback to receive notifications from the main thread */
   uv_callback_init(&loop, &plugin->worker_cb, worker_thread_on_thread_message, UV_DEFAULT);
   plugin->worker_cb.data = plugin;
@@ -1798,7 +1797,7 @@ loc_exit:
   //uv_timer_stop(&plugin->log_rotation_timer);
   //uv_close2((uv_handle_t *) &plugin->log_rotation_timer, NULL);
 
-#if TARGET_OS_IPHONE
+#ifdef USE_UV_CALLBACK
   //uv_callback_stop(&plugin->worker_cb);
   uv_callback_stop_all(&loop);
 #else
@@ -2166,7 +2165,7 @@ void * plugin_init(aergolite *this_node, char *uri) {
     sqlite3_randomness(sizeof(int64), &random_no);
   } while (random_no==0);
 
-#if TARGET_OS_IPHONE
+#ifdef USE_UV_CALLBACK
   /* it is done in the node_thread */
 #elif defined(_WIN32)
   sprintf(plugin->worker_address, "\\\\?\\pipe\\aergolite%" UINT64_FORMAT, random_no);
@@ -2183,7 +2182,7 @@ void * plugin_init(aergolite *this_node, char *uri) {
   unlink(plugin->worker_address);
 #endif
 
-#if !defined(TARGET_OS_IPHONE) || TARGET_OS_IPHONE==0
+#ifndef USE_UV_CALLBACK
   SYNCTRACE("worker thread socket address: %s\n", plugin->worker_address);
 #endif
 

@@ -17,7 +17,7 @@ SQLITE_PRIVATE void free_buffer(uv_handle_t* handle, void* ptr) {
   sqlite3_free(ptr);
 }
 
-#if TARGET_OS_IPHONE
+#ifdef USE_UV_CALLBACK
 /* functions bellow not used */
 #else
 
@@ -93,7 +93,7 @@ loc_failed:
 #endif
 
 SQLITE_PRIVATE int send_request_to_worker(plugin *plugin, void *data, int size, uv_buf_t *response){
-#if TARGET_OS_IPHONE
+#ifdef USE_UV_CALLBACK
   /*
   void *ptr = sqlite3_memdup(data, size);
   if( ptr ){
@@ -104,7 +104,7 @@ SQLITE_PRIVATE int send_request_to_worker(plugin *plugin, void *data, int size, 
   }
   */
   if( plugin->thread_running ){
-    int cmd = *(int*)data;
+    uintptr_t cmd = *(uintptr_t*)data;
     SYNCTRACE("send_request_to_worker: 0x%x\n", cmd);
     uv_callback_fire(&plugin->worker_cb, (void*)cmd, NULL);
   }else{
@@ -131,7 +131,7 @@ SQLITE_PRIVATE int send_request_to_worker(plugin *plugin, void *data, int size, 
   /* save the pointer to the response buffer struct in the socket */
   socket.data = response;
 
-  SYNCTRACE("send_request - connecting...\n");
+  SYNCTRACE("send_request - connecting to %s\n", address);
   uv_pipe_connect(&connect, (uv_pipe_t*)&socket, address, send_request_on_connect);
 
   SYNCTRACE("send_request - running event loop\n");

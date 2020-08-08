@@ -1,7 +1,7 @@
 #include <stdbool.h>
 #include "../common/uv_msg_framing.c"
 #include "../common/uv_send_message.c"
-#if TARGET_OS_IPHONE
+#ifdef USE_UV_CALLBACK
 #include "../common/uv_callback.c"
 #endif
 #include "../../core/sqlite3.h"
@@ -318,7 +318,7 @@ struct plugin {
   unsigned char block_vrf_proof[81];
   unsigned char block_vrf_output[32];
 
-#if TARGET_OS_IPHONE
+#ifdef USE_UV_CALLBACK
   uv_callback_t worker_cb;    /* callback handle to send msg to the worker thread */
 #else
   char worker_address[64];    /* unix socket or named pipe address for the worker thread */
