@@ -425,6 +425,7 @@ SQLITE_PRIVATE void reset_node_state(plugin *plugin){
 /****************************************************************************/
 
 SQLITE_PRIVATE void discard_block(struct block *block) {
+  int round;
 
   SYNCTRACE("discard_block\n");
 
@@ -433,6 +434,16 @@ SQLITE_PRIVATE void discard_block(struct block *block) {
   if( block->header ) sqlite3_free(block->header);
   if( block->body   ) sqlite3_free(block->body  );
   if( block->votes  )    binn_free(block->votes );
+
+  for(round=0; round<=1; round++){
+    while( block->temp_votes[round] ){
+      struct block_vote *next;
+      next = block->temp_votes[round]->next;
+      sqlite3_free(block->temp_votes[round]);
+      block->temp_votes[round] = next;
+    }
+  }
+
   sqlite3_free(block);
 
 }

@@ -104,7 +104,8 @@
 #define PLUGIN_BODY                0xC0DE807
 #define PLUGIN_MOD_PAGES           0xC0DE808
 #define PLUGIN_HASH                0xC0DE809
-#define PLUGIN_VOTES               0xC0DE80A
+#define PLUGIN_ROUND               0xC0DE80A
+#define PLUGIN_VOTES               0xC0DE80B
 
 #define PLUGIN_PROOF               0xC0DE901
 
@@ -242,6 +243,15 @@ struct transaction {
 };
 
 #ifndef AERGOLITE_AMALGAMATION
+struct block_vote {
+  struct block_vote *next;
+  int   node_id;
+  int   round;
+  int64 height;
+  uchar block_id[32];
+  uchar sig[64];
+};
+
 struct block {
   struct block *next;
   int64 height;
@@ -252,18 +262,11 @@ struct block {
   unsigned char vrf_proof[81];
   unsigned char vrf_output[32];
   unsigned int wait_time;
-  int  num_votes;
+  struct block_vote *temp_votes[2];
+  int  num_votes[2];
   int  downloading_txns;
 };
 #endif
-
-struct block_vote {
-  struct block_vote *next;
-  int   node_id;
-  int64 height;
-  uchar block_id[32];
-  uchar sig[64];
-};
 
 struct txn_list {
   struct txn_list *next;
@@ -312,6 +315,7 @@ struct plugin {
   struct block_vote *block_votes;
   int64  last_created_block_height;
   int64  last_vote_height;
+  int    last_vote_round;
 
   int block_interval;
 

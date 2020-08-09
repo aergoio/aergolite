@@ -47,6 +47,17 @@ struct block {
 };
 */
 
+#ifdef AERGOLITE_AMALGAMATION
+struct block_vote {
+  struct block_vote *next;
+  int   node_id;
+  int   round;
+  int64 height;
+  uchar block_id[32];
+  uchar sig[64];
+};
+#endif
+
 /*
 ** The blobs are returned as binn buffers. They have the size on them,
 ** which can retrieved using binn_size()
@@ -66,7 +77,8 @@ struct block {
   unsigned char vrf_proof[81];
   unsigned char vrf_output[32];
   unsigned int  wait_time;
-  int  num_votes;
+  struct block_vote *temp_votes[2];
+  int  num_votes[2];
   int  downloading_txns;
 #endif
 };

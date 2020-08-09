@@ -1,6 +1,6 @@
 
-SQLITE_PRIVATE void choose_block_to_vote(plugin *plugin);
-SQLITE_PRIVATE void check_for_winner_block(plugin *plugin);
+SQLITE_PRIVATE void choose_block_to_vote(plugin *plugin, int round);
+SQLITE_PRIVATE void check_for_winner_block(plugin *plugin, int round);
 SQLITE_PRIVATE int  commit_block(plugin *plugin, struct block *block);
 
 /****************************************************************************/
@@ -43,7 +43,7 @@ SQLITE_PRIVATE bool process_arrived_transaction(plugin *plugin, struct transacti
     /* has the block wait timer already expired? */
     if( !uv_is_active((uv_handle_t*)&plugin->block_wait_timer) ){
       /* is there a winner block? does it have all the txns? */
-      choose_block_to_vote(plugin);
+      choose_block_to_vote(plugin, 0);
     }
   }
 
@@ -120,33 +120,88 @@ loc_again:
 /****************************************************************************/
 
 /*
+** converts the votes to a serialized format
+** the round information is optional
+**
 ** votes = [ [node_id,sig] , [node_id,sig] , [node_id,sig] ]
 */
-SQLITE_PRIVATE bool add_block_vote(struct block *block, int node_id, void *sig){
+SQLITE_PRIVATE int convert_block_vote(struct block *block, int round, int node_id, void *sig){
   binn_iter iter;
   binn vote, *item;
 
-  SYNCTRACE("add_block_vote\n");
+  SYNCTRACE("convert_block_vote\n");
 
   if( !block->votes ){
     block->votes = binn_list();
-    if( !block->votes ) return false;
+    if( !block->votes ) return SQLITE_NOMEM;
   }
 
+#if 0
   /* check if the vote is already stored */
   binn_list_foreach(block->votes, vote){
-    int vote_node_id;
+    int vote_node_id, vote_round;
     assert( vote.type==BINN_LIST );
     vote_node_id = binn_list_int32(&vote, 1);
-    if( vote_node_id==node_id ) return false;
+    vote_round = binn_list_int32(&vote, 3);
+    if( vote_node_id==node_id && vote_round==round ) return SQLITE_OK;
   }
+#endif
 
   /* add it to the list */
   item = binn_list();
-  binn_list_add_int32(item, node_id);
-  binn_list_add_blob(item, sig, 64);  //siglen);
-  binn_list_add_list(block->votes, item);
+  if( binn_list_add_int32(item, node_id)==FALSE ) goto loc_failed;
+  if( binn_list_add_blob(item, sig, 64)==FALSE ) goto loc_failed;
+  if( round>0 ){
+    if( binn_list_add_int32(item, round)==FALSE ) goto loc_failed;
+  }
+  if( binn_list_add_list(block->votes, item)==FALSE ) goto loc_failed;
   binn_free(item);
+
+  return SQLITE_OK;
+
+loc_failed:
+  binn_free(item);
+  return SQLITE_NOMEM;
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void convert_block_votes(struct block *block, int round){
+  struct block_vote *vote;
+
+  assert( round==0 || round==1 );
+
+  for( vote=block->temp_votes[round]; vote; vote=vote->next ){
+    convert_block_vote(block, round, vote->node_id, vote->sig);
+  }
+
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE bool add_block_vote(struct block *block, int round, int node_id, void *sig){
+  struct block_vote *vote;
+
+  SYNCTRACE("add_block_vote\n");
+
+  assert( round==0 || round==1 );
+
+  /* check if the vote is already stored */
+  for( vote=block->temp_votes[round]; vote; vote=vote->next ){
+    if( vote->node_id==node_id ){
+      return false;
+    }
+  }
+
+  /* store the new vote */
+
+  vote = sqlite3_malloc_zero(sizeof(struct block_vote));
+  if( !vote ) return false;
+
+  vote->node_id = node_id;
+  memcpy(vote->sig, sig, 64);
+
+  llist_add(&block->temp_votes[round], vote);
 
   return true;
 }
@@ -157,7 +212,7 @@ SQLITE_PRIVATE bool add_block_vote(struct block *block, int node_id, void *sig){
 ** Store the votes temporarily while the block does not arrive
 */
 SQLITE_PRIVATE void store_block_vote(
-  plugin *plugin, int node_id, int64 height, uchar *block_id, void *sig, int siglen
+  plugin *plugin, int node_id, int64 height, int round, uchar *block_id, void *sig, int siglen
 ){
   struct block_vote *vote;
 
@@ -166,7 +221,7 @@ SQLITE_PRIVATE void store_block_vote(
   /* check if the vote is already stored */
   for( vote=plugin->block_votes; vote; vote=vote->next ){
     if( vote->height==height && memcmp(vote->block_id,block_id,32)==0 &&
-        vote->node_id==node_id ){
+        vote->node_id==node_id && vote->round==round ){
       return;
     }
   }
@@ -177,6 +232,7 @@ SQLITE_PRIVATE void store_block_vote(
   if( !vote ) return;
 
   vote->height = height;
+  vote->round = round;
   vote->node_id = node_id;
   memcpy(vote->block_id, block_id, 32);
   memcpy(vote->sig, sig, siglen);
@@ -194,8 +250,8 @@ SQLITE_PRIVATE void transfer_block_votes(plugin *plugin, struct block *block){
 
   for( vote=plugin->block_votes; vote; vote=vote->next ){
     if( vote->height==block->height && memcmp(vote->block_id,block->id,32)==0 ){
-      if( add_block_vote(block,vote->node_id,vote->sig) ){
-        block->num_votes++;
+      if( add_block_vote(block,vote->round,vote->node_id,vote->sig) ){
+        block->num_votes[vote->round]++;
       }
     }
   }
@@ -488,7 +544,7 @@ SQLITE_PRIVATE int apply_block(plugin *plugin, struct block *block){
 
 /****************************************************************************/
 
-SQLITE_PRIVATE void vote_on_block(plugin *plugin, struct block *block) {
+SQLITE_PRIVATE void vote_on_block(plugin *plugin, int round, struct block *block) {
   aergolite *this_node = plugin->this_node;
   char sig[64];
   struct node *node;
@@ -499,13 +555,16 @@ SQLITE_PRIVATE void vote_on_block(plugin *plugin, struct block *block) {
             "id=%02X%02X%02X%02X\n", block->height, block->wait_time,
             block->id[0], block->id[1], block->id[2], block->id[3]);
 
+  assert( round==0 || round==1 );
+
   /* sign the vote on this block */
+//! and round
   rc = aergolite_sign_raw(this_node, block->id, sig, &siglen);
   if( rc ) return;
 
   /* vote from this node */
-  if( add_block_vote(block,plugin->node_id,sig) ){
-    block->num_votes++;
+  if( add_block_vote(block,round,plugin->node_id,sig) ){
+    block->num_votes[round]++;
   }else{
     SYNCTRACE("vote_on_block - ALREADY VOTED\n");
     return;
@@ -513,12 +572,14 @@ SQLITE_PRIVATE void vote_on_block(plugin *plugin, struct block *block) {
 
   /* flag that this node already voted on this round */
   plugin->last_vote_height = block->height;
+  plugin->last_vote_round = round;
 
   /* broadcast the block vote message */
   map = binn_map();
   if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_BLOCK_VOTE)==FALSE ) goto loc_exit;
   if( binn_map_set_int64(map, PLUGIN_HEIGHT, block->height)==FALSE ) goto loc_exit;
   if( binn_map_set_int32(map, PLUGIN_NODE_ID, plugin->node_id)==FALSE ) goto loc_exit;
+  if( binn_map_set_int32(map, PLUGIN_ROUND, round)==FALSE ) goto loc_exit;
   if( binn_map_set_blob(map, PLUGIN_HASH, block->id, 32)==FALSE ) goto loc_exit;
   if( binn_map_set_blob(map, PLUGIN_SIGNATURE, sig, siglen)==FALSE ) goto loc_exit;
   for( node=plugin->peers; node; node=node->next ){
@@ -533,15 +594,17 @@ loc_exit:
 
 /****************************************************************************/
 
-SQLITE_PRIVATE void choose_block_to_vote(plugin *plugin){
+SQLITE_PRIVATE void choose_block_to_vote(plugin *plugin, int round){
   struct block *block, *winner, *excluded=NULL;
   int64 current_height = plugin->current_block ? plugin->current_block->height : 0;
   int rc;
 
-  SYNCTRACE("choose_block_to_vote\n");
+  SYNCTRACE("choose_block_to_vote height=%" INT64_FORMAT " round=%d\n",
+            current_height+1, round+1);
 
   /* has this node already voted on this round? */
-  if( plugin->last_vote_height==current_height+1 ) return;
+  if( plugin->last_vote_height==current_height+1 &&
+      plugin->last_vote_round==round ) return;
 
   /* is it applying a state update? (some pages sent) */
   if( plugin->is_updating_state ) return;
@@ -587,7 +650,7 @@ loc_again:
       }
     }
     /* the block is OK */
-    vote_on_block(plugin, winner);
+    vote_on_block(plugin, round, winner);
   }
 
 loc_exit:
@@ -601,7 +664,7 @@ loc_exit:
   }
 
   /* is there already a winner block? */
-  check_for_winner_block(plugin);
+  check_for_winner_block(plugin, round);
 
 }
 
@@ -614,7 +677,7 @@ SQLITE_PRIVATE void on_block_wait_timeout(uv_timer_t* handle) {
 
   uv_timer_stop(&plugin->new_block_timer);
 
-  choose_block_to_vote(plugin);
+  choose_block_to_vote(plugin, 0);
 
 }
 
@@ -746,7 +809,7 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
   if( rc ) return;
 
   /* sometimes the block arrives after the votes */
-  check_for_winner_block(plugin);
+  check_for_winner_block(plugin, 0);
 
 }
 
@@ -755,12 +818,16 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
 // is there a winner block?
 // if yes, does it have all the txns locally?
 
-SQLITE_PRIVATE void check_for_winner_block(plugin *plugin) {
+SQLITE_PRIVATE void check_for_winner_block(plugin *plugin, int round) {
   int64 current_height = plugin->current_block ? plugin->current_block->height : 0;
   struct block *block;
-  int rc;
+  int rc, total_votes=0, remaining_votes;
 
   SYNCTRACE("check_for_winner_block\n");
+
+  assert( round==0 || round==1 );
+
+  if( !plugin->new_blocks ) return;
 
   /* is it applying a state update? (some pages sent) */
   if( plugin->is_updating_state ) return;
@@ -768,11 +835,12 @@ SQLITE_PRIVATE void check_for_winner_block(plugin *plugin) {
   for( block=plugin->new_blocks; block; block=block->next ){
     /* check if the block reached the majority of the votes */
     if( block->height==current_height+1 &&
-        block->num_votes >= majority(plugin->total_authorized_nodes) ){
+        block->num_votes[round] >= majority(plugin->total_authorized_nodes) ){
 
       /* commit the new block on this node */
       /* is the winning block open? */
       if( block==plugin->open_block ){
+        convert_block_votes(block, round);
         commit_block(plugin, block);
       }else{
         if( plugin->open_block ){
@@ -782,11 +850,48 @@ SQLITE_PRIVATE void check_for_winner_block(plugin *plugin) {
         rc = check_block_transactions(plugin, block);
         if( rc ) return;  /* transaction not present on mempool */
         /* verify and commit the winner block */
+        convert_block_votes(block, round);
         apply_block(plugin, block);
       }
 
-      break;
+      return;
     }
+  }
+
+  /* no block with sufficient votes */
+  if( round==1 ) return;
+  /* has this node already voted on the second round? */
+  if( plugin->last_vote_height==current_height+1 &&
+      plugin->last_vote_round==1 ) return;
+
+  /* count the total number of votes */
+  for( block=plugin->new_blocks; block; block=block->next ){
+    if( block->height==current_height+1 ){
+      total_votes += block->num_votes[round];
+    }
+  }
+
+#if 0
+  if( total_votes==plugin->total_authorized_nodes ){
+    start_new_voting_round(plugin);
+  }
+#endif
+
+  remaining_votes = plugin->total_authorized_nodes - total_votes;
+
+  /* check if some block can still reach the majority of votes */
+  for( block=plugin->new_blocks; block; block=block->next ){
+    if( block->height==current_height+1 ){
+      int possible_votes = block->num_votes[round] + remaining_votes;
+      if( possible_votes >= majority(plugin->total_authorized_nodes) ){
+        return;
+      }
+    }
+  }
+
+  /* start a new voting round */
+  if( !uv_is_active((uv_handle_t*)&plugin->block_wait_timer) ){
+    choose_block_to_vote(plugin, 1);
   }
 
 }
@@ -800,19 +905,21 @@ SQLITE_PRIVATE void on_block_vote(node *source_node, void *msg, int size) {
   int64 height;
   unsigned char *id;
   char *sig;
-  int rc, node_id, idlen, siglen;
+  int rc, node_id, round, idlen, siglen;
 
   height = binn_map_int64(msg, PLUGIN_HEIGHT);
   node_id = binn_map_int32(msg, PLUGIN_NODE_ID);
+  round = binn_map_int32(msg, PLUGIN_ROUND);
   id = binn_map_blob(msg, PLUGIN_HASH, &idlen);
   sig = binn_map_blob(msg, PLUGIN_SIGNATURE, &siglen);
 
-  SYNCTRACE("on_block_vote - height=%" INT64_FORMAT " id=%02X%02X%02X%02X\n",
-            height, *id, *(id+1), *(id+2), *(id+3));
+  SYNCTRACE("on_block_vote - height=%" INT64_FORMAT " id=%02X%02X%02X%02X round=%d\n",
+            height, *id, *(id+1), *(id+2), *(id+3), round+1);
 
-  if( idlen!=32 || siglen!=64 ) return;
+  if( idlen!=32 || siglen!=64 || round<0 || round>1 ) return;
 
   /* verify the signature on the vote */
+//! check sig on round too
   rc = aergolite_verify_raw(this_node, id, NULL, node_id, sig, siglen);
   if( rc ) return;
 
@@ -827,7 +934,7 @@ SQLITE_PRIVATE void on_block_vote(node *source_node, void *msg, int size) {
     SYNCTRACE("on_block_vote - BLOCK NOT FOUND\n");
     if( height>current_height ){
       /* store the vote for this block */
-      store_block_vote(plugin, node_id, height, id, sig, siglen);
+      store_block_vote(plugin, node_id, height, round, id, sig, siglen);
       //if( plugin->sync_down_state==DB_STATE_IN_SYNC ){
       //  /* the block is not on memory. request it */
       //! request_block(source_node, height, id);  //! if it fails, start a state update
@@ -842,19 +949,19 @@ SQLITE_PRIVATE void on_block_vote(node *source_node, void *msg, int size) {
   }
 
   /* check if this vote was already counted */
-  if( add_block_vote(block,node_id,sig)==false ){
+  if( add_block_vote(block,round,node_id,sig)==false ){
     SYNCTRACE("on_block_vote - block vote already stored\n");
     return;
   }
 
   /* increment the number of nodes that voted on this block */
-  block->num_votes++;
+  block->num_votes[round]++;
 
   SYNCTRACE("on_block_vote - num_votes=%d total_authorized_nodes=%d\n",
-            block->num_votes, plugin->total_authorized_nodes);
+            block->num_votes[round], plugin->total_authorized_nodes);
 
   /* do we have a winner block? */
-  check_for_winner_block(plugin);
+  check_for_winner_block(plugin, round);
 
 }
 
@@ -1095,6 +1202,7 @@ SQLITE_PRIVATE void send_block_vote(
   node *node,
   int64 height,
   void *block_id,
+  int round,
   int node_id,
   void *sig
 ){
@@ -1103,6 +1211,7 @@ SQLITE_PRIVATE void send_block_vote(
   if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_BLOCK_VOTE)==FALSE ) goto loc_exit;
   if( binn_map_set_int64(map, PLUGIN_HEIGHT, height)==FALSE ) goto loc_exit;
   if( binn_map_set_int32(map, PLUGIN_NODE_ID, node_id)==FALSE ) goto loc_exit;
+  if( binn_map_set_int32(map, PLUGIN_ROUND, round)==FALSE ) goto loc_exit;
   if( binn_map_set_blob(map, PLUGIN_HASH, block_id, 32)==FALSE ) goto loc_exit;
   if( binn_map_set_blob(map, PLUGIN_SIGNATURE, sig, 64)==FALSE ) goto loc_exit;
   send_peer_message(node, map, NULL);
@@ -1124,6 +1233,7 @@ SQLITE_PRIVATE void send_block_votes(plugin *plugin, node *node) {
 
   /* send the votes for arrived blocks */
   for( block=plugin->new_blocks; block; block=block->next ){
+#if 0
     binn_iter iter;
     binn item;
     binn_list_foreach(block->votes, item){
@@ -1132,13 +1242,22 @@ SQLITE_PRIVATE void send_block_votes(plugin *plugin, node *node) {
       assert( item.type==BINN_LIST );
       node_id = binn_list_int32(&item, 1);
       sig = binn_list_blob(&item, 2, NULL);
-      send_block_vote(plugin, node, block->height, block->id, node_id, sig);
+      send_block_vote(plugin, node, block->height, block->id, round, node_id, sig);
+    }
+#endif
+    struct block_vote *vote;
+    int round;
+    for( round=0; round<=1; round++ ){
+      for( vote=block->temp_votes[round]; vote; vote=vote->next ){
+        send_block_vote(plugin, node, block->height, block->id, round, vote->node_id, vote->sig);
+      }
     }
   }
 
   /* send the votes for not yet arrived blocks */
   for( vote=plugin->block_votes; vote; vote=vote->next ){
-    send_block_vote(plugin, node, vote->height, vote->block_id, vote->node_id, vote->sig);
+    send_block_vote(plugin, node, vote->height, vote->block_id, vote->round,
+                    vote->node_id, vote->sig);
   }
 
 }

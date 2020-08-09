@@ -37,7 +37,7 @@ SQLITE_PRIVATE unsigned int calculate_wait_interval(
   assert(block_interval > 0);
 
   /* calculate the lower and upper bounds */
-  lower = block_interval / 2;
+  lower = block_interval / 10;
   upper = block_interval / 2 * total_authorized_nodes;
 
   /* calculate the wait interval */
@@ -132,6 +132,8 @@ SQLITE_PRIVATE int verify_proof(
 
   /* verify the proof */
   success = secp256k1_vrf_verify(output, proof, (uchar*) pubkey, msg, msglen);
+
+  SYNCTRACE("verify_proof success=%d\n", success);
 
   if( success ) return SQLITE_OK;
   return SQLITE_INVALID;
