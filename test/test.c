@@ -848,11 +848,27 @@ loc_again2:
   }
 
 
+  int exec_from_node = 3;
+
+
+  /* checking if the database is ready to execute transactions */
+
+  printf("waiting until node %d is ready\n", exec_from_node); fflush(stdout);
+
+  done = 0;
+  for(count=0; !done && count<100; count++){
+    int result;
+    if( count>0 ) sleep_ms(wait_time);
+    rc = db_query_int32(&result, db[exec_from_node], "PRAGMA db_is_ready");
+    assert(rc==SQLITE_OK);
+    done = (result==1);
+  }
+  assert(done);
+
+
   /* execute 3 db transactions on one of the databases */
 
   printf("executing transactions on nodes..."); fflush(stdout);
-
-  int exec_from_node = 3;
 
   db_execute(db[exec_from_node], "create table t1 (name)");
   db_execute(db[exec_from_node], "insert into t1 values ('aa1')");
@@ -911,6 +927,24 @@ loc_again2:
     db_check_int(db[i], "select count(*) from t1", 2);
     db_check_int(db[i], "select count(*) from t1 where name='aa1'", 1);
     db_check_int(db[i], "select count(*) from t1 where name='aa2'", 1);
+
+  }
+
+
+  /* checking if the node database is ready to execute transactions */
+
+  for(i=1; i<=n; i++){
+    printf("waiting until node %d is ready\n", i); fflush(stdout);
+
+    done = 0;
+    for(count=0; !done && count<100; count++){
+      int result;
+      if( count>0 ) sleep_ms(wait_time);
+      rc = db_query_int32(&result, db[i], "PRAGMA db_is_ready");
+      assert(rc==SQLITE_OK);
+      done = (result==1);
+    }
+    assert(done);
 
   }
 
@@ -1411,6 +1445,13 @@ loc_check_conns:
     db_check_int(db[i], "select count(*) from t1 where name='aa1'", 1);
     db_check_int(db[i], "select count(*) from t1 where name='aa2'", 1);
 
+  }
+
+
+  for(i=1; i<=n; i++){
+
+    printf("checking node %d\n", i); fflush(stdout);
+
     if( last_nonce[i] > 0 ){
       char sql[128];
       sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[i]);
@@ -1444,6 +1485,8 @@ loc_check_conns:
         node = active_online_nodes[i];
       }
       printf("executing on node %d\n", node);
+
+      db_check_int(db[node], "PRAGMA db_is_ready", 1);
 
       db_execute(db[node], "insert into t1 values ('online')");
 
@@ -1540,6 +1583,8 @@ loc_check_conns:
         node = active_offline_nodes[i];
       }
       printf("executing on node %d\n", node);
+
+      db_check_int(db[node], "PRAGMA db_is_ready", 1);
 
       db_execute(db[node], "insert into t1 values ('offline')");
 
@@ -1687,6 +1732,24 @@ loc_check_conns2:
     db_check_int(db[i], "select count(*) from t1 where name='aa2'", 1);
     db_check_int(db[i], "select count(*) from t1 where name='offline'", num_txns_on_offline_nodes);
     db_check_int(db[i], "select count(*) from t1 where name='online'", num_txns_on_online_nodes);
+
+  }
+
+
+  /* checking if the node database is ready to execute transactions */
+
+  for(i=1; i<=n; i++){
+    printf("waiting until node %d is ready\n", i); fflush(stdout);
+
+    done = 0;
+    for(count=0; !done && count<100; count++){
+      int result;
+      if( count>0 ) sleep_ms(wait_time);
+      rc = db_query_int32(&result, db[i], "PRAGMA db_is_ready");
+      assert(rc==SQLITE_OK);
+      done = (result==1);
+    }
+    assert(done);
 
   }
 
@@ -1964,6 +2027,21 @@ loc_again2:
   }
 
 
+  /* checking if the database is ready to execute transactions */
+
+  printf("waiting until node %d is ready\n", starting_node); fflush(stdout);
+
+  done = 0;
+  for(count=0; !done && count<100; count++){
+    int result;
+    if( count>0 ) sleep_ms(wait_time);
+    rc = db_query_int32(&result, db[starting_node], "PRAGMA db_is_ready");
+    assert(rc==SQLITE_OK);
+    done = (result==1);
+  }
+  assert(done);
+
+
   /* execute 3 db transactions on one of the databases */
 
   printf("executing transactions on nodes...");
@@ -2073,6 +2151,17 @@ loc_again2:
         i = 0;
         node = active_online_nodes[i];
       }
+
+      done = 0;
+      for(count=0; !done && count<100; count++){
+        int result;
+        if( count>0 ) sleep_ms(wait_time);
+        rc = db_query_int32(&result, db[node], "PRAGMA db_is_ready");
+        assert(rc==SQLITE_OK);
+        done = (result==1);
+      }
+      assert(done);
+
       printf("executing on node %d\n", node);
 
       db_execute(db[node], "insert into t1 values ('online')");
@@ -2155,6 +2244,17 @@ loc_again2:
         i = 0;
         node = disconnect_nodes[i];
       }
+
+      done = 0;
+      for(count=0; !done && count<100; count++){
+        int result;
+        if( count>0 ) sleep_ms(wait_time);
+        rc = db_query_int32(&result, db[node], "PRAGMA db_is_ready");
+        assert(rc==SQLITE_OK);
+        done = (result==1);
+      }
+      assert(done);
+
       printf("executing on node %d\n", node);
 
       db_execute(db[node], "insert into t1 values ('disconnected')");
@@ -2908,6 +3008,24 @@ loc_again1:
 
   for(i=1; i<=n; i++){
     db_check_int(db[i], "PRAGMA last_nonce", last_nonce[i]);
+  }
+
+
+  /* checking if the node database is ready to execute transactions */
+
+  for(i=1; i<=n; i++){
+    printf("waiting until node %d is ready\n", i); fflush(stdout);
+
+    done = 0;
+    for(count=0; !done && count<100; count++){
+      int result;
+      if( count>0 ) sleep_ms(wait_time);
+      rc = db_query_int32(&result, db[i], "PRAGMA db_is_ready");
+      assert(rc==SQLITE_OK);
+      done = (result==1);
+    }
+    assert(done);
+
   }
 
 
