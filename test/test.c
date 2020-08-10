@@ -1455,7 +1455,17 @@ loc_check_conns:
     if( last_nonce[i] > 0 ){
       char sql[128];
       sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[i]);
-      db_check_str(db[i], sql, "processed");
+      //db_check_str(db[i], sql, "processed");
+      done = 0;
+      for(count=0; !done && count<100; count++){
+        char *result;
+        if( count>0 ) sleep_ms(wait_time);
+        rc = db_query_str(&result, db[i], sql);
+        assert(rc==SQLITE_OK);
+        done = (strcmp(result,"processed")==0);
+        sqlite3_free(result);
+      }
+      assert(done);
     }
 
   }
@@ -2108,7 +2118,17 @@ loc_again2:
     if( last_nonce[i] > 0 ){
       char sql[128];
       sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[i]);
-      db_check_str(db[i], sql, "processed");
+      //db_check_str(db[i], sql, "processed");
+      done = 0;
+      for(count=0; !done && count<100; count++){
+        char *result;
+        if( count>0 ) sleep_ms(wait_time);
+        rc = db_query_str(&result, db[i], sql);
+        assert(rc==SQLITE_OK);
+        done = (strcmp(result,"processed")==0);
+        sqlite3_free(result);
+      }
+      assert(done);
     }
 
   }
