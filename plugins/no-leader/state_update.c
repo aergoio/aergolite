@@ -204,7 +204,8 @@ loc_next:
       int i;
       for(i=0; i<count; i++){
         int *pid = (int*) array_get(plugin->state_update_failed_nodes, i);
-        array_remove(&plugin->state_update_contacted_nodes, compare_int, pid);
+        assert( pid );
+        array_remove(plugin->state_update_contacted_nodes, compare_int, pid);
       }
       /* clear the list of failed nodes */
       array_clear(&plugin->state_update_failed_nodes);

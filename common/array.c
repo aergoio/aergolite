@@ -153,12 +153,14 @@ SQLITE_PRIVATE void array_remove(void *array, int(*compare_fn)(void*,void*), voi
 
   assert( pos<used_items );
 
-  /* remove the item from the array */
-  dest   = base + (pos * item_size);
-  pos++;
-  source = base + (pos * item_size);
-  size   = (used_items - pos) * item_size;
-  memmove(dest, source, size);
+  if( pos<used_items-1 ){
+    /* remove the item from the array */
+    dest   = base + (pos * item_size);
+    pos++;
+    source = base + (pos * item_size);
+    size   = (used_items - pos) * item_size;
+    memmove(dest, source, size);
+  }
   /* update the used items */
   pshort[2] = used_items - 1;
 }
