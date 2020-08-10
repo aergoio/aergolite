@@ -12,14 +12,16 @@
 
 #ifdef __APPLE__
 #define BLOCK_INTERVAL   1000
+#elif defined(_WIN32)
+#define BLOCK_INTERVAL   5000
 #else
 #define BLOCK_INTERVAL   3000
 #endif
 
 #ifdef __APPLE__
-const int wait_time = 150000;
+const int wait_time = 150;
 #else
-const int wait_time = 250000;
+const int wait_time = 250;
 #endif
 
 /*
@@ -210,7 +212,7 @@ void test_5_nodes(int bind_to_random_ports){
   done = 0;
   for(count=0; !done && count<100; count++){
     char *result;
-    usleep(wait_time); // 100 ms
+    sleep_ms(wait_time);
     rc = db_query_str(&result, db1, "PRAGMA transaction_status(4)");
     assert(rc==SQLITE_OK);
     done = (strcmp(result,"processed")==0);
@@ -227,7 +229,7 @@ void test_5_nodes(int bind_to_random_ports){
   done = 0;
   for(count=0; !done && count<100; count++){
     int result;
-    if( count>0 ) usleep(wait_time);
+    if( count>0 ) sleep_ms(wait_time);
     rc = db_query_int32(&result, db2, "select count(*) from sqlite_master where name='t1'");
     assert(rc==SQLITE_OK);
     printf("."); fflush(stdout);
@@ -238,7 +240,7 @@ void test_5_nodes(int bind_to_random_ports){
   done = 0;
   for(count=0; !done && count<100; count++){
     int result;
-    if( count>0 ) usleep(wait_time);
+    if( count>0 ) sleep_ms(wait_time);
     rc = db_query_int32(&result, db2, "select count(*) from t1");
     assert(rc==SQLITE_OK);
     printf("."); fflush(stdout);
@@ -258,7 +260,7 @@ void test_5_nodes(int bind_to_random_ports){
   done = 0;
   for(count=0; !done && count<100; count++){
     int result;
-    if( count>0 ) usleep(wait_time);
+    if( count>0 ) sleep_ms(wait_time);
     rc = db_query_int32(&result, db3, "select count(*) from sqlite_master where name='t1'");
     assert(rc==SQLITE_OK);
     printf("."); fflush(stdout);
@@ -269,7 +271,7 @@ void test_5_nodes(int bind_to_random_ports){
   done = 0;
   for(count=0; !done && count<100; count++){
     int result;
-    if( count>0 ) usleep(wait_time);
+    if( count>0 ) sleep_ms(wait_time);
     rc = db_query_int32(&result, db3, "select count(*) from t1");
     assert(rc==SQLITE_OK);
     printf("."); fflush(stdout);
@@ -289,7 +291,7 @@ void test_5_nodes(int bind_to_random_ports){
   done = 0;
   for(count=0; !done && count<100; count++){
     int result;
-    if( count>0 ) usleep(wait_time);
+    if( count>0 ) sleep_ms(wait_time);
     rc = db_query_int32(&result, db4, "select count(*) from sqlite_master where name='t1'");
     assert(rc==SQLITE_OK);
     printf("."); fflush(stdout);
@@ -300,7 +302,7 @@ void test_5_nodes(int bind_to_random_ports){
   done = 0;
   for(count=0; !done && count<100; count++){
     int result;
-    if( count>0 ) usleep(wait_time);
+    if( count>0 ) sleep_ms(wait_time);
     rc = db_query_int32(&result, db4, "select count(*) from t1");
     assert(rc==SQLITE_OK);
     printf("."); fflush(stdout);
@@ -320,7 +322,7 @@ void test_5_nodes(int bind_to_random_ports){
   done = 0;
   for(count=0; !done && count<100; count++){
     int result;
-    if( count>0 ) usleep(wait_time);
+    if( count>0 ) sleep_ms(wait_time);
     rc = db_query_int32(&result, db5, "select count(*) from sqlite_master where name='t1'");
     assert(rc==SQLITE_OK);
     printf("."); fflush(stdout);
@@ -331,7 +333,7 @@ void test_5_nodes(int bind_to_random_ports){
   done = 0;
   for(count=0; !done && count<100; count++){
     int result;
-    if( count>0 ) usleep(wait_time);
+    if( count>0 ) sleep_ms(wait_time);
     rc = db_query_int32(&result, db5, "select count(*) from t1");
     assert(rc==SQLITE_OK);
     printf("."); fflush(stdout);
@@ -457,7 +459,7 @@ loc_again1:
     if( (i<=2 && nrows<n) ||
         (i>2  && nrows<3) ){
       printf("."); fflush(stdout);
-      usleep(wait_time);
+      sleep_ms(wait_time);
       goto loc_again1;
     }
   }
@@ -505,6 +507,7 @@ loc_again1:
       memcpy(privkey, admin_privkey, 32);
       strcpy(pkhex, admin_pkhex);
       db_execute(db[add_from_node], cmd);
+      sleep_ms(block_interval);
     }
   }
 
@@ -577,7 +580,7 @@ loc_again2:
   done = 0;
   for(count=0; !done && count<100; count++){
     char *result;
-    usleep(wait_time);
+    sleep_ms(wait_time);
     rc = db_query_str(&result, db[exec_from_node], "PRAGMA transaction_status(3)");
     assert(rc==SQLITE_OK);
     done = (strcmp(result,"processed")==0);
@@ -599,7 +602,7 @@ loc_again2:
     done = 0;
     for(count=0; !done && count<100; count++){
       int result;
-      if( count>0 ) usleep(wait_time);
+      if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from sqlite_master where name='t1'");
       assert(rc==SQLITE_OK);
       done = (result>0);
@@ -609,7 +612,7 @@ loc_again2:
     done = 0;
     for(count=0; !done && count<100; count++){
       int result;
-      if( count>0 ) usleep(wait_time);
+      if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from t1");
       assert(rc==SQLITE_OK);
       done = (result>1);
@@ -730,7 +733,7 @@ loc_again1:
     if( (i<=2 && nrows<n) ||
         (i>2  && nrows<3) ){
       printf("."); fflush(stdout);
-      usleep(wait_time);
+      sleep_ms(wait_time);
       goto loc_again1;
     }
   }
@@ -765,7 +768,7 @@ loc_again1:
         } while( in_array_list(node,included_nodes) );
       }
       //
-      printf("adding node %d to the network\n", node);
+      printf("authorizing node %d on the blockchain network\n", node); fflush(stdout);
       sprintf(cmd, "pragma add_node='%s'", node_pubkey[node]);
       db_execute(db[add_from_node], cmd);
       add_to_array_list(included_nodes, node);
@@ -776,7 +779,7 @@ loc_again1:
     for(i=0; i<len_array_list(included_nodes); i++){
       int nrows;
       int node = included_nodes[i];
-      printf("checking node %d connections", node);
+      printf("checking node %d connections", node); fflush(stdout);
 loc_again2:
       sqlite3_finalize(stmt); stmt = NULL;
       rc = sqlite3_prepare_v2(db[node], "pragma nodes", -1, &stmt, NULL);
@@ -799,7 +802,7 @@ loc_again2:
               //assert( external[0]==0 ); /* internal node */
               if( external[0]=='y' ){     /* "yes" */
                 printf("."); fflush(stdout);
-                usleep(wait_time);
+                sleep_ms(wait_time);
                 goto loc_again2;
               }
             }else{
@@ -826,11 +829,14 @@ loc_again2:
         assert( nrows==n );
       }else{
         //assert( nrows>=len_array_list(included_nodes) );
+        sleep_ms(wait_time);
         if( nrows<len_array_list(included_nodes) ) goto loc_again2;
       }
     }
     //puts("");
 
+    /* wait to add the new nodes */
+    sleep_ms(block_interval);
   }
 
 
@@ -844,7 +850,7 @@ loc_again2:
 
   /* execute 3 db transactions on one of the databases */
 
-  printf("executing transactions on nodes...");
+  printf("executing transactions on nodes..."); fflush(stdout);
 
   int exec_from_node = 3;
 
@@ -864,7 +870,7 @@ loc_again2:
   done = 0;
   for(count=0; !done && count<100; count++){
     char *result;
-    usleep(wait_time);
+    sleep_ms(wait_time);
     rc = db_query_str(&result, db[exec_from_node], "PRAGMA transaction_status(3)");
     assert(rc==SQLITE_OK);
     done = (strcmp(result,"processed")==0);
@@ -885,7 +891,7 @@ loc_again2:
     done = 0;
     for(count=0; !done && count<100; count++){
       int result;
-      if( count>0 ) usleep(wait_time);
+      if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from sqlite_master where name='t1'");
       assert(rc==SQLITE_OK);
       done = (result>0);
@@ -895,7 +901,7 @@ loc_again2:
     done = 0;
     for(count=0; !done && count<100; count++){
       int result;
-      if( count>0 ) usleep(wait_time);
+      if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from t1");
       assert(rc==SQLITE_OK);
       done = (result>1);
@@ -911,7 +917,7 @@ loc_again2:
 
   /* execute more transactions on separate databases */
 
-  puts("inserting more data...");
+  puts("inserting more data..."); fflush(stdout);
 
   db_execute(db[4], "insert into t1 values ('aa3')");
   db_execute(db[3], "insert into t1 values ('aa4')");
@@ -939,7 +945,7 @@ loc_again2:
     done = 0;
     for(count=0; !done && count<100; count++){
       char query[64], *result;
-      usleep(wait_time);
+      sleep_ms(wait_time);
       sprintf(query, "PRAGMA transaction_status(%d)", last_nonce[i]);
       rc = db_query_str(&result, db[i], query);
       assert(rc==SQLITE_OK);
@@ -963,7 +969,7 @@ loc_again2:
     done = 0;
     for(count=0; !done && count<100; count++){
       int result;
-      if( count>0 ) usleep(wait_time);
+      if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from sqlite_master where name='t2'");
       assert(rc==SQLITE_OK);
       done = (result>0);
@@ -973,7 +979,7 @@ loc_again2:
     done = 0;
     for(count=0; !done && count<100; count++){
       int result;
-      if( count>0 ) usleep(wait_time);
+      if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from t1");
       assert(rc==SQLITE_OK);
       done = (result>2);
@@ -1128,7 +1134,7 @@ loc_again1:
       if( (i<=2 && nrows<n) ||
           (i>2  && nrows<3) ){
         printf("."); fflush(stdout);
-        usleep(wait_time);
+        sleep_ms(wait_time);
         goto loc_again1;
       }
     }
@@ -1160,7 +1166,7 @@ loc_again1:
       sprintf(cmd, "pragma add_node='%s'", node_pubkey[node]);
     }
     db_execute(db[add_from_node], cmd);
-    usleep(wait_between_add_nodes * 1000);
+    sleep_ms(wait_between_add_nodes);
   }
 
 
@@ -1179,7 +1185,7 @@ loc_again1:
         sprintf(cmd, "pragma node_type='full:%s'", node_pubkey[node]);
         db_execute(db[add_from_node], cmd);
         last_nonce[add_from_node]++;
-        //usleep(wait_between_add_nodes * 1000);
+        //sleep_ms(wait_between_add_nodes);
       }
     }
   }else if( node_type_setting==USE_NODE_TYPE_ALL ){
@@ -1217,7 +1223,7 @@ loc_again2:
           //assert( external[0]==0 ); /* internal node */
           if( external[0]=='y' ){     /* "yes" */
             printf("authorization for node %d has not arrived\n", j); fflush(stdout);
-            usleep(wait_time);
+            sleep_ms(wait_time);
             goto loc_again2;
           }
         }
@@ -1268,7 +1274,7 @@ loc_check_conns:
   }
 
   if( has_external || missing_node_type ){
-    usleep(2000000);
+    sleep_ms(2000);
     puts("");
     goto loc_check_conns;
   }
@@ -1311,9 +1317,9 @@ loc_check_conns:
   for(i=1; i<=n; i++){
     char *leader_id_str = NULL;
     done = 0;
-    for(count=0; !done && count<150; count++){
+    for(count=0; !done && count<100; count++){
       char *result;
-      if( count>0 ) usleep(wait_time);
+      if( count>0 ) sleep_ms(wait_time);
       rc = db_query_str(&result, db[i], "pragma protocol_status");
       assert(rc==SQLITE_OK);
       //done = strstr(result,"\"is_leader\": true")>0 || strstr(result,"\"leader\": null")==0;
@@ -1361,9 +1367,9 @@ loc_check_conns:
   printf("waiting for new block"); fflush(stdout);
 
   done = 0;
-  for(count=0; !done && count<150; count++){
+  for(count=0; !done && count<100; count++){
     char *result;
-    usleep(wait_time);
+    sleep_ms(wait_time);
     rc = db_query_str(&result, db[exec_from_node], "PRAGMA transaction_status(3)");
     assert(rc==SQLITE_OK);
     done = (strcmp(result,"processed")==0);
@@ -1382,9 +1388,9 @@ loc_check_conns:
     printf("checking node %d\n", i); fflush(stdout);
 
     done = 0;
-    for(count=0; !done && count<150; count++){
+    for(count=0; !done && count<100; count++){
       int result;
-      if( count>0 ) usleep(wait_time);
+      if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from sqlite_master where name='t1'");
       assert(rc==SQLITE_OK);
       done = (result>0);
@@ -1392,9 +1398,9 @@ loc_check_conns:
     assert(done);
 
     done = 0;
-    for(count=0; !done && count<150; count++){
+    for(count=0; !done && count<100; count++){
       int result;
-      if( count>0 ) usleep(wait_time);
+      if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from t1");
       assert(rc==SQLITE_OK);
       done = (result>1);
@@ -1457,7 +1463,7 @@ loc_check_conns:
         done = 0;
         for(count=0; !done && count<200; count++){
           char *result, sql[128];
-          if( count>0 ) usleep(150000);
+          if( count>0 ) sleep_ms(wait_time);
           sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[node]);
           rc = db_query_str(&result, db[node], sql);
           assert(rc==SQLITE_OK);
@@ -1482,7 +1488,7 @@ loc_check_conns:
         done = 0;
         for(count=0; !done && count<100; count++){
           int result;
-          if( count>0 ) usleep(wait_time);
+          if( count>0 ) sleep_ms(wait_time);
           rc = db_query_int32(&result, db[i], "select count(*) from sqlite_master where name='t1'");
           assert(rc==SQLITE_OK);
           done = (result>0);
@@ -1492,7 +1498,7 @@ loc_check_conns:
         done = 0;
         for(count=0; !done && count<100; count++){
           int result;
-          if( count>0 ) usleep(wait_time);
+          if( count>0 ) sleep_ms(wait_time);
           rc = db_query_int32(&result, db[i], "select count(*) from t1");
           assert(rc==SQLITE_OK);
           done = (result >= 2 + num_txns_on_online_nodes);
@@ -1602,7 +1608,7 @@ loc_check_conns2:
   }
 
   if( has_external ){
-    usleep(2000000);
+    sleep_ms(2000);
     puts("");
     goto loc_check_conns2;
   }
@@ -1619,7 +1625,7 @@ loc_check_conns2:
     done = 0;
     for(count=0; !done && count<100; count++){
       char *result;
-      if( count>0 ) usleep(wait_time);
+      if( count>0 ) sleep_ms(wait_time);
       rc = db_query_str(&result, db[node], "pragma protocol_status");
       assert(rc==SQLITE_OK);
       done = strstr(result,"\"is_leader\": true")>0 || strstr(result,"\"leader\": null")==0;
@@ -1631,7 +1637,7 @@ loc_check_conns2:
     done = 0;
     for(count=0; !done && count<100; count++){
       int result;
-      if( count>0 ) usleep(wait_time);
+      if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[node], "select count(*) from t1");
       assert(rc==SQLITE_OK);
       done = (result >= 2 + num_txns_on_online_nodes + num_txns_on_offline_nodes);
@@ -1669,7 +1675,7 @@ loc_check_conns2:
     done = 0;
     for(count=0; !done && count<100; count++){
       int result;
-      if( count>0 ) usleep(wait_time);
+      if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from t1");
       assert(rc==SQLITE_OK);
       done = (result >= 2 + num_txns_on_online_nodes + num_txns_on_offline_nodes);
@@ -1716,7 +1722,7 @@ loc_check_conns2:
       done = 0;
       for(count=0; !done && count<200; count++){
         char *result, sql[128];
-        if( count>0 ) usleep(150000);
+        if( count>0 ) sleep_ms(wait_time);
         sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[node]);
         rc = db_query_str(&result, db[node], sql);
         assert(rc==SQLITE_OK);
@@ -1739,7 +1745,7 @@ loc_check_conns2:
       done = 0;
       for(count=0; !done && count<100; count++){
         int result;
-        if( count>0 ) usleep(wait_time);
+        if( count>0 ) sleep_ms(wait_time);
         rc = db_query_int32(&result, db[i], "select count(*) from t1");
         assert(rc==SQLITE_OK);
         done = (result >= 2 + num_txns_on_online_nodes + num_txns_on_offline_nodes + num_txns_on_reconnect);
@@ -1929,7 +1935,7 @@ loc_again2:
           //assert( external[0]==0 ); /* internal node */
           if( external[0]=='y' ){     /* "yes" */
             printf("authorization for node %d has not arrived\n", j); fflush(stdout);
-            usleep(wait_time);
+            sleep_ms(wait_time);
             goto loc_again2;
           }
         }
@@ -1978,7 +1984,7 @@ loc_again2:
   done = 0;
   for(count=0; !done && count<100; count++){
     char query[64], *result;
-    usleep(wait_time);
+    sleep_ms(wait_time);
     sprintf(query, "PRAGMA transaction_status(%d)", last_nonce[starting_node]);
     rc = db_query_str(&result, db[starting_node], query);
     assert(rc==SQLITE_OK);
@@ -2000,7 +2006,7 @@ loc_again2:
     done = 0;
     for(count=0; !done && count<100; count++){
       int result;
-      if( count>0 ) usleep(wait_time);
+      if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from sqlite_master where name='t1'");
       assert(rc==SQLITE_OK);
       done = (result>0);
@@ -2010,7 +2016,7 @@ loc_again2:
     done = 0;
     for(count=0; !done && count<100; count++){
       int result;
-      if( count>0 ) usleep(wait_time);
+      if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from t1");
       assert(rc==SQLITE_OK);
       done = (result>1);
@@ -2086,7 +2092,7 @@ loc_again2:
       done = 0;
       for(count=0; !done && count<200; count++){
         char *result, sql[128];
-        if( count>0 ) usleep(150000);
+        if( count>0 ) sleep_ms(wait_time);
         sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[node]);
         rc = db_query_str(&result, db[node], sql);
         assert(rc==SQLITE_OK);
@@ -2111,7 +2117,7 @@ loc_again2:
       done = 0;
       for(count=0; !done && count<100; count++){
         int result;
-        if( count>0 ) usleep(wait_time);
+        if( count>0 ) sleep_ms(wait_time);
         rc = db_query_int32(&result, db[i], "select count(*) from t1");
         assert(rc==SQLITE_OK);
         done = (result >= 2 + num_blocks * num_txns_per_block);
@@ -2297,7 +2303,7 @@ loc_again2:
     done = 0;
     for(count=0; !done && count<100; count++){
       char *result;
-      if( count>0 ) usleep(wait_time);
+      if( count>0 ) sleep_ms(wait_time);
       rc = db_query_str(&result, db[node], "pragma protocol_status");
       assert(rc==SQLITE_OK);
       done = strstr(result,"\"is_leader\": true")>0 || strstr(result,"\"leader\": null")==0;
@@ -2311,7 +2317,7 @@ loc_again2:
     done = 0;
     for(count=0; !done && count<200; count++){
       char *result, sql[128];
-      if( count>0 ) usleep(150000);
+      if( count>0 ) sleep_ms(wait_time);
       sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[node]);
       rc = db_query_str(&result, db[node], sql);
       assert(rc==SQLITE_OK);
@@ -2339,7 +2345,7 @@ loc_again2:
     done = 0;
     for(count=0; !done && count<100; count++){
       int result;
-      if( count>0 ) usleep(wait_time);
+      if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[node], "select count(*) from t1");
       assert(rc==SQLITE_OK);
       done = (result >= total_rows);
@@ -2351,7 +2357,7 @@ loc_again2:
     done = 0;
     for(count=0; !done && count<100; count++){
       int result;
-      if( count>0 ) usleep(wait_time);
+      if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[node], "select count(*) from sqlite_master where type='table'");
       assert(rc==SQLITE_OK);
       done = (result >= total_tables);
@@ -2381,7 +2387,7 @@ loc_again2:
     done = 0;
     for(count=0; !done && count<100; count++){
       int result;
-      if( count>0 ) usleep(wait_time);
+      if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from t1");
       assert(rc==SQLITE_OK);
       done = (result >= total_rows);
@@ -2393,7 +2399,7 @@ loc_again2:
     done = 0;
     for(count=0; !done && count<100; count++){
       int result;
-      if( count>0 ) usleep(wait_time);
+      if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from sqlite_master where type='table'");
       assert(rc==SQLITE_OK);
       done = (result >= total_tables);
@@ -2479,7 +2485,7 @@ loc_again2:
       node = active_online_nodes[i];
     }
     char *result, sql[128];
-    usleep(wait_time);
+    sleep_ms(wait_time);
     sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[node]);
     rc = db_query_str(&result, db[node], sql);
     assert(rc==SQLITE_OK);
@@ -2644,7 +2650,7 @@ loc_again2:
       done = 0;
       for(count=0; !done && count<100; count++){
         char *result;
-        if( count>0 ) usleep(wait_time);
+        if( count>0 ) sleep_ms(wait_time);
         rc = db_query_str(&result, db[node], "pragma protocol_status");
         assert(rc==SQLITE_OK);
         done = strstr(result,"\"is_leader\": true")>0 || strstr(result,"\"leader\": null")==0;
@@ -2681,7 +2687,7 @@ loc_again2:
       done = 0;
       for(count=0; !done && count<200; count++){
         char *result, sql[128];
-        if( count>0 ) usleep(wait_time);
+        if( count>0 ) sleep_ms(wait_time);
         sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[node]);
         rc = db_query_str(&result, db[node], sql);
         assert(rc==SQLITE_OK);
@@ -2712,7 +2718,7 @@ loc_again2:
       done = 0;
       for(count=0; !done && count<100; count++){
         int result;
-        if( count>0 ) usleep(wait_time);
+        if( count>0 ) sleep_ms(wait_time);
         rc = db_query_int32(&result, db[i], "select count(*) from t1");
         assert(rc==SQLITE_OK);
         done = (result >= num_records);
@@ -2722,7 +2728,7 @@ loc_again2:
       done = 0;
       for(count=0; !done && count<100; count++){
         int result;
-        if( count>0 ) usleep(wait_time);
+        if( count>0 ) sleep_ms(wait_time);
         rc = db_query_int32(&result, db[i], "select count(*) from sqlite_master where type='table'");
         assert(rc==SQLITE_OK);
         done = (result >= num_tables);
@@ -2750,7 +2756,7 @@ loc_again2:
         node = active_online_nodes[i];
       }
       char *result, sql[128];
-      usleep(wait_time);
+      sleep_ms(wait_time);
       sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[node]);
       rc = db_query_str(&result, db[node], sql);
       assert(rc==SQLITE_OK);
@@ -2864,7 +2870,7 @@ loc_again1:
     if( (i<=2 && nrows<n) ||
         (i>2  && nrows<3) ){
       printf("."); fflush(stdout);
-      usleep(wait_time);
+      sleep_ms(wait_time);
       goto loc_again1;
     }
   }
@@ -2895,7 +2901,7 @@ loc_again1:
       sprintf(cmd, "pragma add_node='%s'", node_pubkey[node]);
     //}
     db_execute(db[add_from_node], cmd);
-    usleep(wait_between_add_nodes * 1000);
+    sleep_ms(wait_between_add_nodes);
   }
 
   last_nonce[add_from_node] = n;
@@ -2933,7 +2939,7 @@ loc_again1:
     done = 0;
     for(count=0; !done && count<100; count++){
       int result;
-      if( count>0 ) usleep(wait_time);
+      if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from sqlite_master where name like 't%'");
       assert(rc==SQLITE_OK);
       done = (result==3);
@@ -2970,7 +2976,7 @@ loc_again1:
       db_execute(db[i], sql);
       last_nonce[i]++;
     }
-    usleep(txn_interval * 1000);
+    sleep_ms(txn_interval);
   }
 
   for(i=1; i<=n; i++){
@@ -2979,7 +2985,7 @@ loc_again1:
 
 
   //puts("waiting...");
-  //usleep(block_interval * 1000 * 2);
+  //sleep_ms(block_interval * 2);
 
 
   /* check whether at least some data was replicated to all the nodes */
@@ -3028,7 +3034,7 @@ loc_again1:
     done = 0;
     for(count=0; !done && count<100; count++){
       int result;
-      if( count>0 ) usleep(wait_time);
+      if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from t1");
       assert(rc==SQLITE_OK);
       done = (result==num_rows);

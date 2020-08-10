@@ -10,7 +10,38 @@
 #include "../common/backtrace.c"
 
 //#define QUIT_TEST()  print_backtrace()
-#define QUIT_TEST()  exit(1)
+#ifdef _WIN32
+#define QUIT_TEST()  { sleep_ms(500); exit(1); }
+#else
+#define QUIT_TEST()  exit(1);
+#endif
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#elif _POSIX_C_SOURCE >= 199309L
+//#include <time.h>   // for nanosleep
+#else
+#include <unistd.h> // for usleep
+#endif
+
+/****************************************************************************/
+
+void sleep_ms(int milliseconds){
+#ifdef _WIN32
+    Sleep(milliseconds);
+#elif _POSIX_C_SOURCE >= 199309L
+    struct timespec ts;
+    ts.tv_sec = milliseconds / 1000;
+    ts.tv_nsec = (milliseconds % 1000) * 1000000;
+    nanosleep(&ts, NULL);
+#else
+    sleep(milliseconds / 1000);
+    usleep((milliseconds % 1000) * 1000);
+#endif
+}
+
+/****************************************************************************/
 
 static int bind_sql_parameters(sqlite3_stmt *stmt, const char *types, va_list ap);
 
@@ -19,6 +50,7 @@ static int bind_sql_parameters(sqlite3_stmt *stmt, const char *types, va_list ap
 void print_error(int rc, char *desc, char *sql, const char *function, int line){
 
   printf("\n\tFAIL %d: %s\n\tsql: %s\n\tfunction: %s\n\tline: %d\n", rc, desc, sql, function, line);
+  fflush(stdout);
 
 }
 
