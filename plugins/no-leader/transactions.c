@@ -407,7 +407,7 @@ SQLITE_PRIVATE int store_transaction_on_mempool(
   }
 
   /* check if transaction was already included on a block */
-  rc = aergolite_get_authorization(this_node, node_id, NULL, NULL, NULL, NULL, &last_nonce);
+  rc = aergolite_get_authorization(this_node, node_id, NULL, NULL, NULL, NULL, NULL, &last_nonce);
   if( rc!=SQLITE_OK ) return rc;
   if( nonce<=last_nonce ){
     SYNCTRACE("store_transaction_on_mempool - transaction nonce is old\n");

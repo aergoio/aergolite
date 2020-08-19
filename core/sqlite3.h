@@ -11860,11 +11860,12 @@ AERGOLITE_API int aergolite_get_authorization(
   char *pubkey,
   int *ppklen,
   void **pauthorization,
+  int64 *pfirst_block,
   BOOL *pis_full_node,
   int64 *plast_nonce
 );
 
-AERGOLITE_API int aergolite_num_authorized_nodes(aergolite *this_node);
+AERGOLITE_API int aergolite_num_authorized_nodes(aergolite *this_node, BOOL on_blockchain);
 
 AERGOLITE_API int is_node_authorized(aergolite *this_node, char *pubkey, int pklen, BOOL *is_authorized);
 
@@ -11895,6 +11896,7 @@ typedef void (*on_allowed_node_cb)(
   char *pubkey,
   int pklen,
   void *authorization,
+  int64 *pfirst_block,
   char *type,
   int64 last_nonce
 );

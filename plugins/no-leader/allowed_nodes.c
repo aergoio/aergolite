@@ -8,9 +8,12 @@
 */
 SQLITE_PRIVATE void count_authorized_nodes(plugin *plugin) {
 
-  plugin->total_authorized_nodes = aergolite_num_authorized_nodes(plugin->this_node);
+  plugin->total_authorized_nodes = aergolite_num_authorized_nodes(plugin->this_node, FALSE);
+  plugin->active_authorized_nodes = aergolite_num_authorized_nodes(plugin->this_node, TRUE);
 
-  SYNCTRACE("count_authorized_nodes total_authorized_nodes=%d\n", plugin->total_authorized_nodes);
+  SYNCTRACE("count_authorized_nodes total=%d active=%d\n",
+            plugin->total_authorized_nodes,
+            plugin->active_authorized_nodes);
 
 }
 
@@ -557,7 +560,7 @@ SQLITE_PRIVATE void on_node_identification(node *node, void *msg, int size) {
 
   /* load the public key from the allowed nodes table */
   rc = aergolite_get_authorization(this_node, node->id, pubkey_int, &pklen_int,
-                                   NULL, &is_full_node, NULL);
+                                   NULL, NULL, &is_full_node, NULL);
   if( rc==SQLITE_OK ){
     if( pubkey_ext ){
       if( pklen_int!=pklen_ext || memcmp(pubkey_int, pubkey_ext, pklen_int)!=0 ){

@@ -127,7 +127,7 @@ SQLITE_PRIVATE int verify_proof(
   msglen = strlen(msg);
 
   /* get the node's public key */
-  rc = aergolite_get_authorization(plugin->this_node, node_id, pubkey, &pklen, NULL, NULL, NULL);
+  rc = aergolite_get_authorization(plugin->this_node, node_id, pubkey, &pklen, NULL, NULL, NULL, NULL);
   if( rc ) return rc;  /* returns SQLITE_NOTFOUND if the node is not authorized */
 
   /* verify the proof */

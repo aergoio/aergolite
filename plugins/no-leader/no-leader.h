@@ -298,6 +298,7 @@ struct plugin {
 
   node *peers;                /* Remote nodes connected to this one */
   int total_authorized_nodes; /* Including those that are currently off-line */
+  int active_authorized_nodes;/* Only nodes with authorization included in the blockchain */
 
   BOOL is_authorized;         /* Whether this node is authorized on the network */
   BOOL is_full_node;
@@ -367,8 +368,6 @@ SQLITE_PRIVATE int send_udp_broadcast(plugin *plugin, char *message);
 SQLITE_PRIVATE int send_udp_message(plugin *plugin, const struct sockaddr *address, char *message);
 
 SQLITE_PRIVATE void on_text_command_received(node *node, char *message);
-
-SQLITE_PRIVATE BOOL has_nodes_for_consensus(plugin *plugin);
 
 /* general */
 

@@ -5,28 +5,70 @@ SQLITE_PRIVATE int  commit_block(plugin *plugin, struct block *block);
 
 /****************************************************************************/
 
-SQLITE_PRIVATE BOOL has_nodes_for_consensus(plugin *plugin){
+SQLITE_PRIVATE BOOL can_vote_on_block(plugin *plugin, int node_id, int64 block_height){
+  int64 since_block;
+  int rc;
+
+  SYNCTRACE("can_vote_on_block node_id=%d block_height=%" INT64_FORMAT "\n",
+            node_id, block_height);
+
+  if( node_id==0 ) return FALSE;
+
+  /* if this is the first block */
+  if( block_height==1 ) return TRUE;
+
+  /* check in which block the authorization was inserted, if in some */
+  rc = aergolite_get_authorization(plugin->this_node, node_id, NULL, NULL, NULL, &since_block, NULL, NULL);
+  if( rc ) return FALSE;
+
+  /* the node can only vote after its authorization is included in a block */
+  if( since_block>0 && block_height>since_block ) return TRUE;
+  return FALSE;
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE BOOL has_nodes_for_consensus(plugin *plugin, int64 block_height){
   node *node;
   int count;
 
-  count_authorized_nodes(plugin);
-  if( plugin->total_authorized_nodes<=1 ) return FALSE;
+  //if( plugin->active_authorized_nodes<1 ) return FALSE;
 
-  count = 0;
-  if( plugin->is_authorized ){  /* this node */
-    count++;
-  }
+  /* this node */
+  if( !can_vote_on_block(plugin,plugin->node_id,block_height) ) return FALSE;
+  count = 1;
+
+  /* connected nodes */
   for( node=plugin->peers; node; node=node->next ){
-    if( node->is_authorized && node->id!=0 ) count++;
+    if( can_vote_on_block(plugin,node->id,block_height) ) count++;
   }
 
   SYNCTRACE("has_nodes_for_consensus connected=%d\n", count);
 
-  if( count<majority(plugin->total_authorized_nodes) ){
+  if( count<majority(plugin->active_authorized_nodes) ){
     return FALSE;
   }
 
   return TRUE;
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE BOOL can_create_block(plugin *plugin){
+  int64 block_height = plugin->current_block ? plugin->current_block->height+1 : 1;
+  BOOL ret=FALSE;
+
+  SYNCTRACE("can_create_block\n");
+
+  count_authorized_nodes(plugin);
+
+  if( plugin->total_authorized_nodes<1 ) goto loc_exit;
+
+  ret = has_nodes_for_consensus(plugin, block_height);
+
+loc_exit:
+  SYNCTRACE("can_create_block ret=%s\n", ret ? "TRUE" : "FALSE");
+  return ret;
 }
 
 /****************************************************************************/
@@ -609,6 +651,13 @@ SQLITE_PRIVATE void choose_block_to_vote(plugin *plugin, int round){
   /* is it applying a state update? (some pages sent) */
   if( plugin->is_updating_state ) return;
 
+  /* is this node authorized to vote on this round? */
+  if( !can_vote_on_block(plugin,plugin->node_id,current_height+1) ){
+    /* just check for winner block */
+    SYNCTRACE("choose_block_to_vote - cannot vote for this block\n");
+    goto loc_exit;
+  }
+
   /* calculate the blocks wait times */
   for( block=plugin->new_blocks; block; block=block->next ){
     if( block->height==current_height+1 ){
@@ -687,6 +736,8 @@ SQLITE_PRIVATE void start_block_wait_timer(plugin *plugin){
   int64 current_height = plugin->current_block ? plugin->current_block->height : 0;
   /* has this node already voted on this round? */
   if( plugin->last_vote_height==current_height+1 ) return;
+  /* is this node authorized to vote on this round? */
+  if( !can_vote_on_block(plugin,plugin->node_id,current_height+1) ) return;
   /* start the block wait timer if not yet started */
   if( !uv_is_active((uv_handle_t*)&plugin->block_wait_timer) ){
     int block_wait_interval = get_block_wait_interval(plugin);
@@ -820,6 +871,7 @@ SQLITE_PRIVATE void on_new_block(node *node, void *msg, int size) {
 
 SQLITE_PRIVATE void check_for_winner_block(plugin *plugin, int round) {
   int64 current_height = plugin->current_block ? plugin->current_block->height : 0;
+  int64 num_authorized_nodes;
   struct block *block;
   int rc, total_votes=0, remaining_votes;
 
@@ -829,13 +881,19 @@ SQLITE_PRIVATE void check_for_winner_block(plugin *plugin, int round) {
 
   if( !plugin->new_blocks ) return;
 
+  if( current_height>0 ){
+    num_authorized_nodes = plugin->active_authorized_nodes;
+  }else{
+    num_authorized_nodes = plugin->total_authorized_nodes;
+  }
+
   /* is it applying a state update? (some pages sent) */
   if( plugin->is_updating_state ) return;
 
   for( block=plugin->new_blocks; block; block=block->next ){
     /* check if the block reached the majority of the votes */
     if( block->height==current_height+1 &&
-        block->num_votes[round] >= majority(plugin->total_authorized_nodes) ){
+        block->num_votes[round] >= majority(num_authorized_nodes) ){
 
       /* commit the new block on this node */
       /* is the winning block open? */
@@ -872,18 +930,18 @@ SQLITE_PRIVATE void check_for_winner_block(plugin *plugin, int round) {
   }
 
 #if 0
-  if( total_votes==plugin->total_authorized_nodes ){
+  if( total_votes==num_authorized_nodes ){
     start_new_voting_round(plugin);
   }
 #endif
 
-  remaining_votes = plugin->total_authorized_nodes - total_votes;
+  remaining_votes = num_authorized_nodes - total_votes;
 
   /* check if some block can still reach the majority of votes */
   for( block=plugin->new_blocks; block; block=block->next ){
     if( block->height==current_height+1 ){
       int possible_votes = block->num_votes[round] + remaining_votes;
-      if( possible_votes >= majority(plugin->total_authorized_nodes) ){
+      if( possible_votes >= majority(num_authorized_nodes) ){
         return;
       }
     }
@@ -957,8 +1015,8 @@ SQLITE_PRIVATE void on_block_vote(node *source_node, void *msg, int size) {
   /* increment the number of nodes that voted on this block */
   block->num_votes[round]++;
 
-  SYNCTRACE("on_block_vote - num_votes=%d total_authorized_nodes=%d\n",
-            block->num_votes[round], plugin->total_authorized_nodes);
+  SYNCTRACE("on_block_vote - num_votes=%d active_authorized_nodes=%d\n",
+            block->num_votes[round], plugin->active_authorized_nodes);
 
   /* do we have a winner block? */
   check_for_winner_block(plugin, round);
@@ -1016,7 +1074,7 @@ SQLITE_PRIVATE struct block * create_new_block(plugin *plugin) {
 
   /* are there unused transactions on mempool? */
   if( count_mempool_unused_txns(plugin)==0 ||
-      !has_nodes_for_consensus(plugin)
+      !can_create_block(plugin)
   ){
     return (struct block *) -1;
   }
@@ -1139,7 +1197,7 @@ SQLITE_PRIVATE void start_new_block_timer(plugin *plugin) {
   ** and it is not committed yet */
   if( plugin->last_created_block_height==current_height+1 ) return;
   if( count_mempool_unused_txns(plugin)==0 ) return;
-  if( !has_nodes_for_consensus(plugin) ) return;
+  if( !can_create_block(plugin) ) return;
   if( !uv_is_active((uv_handle_t*)&plugin->new_block_timer) ){
     int interval = calculate_node_wait_interval(plugin, current_height+1);
     SYNCTRACE("start_new_block_timer interval=%d\n", interval);

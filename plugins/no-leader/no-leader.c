@@ -2107,7 +2107,7 @@ void * plugin_init(aergolite *this_node, char *uri) {
 
 
   /* is this an authorizated node? */
-  rc = aergolite_get_authorization(this_node, plugin->node_id, NULL, NULL, NULL,
+  rc = aergolite_get_authorization(this_node, plugin->node_id, NULL, NULL, NULL, NULL,
                                    &is_full_node, NULL);
   if( rc==SQLITE_OK ){
     plugin->is_authorized = TRUE;
