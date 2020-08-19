@@ -267,6 +267,7 @@ SQLITE_PRIVATE void update_auth_last_nonce(aergolite *this_node, int node_id, in
 
 SQLITE_PRIVATE void update_auth_first_block(aergolite *this_node, int node_id, int64 first_block);
 
+SQLITE_PRIVATE int  load_authorizations(aergolite *this_node);
 SQLITE_PRIVATE void update_authorizations(aergolite *this_node);
 SQLITE_PRIVATE void reload_authorizations(aergolite *this_node);
 
@@ -336,6 +337,12 @@ AERGOLITE_API int aergolite_load_current_state(
   void **pbody,
   void **pvotes
 );
+
+AERGOLITE_API BOOL can_vote_on_block(
+  aergolite *this_node, int node_id, int64 block_height
+);
+
+SQLITE_PRIVATE int get_num_active_nodes(aergolite *this_node, int64 block_height);
 
 SQLITE_PRIVATE int check_page(aergolite *this_node, Pgno pgno, void *data, int size);
 

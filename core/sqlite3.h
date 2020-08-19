@@ -11824,7 +11824,7 @@ AERGOLITE_API int aergolite_verify_block_header(aergolite *this_node, void *head
 
 
 /*
-** Allowed nodes
+** Authorized nodes
 */
 
 AERGOLITE_API int read_authorized_pubkey(void *log, char *pubkey, int *ppklen, char *type);
@@ -11907,6 +11907,9 @@ AERGOLITE_API int aergolite_iterate_allowed_nodes(
   void *arg
 );
 
+AERGOLITE_API BOOL can_vote_on_block(
+  aergolite *this_node, int node_id, int64 block_height
+);
 
 
 /*

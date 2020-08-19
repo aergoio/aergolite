@@ -5,29 +5,6 @@ SQLITE_PRIVATE int  commit_block(plugin *plugin, struct block *block);
 
 /****************************************************************************/
 
-SQLITE_PRIVATE BOOL can_vote_on_block(plugin *plugin, int node_id, int64 block_height){
-  int64 since_block;
-  int rc;
-
-  SYNCTRACE("can_vote_on_block node_id=%d block_height=%" INT64_FORMAT "\n",
-            node_id, block_height);
-
-  if( node_id==0 ) return FALSE;
-
-  /* if this is the first block */
-  if( block_height==1 ) return TRUE;
-
-  /* check in which block the authorization was inserted, if in some */
-  rc = aergolite_get_authorization(plugin->this_node, node_id, NULL, NULL, NULL, &since_block, NULL, NULL);
-  if( rc ) return FALSE;
-
-  /* the node can only vote after its authorization is included in a block */
-  if( since_block>0 && block_height>since_block ) return TRUE;
-  return FALSE;
-}
-
-/****************************************************************************/
-
 SQLITE_PRIVATE BOOL has_nodes_for_consensus(plugin *plugin, int64 block_height){
   node *node;
   int count;
@@ -35,12 +12,15 @@ SQLITE_PRIVATE BOOL has_nodes_for_consensus(plugin *plugin, int64 block_height){
   //if( plugin->active_authorized_nodes<1 ) return FALSE;
 
   /* this node */
-  if( !can_vote_on_block(plugin,plugin->node_id,block_height) ) return FALSE;
+  if( !can_vote_on_block(plugin->this_node,plugin->node_id,block_height) ){
+    return FALSE;
+  }
+
   count = 1;
 
   /* connected nodes */
   for( node=plugin->peers; node; node=node->next ){
-    if( can_vote_on_block(plugin,node->id,block_height) ) count++;
+    if( can_vote_on_block(plugin->this_node,node->id,block_height) ) count++;
   }
 
   SYNCTRACE("has_nodes_for_consensus connected=%d\n", count);
@@ -652,7 +632,7 @@ SQLITE_PRIVATE void choose_block_to_vote(plugin *plugin, int round){
   if( plugin->is_updating_state ) return;
 
   /* is this node authorized to vote on this round? */
-  if( !can_vote_on_block(plugin,plugin->node_id,current_height+1) ){
+  if( !can_vote_on_block(plugin->this_node,plugin->node_id,current_height+1) ){
     /* just check for winner block */
     SYNCTRACE("choose_block_to_vote - cannot vote for this block\n");
     goto loc_exit;
@@ -737,7 +717,7 @@ SQLITE_PRIVATE void start_block_wait_timer(plugin *plugin){
   /* has this node already voted on this round? */
   if( plugin->last_vote_height==current_height+1 ) return;
   /* is this node authorized to vote on this round? */
-  if( !can_vote_on_block(plugin,plugin->node_id,current_height+1) ) return;
+  if( !can_vote_on_block(plugin->this_node,plugin->node_id,current_height+1) ) return;
   /* start the block wait timer if not yet started */
   if( !uv_is_active((uv_handle_t*)&plugin->block_wait_timer) ){
     int block_wait_interval = get_block_wait_interval(plugin);
@@ -1005,6 +985,13 @@ SQLITE_PRIVATE void on_block_vote(node *source_node, void *msg, int size) {
     }
     return;
   }
+
+#if 0
+  if( !can_vote_on_block(plugin->this_node,node_id,height) ){
+    SYNCTRACE("on_block_vote - node cannot vote on this block\n");
+    return;
+  }
+#endif
 
   /* check if this vote was already counted */
   if( add_block_vote(block,round,node_id,sig)==false ){
