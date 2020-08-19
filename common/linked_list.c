@@ -4,16 +4,16 @@
 // llist_prepend(&first, item);
 // llist_remove(&first, item);
 
-typedef struct llitem_struct llitem_t;
-struct llitem_struct {
-    llitem_t *next;
+typedef struct llitem llitem;
+struct llitem {
+    llitem *next;
 };
 
 SQLITE_PRIVATE void llist_add(void *pfirst, void *pto_add) {
-  llitem_t **first, *to_add, *item;
+  llitem **first, *to_add, *item;
 
-  first = (llitem_t **) pfirst;
-  to_add = (llitem_t *) pto_add;
+  first = (llitem **) pfirst;
+  to_add = (llitem *) pto_add;
 
   item = *first;
   if (item == 0) {
@@ -28,10 +28,10 @@ SQLITE_PRIVATE void llist_add(void *pfirst, void *pto_add) {
 }
 
 SQLITE_PRIVATE void llist_prepend(void *pfirst, void *pto_add) {
-  llitem_t **first, *to_add, *item;
+  llitem **first, *to_add, *item;
 
-  first = (llitem_t **) pfirst;
-  to_add = (llitem_t *) pto_add;
+  first = (llitem **) pfirst;
+  to_add = (llitem *) pto_add;
 
   item = *first;
   *first = to_add;
@@ -40,10 +40,10 @@ SQLITE_PRIVATE void llist_prepend(void *pfirst, void *pto_add) {
 }
 
 SQLITE_PRIVATE void llist_remove(void *pfirst, void *pto_del) {
-  llitem_t **first, *to_del, *item;
+  llitem **first, *to_del, *item;
 
-  first = (llitem_t **) pfirst;
-  to_del = (llitem_t *) pto_del;
+  first = (llitem **) pfirst;
+  to_del = (llitem *) pto_del;
 
   item = *first;
   if (to_del == item) {
