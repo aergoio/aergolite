@@ -1200,7 +1200,11 @@ loc_again1:
       sprintf(cmd, "pragma add_node='%s'", node_pubkey[node]);
     }
     db_execute(db[add_from_node], cmd);
-    sleep_ms(wait_between_add_nodes);
+    if( node==1 ){
+      sleep_ms(block_interval * 2);
+    }else{
+      sleep_ms(wait_between_add_nodes);
+    }
   }
 
 
@@ -1855,8 +1859,7 @@ void test_new_nodes(
   /* which node will make the first transactions */
   int starting_node,
   /* new nodes added to the network after it is running */
-  int n_new_no_content,
-  int n_new_with_content,
+  int n_new_nodes,
   /* nodes that are disconnected and reconnected */
   int n_old_no_content,
   int n_old_with_content,
@@ -1867,8 +1870,7 @@ void test_new_nodes(
   /* number of nodes remaining online later, less than the majority of nodes */
   int n_remaining_online,
   /* new nodes added while the network has less than half nodes */
-  int n_new_no_content2,
-  int n_new_with_content2
+  int n_new_nodes2
 ){
   sqlite3 *db[512] = {0};
   char uri[256];
@@ -1884,20 +1886,18 @@ void test_new_nodes(
          "test_new_nodes(\n"
          "  initial_nodes=%d\n", n_before);
   printf("  random_ports=%s\n", bind_to_random_ports ? "yes" : "no");
-  printf("  n_new_no_content=%d\n", n_new_no_content);
-  printf("  n_new_with_content=%d\n", n_new_with_content);
+  printf("  n_new_nodes=%d\n", n_new_nodes);
   printf("  n_old_no_content=%d\n", n_old_no_content);
   printf("  n_old_with_content=%d\n", n_old_with_content);
   printf("  num_offline_txns=%d\n", num_offline_txns);
   printf("  new_blocks_on_net=%d\n", new_blocks_on_net);
 
   printf("  n_remaining_online=%d\n", n_remaining_online);
-  printf("  n_new_no_content2=%d\n", n_new_no_content2);
-  printf("  n_new_with_content2=%d\n", n_new_with_content2);
+  printf("  n_new_nodes2=%d\n", n_new_nodes2);
   puts(")");
   fflush(stdout);
 
-  n = n_before + n_new_no_content + n_new_with_content + n_new_no_content2 + n_new_with_content2;
+  n = n_before + n_new_nodes + n_new_nodes2;
 
   assert(n>=5 && n<512);
 
@@ -2294,48 +2294,6 @@ loc_again2:
   }
 
 
-  /* execute transactions on new, not yet connected nodes */
-
-  if( n_new_with_content>0 ){
-
-    /* reopen the nodes in off-line mode */
-
-    for(i=n_before+1; i<=n_before+n_new_with_content; i++){
-      int node = i;
-      printf("opening new node %d in offline mode\n", node);
-      sprintf(uri, "file:db%d.db?blockchain=on&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
-      assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
-      /* register the callback function used to sign the admin transactions */
-      sqlite3_create_function(db[node], "sign_transaction", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC,
-        NULL, &on_sign_transaction, NULL, NULL);
-    }
-
-    puts("executing offline transactions on new nodes...");
-
-    for(i=n_before+1; i<=n_before+n_new_with_content; i++){
-      int node = i;
-      printf("executing on node %d\n", node);
-      for(j=0; j<num_offline_txns; j++){
-        char sql[256];
-        sprintf(sql, "create table t%d%d (name)", i, j);
-        db_execute(db[node], sql);
-        //db_execute(db[node], "insert into t1 values ('new')");
-        last_nonce[node]++;
-        db_check_int(db[node], "PRAGMA last_nonce", last_nonce[node]);
-      }
-    }
-
-    /* close the new nodes */
-
-    for(i=n_before+1; i<=n_before+n_new_with_content; i++){
-      int node = i;
-      sqlite3_close(db[node]);
-      db[node] = 0;
-    }
-
-  }
-
-
   /* get the list of connecting nodes */
 
   for(i=0; disconnect_nodes[i]; i++){
@@ -2343,7 +2301,7 @@ loc_again2:
     add_to_array_list(connecting_nodes, node);
   }
 
-  for(i=n_before+1; i<=n_before+n_new_with_content+n_new_no_content; i++){
+  for(i=n_before+1; i<=n_before+n_new_nodes; i++){
     add_to_array_list(connecting_nodes, i);
   }
 
@@ -2472,7 +2430,7 @@ loc_again2:
     }
     assert(done);
 
-    int total_tables = 1 + 1 + n_new_with_content * num_offline_txns;
+    int total_tables = 1 + 1;
 
     done = 0;
     for(count=0; !done && count<100; count++){
@@ -2514,7 +2472,7 @@ loc_again2:
     }
     assert(done);
 
-    int total_tables = 1 + 1 + n_new_with_content * num_offline_txns;
+    int total_tables = 1 + 1;
 
     done = 0;
     for(count=0; !done && count<100; count++){
@@ -2543,7 +2501,7 @@ loc_again2:
 
 
 
-  int n_after = n_before + n_new_with_content + n_new_no_content;
+  int n_after = n_before + n_new_nodes;
 
   int n_disconnect = n_after - n_remaining_online;
 
@@ -2598,7 +2556,7 @@ loc_again2:
   printf("checking that no new block is generated"); fflush(stdout);
 
   done = 0;
-  for(count=0, i=0; !done && count<40; count++){
+  for(count=0, i=0; !done && count<50; count++){
     int node = active_online_nodes[i];
     if( node==0 ){
       i = 0;
@@ -2618,49 +2576,6 @@ loc_again2:
   puts("");
 
 
-  /* execute transactions on new, not yet connected nodes */
-
-  if( n_new_with_content2>0 ){
-
-    /* reopen the nodes in off-line mode */
-
-    for(i=n_after+1; i<=n_after+n_new_with_content2; i++){
-      int node = i;
-      printf("opening new node %d in offline mode\n", node);
-      sprintf(uri, "file:db%d.db?blockchain=on&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
-      assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
-      /* register the callback function used to sign the admin transactions */
-      sqlite3_create_function(db[node], "sign_transaction", 1, SQLITE_UTF8,
-        NULL, &on_sign_transaction, NULL, NULL);
-    }
-
-    puts("executing offline transactions on new nodes...");
-
-    for(i=n_after+1; i<=n_after+n_new_with_content2; i++){
-      int node = i;
-      printf("executing on node %d\n", node);
-      for(j=0; j<num_offline_txns; j++){
-        char sql[256];
-        sprintf(sql, "create table t%d%d (name)", i, j);
-        db_execute(db[node], sql);
-        //db_execute(db[node], "insert into t1 values ('new')");
-        last_nonce[node]++;
-        db_check_int(db[node], "PRAGMA last_nonce", last_nonce[node]);
-      }
-    }
-
-    /* close the new nodes */
-
-    for(i=n_after+1; i<=n_after+n_new_with_content2; i++){
-      int node = i;
-      sqlite3_close(db[node]);
-      db[node] = 0;
-    }
-
-  }
-
-
-
   /* get the list of connecting nodes */
 
   clear_array_list(connecting_nodes);
@@ -2670,7 +2585,7 @@ loc_again2:
   //  add_to_array_list(connecting_nodes, node);
   //}
 
-  int n_after2 = n_after + n_new_with_content2 + n_new_no_content2;
+  int n_after2 = n_after + n_new_nodes2;
 
   for(i=n_after+1; i<=n_after2; i++){
     add_to_array_list(connecting_nodes, i);
@@ -2758,6 +2673,53 @@ loc_again2:
   }
 
 
+
+  //if( n_after < majority(n) ){
+
+    printf("checking that no new block is generated"); fflush(stdout);
+
+    done = 0;
+    for(count=0, i=0; !done && count<50; count++){
+      int node = active_online_nodes[i];
+      if( node==0 ){
+        i = 0;
+        node = active_online_nodes[i];
+      }
+      char *result, sql[128];
+      sleep_ms(wait_time);
+      sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[node]);
+      rc = db_query_str(&result, db[node], sql);
+      assert(rc==SQLITE_OK);
+      done = (strcmp(result,"processed")==0);
+      sqlite3_free(result);
+      printf("."); fflush(stdout);
+    }
+    puts("");
+    assert(done==0);
+
+
+    for(i=0; disconnect_nodes[i]; i++){
+      int node = disconnect_nodes[i];
+      printf("reconnecting node %d\n", node);
+      if( node==1 ){
+        sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
+      }else if( node==2 ){
+        sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
+      }else{
+        if( bind_to_random_ports ){
+          sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
+        }else{
+          sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, 4300 + node, pkhex, block_interval);
+        }
+      }
+      assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
+    }
+
+    clear_array_list(disconnect_nodes);
+
+  //}
+
+
   /* check if the transactions are processed in a new block */
 
   if( n_after2 >= majority(n) ){
@@ -2826,8 +2788,7 @@ loc_again2:
                         + n_old_with_content * num_offline_txns
                         + num_offline_txns;
 
-    int num_tables = 2 + n_new_with_content * num_offline_txns
-                       + n_new_with_content2 * num_offline_txns;
+    int num_tables = 2;
 
     for(i=1; i<=n_after2; i++){
 
@@ -3682,34 +3643,31 @@ int main(){
     /* bind_to_random_ports,  */ true,
     /* block interval         */ BLOCK_INTERVAL,
     /* starting_node,         */ 2,
-    /* n_new_no_content,      */ 1,
-    /* n_new_with_content,    */ 1,
+    /* n_new_nodes,           */ 2,
     /* n_old_no_content,      */ 1,
     /* n_old_with_content,    */ 2,
     /* new_blocks_on_net,     */ 1,
     /* num_offline_txns,      */ 3,
 
     /* n_remaining_online,    */ 12,
-    /* n_new_no_content2,     */ 0,
-    /* n_new_with_content2    */ 0
+    /* n_new_nodes2           */ 0
   );
 #endif
 
+
   test_new_nodes( /* total_nodes=14 */
     /* n_before,              */ 10,
     /* bind_to_random_ports,  */ true,
     /* block interval         */ BLOCK_INTERVAL,
     /* starting_node,         */ 2,
-    /* n_new_no_content,      */ 1,
-    /* n_new_with_content,    */ 1,
+    /* n_new_nodes,           */ 2,
     /* n_old_no_content,      */ 1,
     /* n_old_with_content,    */ 1,
     /* new_blocks_on_net,     */ 1,
     /* num_offline_txns,      */ 3,
 
     /* n_remaining_online,    */ 6,
-    /* n_new_no_content2,     */ 1,
-    /* n_new_with_content2    */ 1
+    /* n_new_nodes2           */ 2
   );
 
   test_new_nodes( /* total_nodes=14 */
@@ -3717,16 +3675,14 @@ int main(){
     /* bind_to_random_ports,  */ true,
     /* block interval         */ BLOCK_INTERVAL,
     /* starting_node,         */ 2,
-    /* n_new_no_content,      */ 1,
-    /* n_new_with_content,    */ 1,
+    /* n_new_nodes,           */ 2,
     /* n_old_no_content,      */ 1,
     /* n_old_with_content,    */ 1,
-    /* new_blocks_on_net,     */ 1,
+    /* new_blocks_on_net,     */ 5,
     /* num_offline_txns,      */ 3,
 
     /* n_remaining_online,    */ 6,
-    /* n_new_no_content2,     */ 2,
-    /* n_new_with_content2    */ 0
+    /* n_new_nodes2           */ 2
   );
 
 
