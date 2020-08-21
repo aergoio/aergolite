@@ -144,10 +144,10 @@ SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log, BOOL from_thi
       node->is_authorized = TRUE;
       node->is_full_node = is_full_node;
       authorized_node = node;
-      if( from_this_node ){
+      //if( from_this_node ){
         /* send all the authorizations to the new node */
         rc = send_authorizations(node, NULL);
-      }
+      //}
     }else if( node->is_authorized && from_this_node ){
       /* send only this new authorization to this node */
       rc = send_authorizations(node, log);
