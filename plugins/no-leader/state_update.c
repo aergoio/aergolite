@@ -208,7 +208,7 @@ loc_next:
         array_remove(plugin->state_update_contacted_nodes, compare_int, pid);
       }
       /* clear the list of failed nodes */
-      array_clear(&plugin->state_update_failed_nodes);
+      array_clear(plugin->state_update_failed_nodes);
       /* retry the state update with the failed nodes */
       goto loc_next;
     }
