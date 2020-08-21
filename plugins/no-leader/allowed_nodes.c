@@ -111,7 +111,7 @@ SQLITE_PRIVATE void on_new_accepted_node(node *node) {
 
 /****************************************************************************/
 
-SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log, BOOL from_network){
+SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log, BOOL from_this_node){
   aergolite *this_node = plugin->this_node;
   node *node, *authorized_node=NULL;
   BOOL is_full_node;
@@ -130,6 +130,13 @@ SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log, BOOL from_net
   if( plugin->pklen==pklen && memcmp(plugin->pubkey,pubkey,pklen)==0 ){
     plugin->is_authorized = TRUE;
     plugin->is_full_node = is_full_node;
+    /* if the admin is authorizing this node as the first one */
+    if( from_this_node && !plugin->current_block ){
+      /* mark the current state as finished */
+      plugin->sync_down_state = DB_STATE_IN_SYNC;
+      /* create the first block */
+      //start_new_block_timer(plugin);
+    }
   }
 
   for( node=plugin->peers; node; node=node->next ){
@@ -137,11 +144,11 @@ SQLITE_PRIVATE int on_new_authorization(plugin *plugin, void *log, BOOL from_net
       node->is_authorized = TRUE;
       node->is_full_node = is_full_node;
       authorized_node = node;
-      if( !from_network ){
+      if( from_this_node ){
         /* send all the authorizations to the new node */
         rc = send_authorizations(node, NULL);
       }
-    }else if( node->is_authorized && !from_network ){
+    }else if( node->is_authorized && from_this_node ){
       /* send only this new authorization to this node */
       rc = send_authorizations(node, log);
     }
@@ -176,7 +183,7 @@ SQLITE_PRIVATE void on_authorization_received(node *node, void *msg, int size){
   binn_list_foreach(list, item){
     assert( item.type==BINN_LIST );
     void *log = item.ptr;
-    on_new_authorization(plugin, log, TRUE);
+    on_new_authorization(plugin, log, FALSE);
   }
 
 }

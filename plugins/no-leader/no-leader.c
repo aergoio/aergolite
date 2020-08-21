@@ -1161,6 +1161,10 @@ SQLITE_PRIVATE void worker_thread_on_peer_message(uv_msg_t *stream, void *msg, i
     SYNCTRACE("   received message: PLUGIN_UPTODATE\n");
     on_uptodate_message(node, msg, size);
     break;
+  case PLUGIN_BUSY:
+    SYNCTRACE("   received message: PLUGIN_BUSY\n");
+    on_node_is_busy(node, msg, size);
+    break;
 
 /*
   case PLUGIN_TXN_NOTFOUND:

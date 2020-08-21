@@ -39,6 +39,7 @@
 
 #define PLUGIN_CMD_PING            0xCD21     /* check if alive */
 #define PLUGIN_CMD_PONG            0xCD22     /* I am alive */
+#define PLUGIN_BUSY                0xCD23     /* I am busy */
 
 #define PLUGIN_TEXT                0xCD31     /* text message via TCP */
 

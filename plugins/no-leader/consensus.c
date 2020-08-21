@@ -149,13 +149,13 @@ loc_again:
 */
 SQLITE_PRIVATE int convert_block_vote(struct block *block, int round, int node_id, void *sig){
   binn_iter iter;
-  binn vote, *item;
+  binn vote, *item=NULL;
 
-  SYNCTRACE("convert_block_vote\n");
+  SYNCTRACE("convert_block_vote height=%" INT64_FORMAT " node=%d\n", block->height, node_id);
 
   if( !block->votes ){
     block->votes = binn_list();
-    if( !block->votes ) return SQLITE_NOMEM;
+    if( !block->votes ) goto loc_failed;
   }
 
 #if 0
@@ -183,6 +183,7 @@ SQLITE_PRIVATE int convert_block_vote(struct block *block, int round, int node_i
 
 loc_failed:
   binn_free(item);
+  sqlite3_log(1, "convert_block_vote FAILED");
   return SQLITE_NOMEM;
 }
 
@@ -536,6 +537,8 @@ SQLITE_PRIVATE int commit_block(plugin *plugin, struct block *block){
   /* update the nodes types on memory */
   plugin_update_nodes_types(plugin);
 
+  count_authorized_nodes(plugin);
+
   SYNCTRACE("commit_block OK\n");
 
   start_new_block_timer(plugin);
@@ -855,7 +858,7 @@ SQLITE_PRIVATE void check_for_winner_block(plugin *plugin, int round) {
   struct block *block;
   int rc, total_votes=0, remaining_votes;
 
-  SYNCTRACE("check_for_winner_block\n");
+  SYNCTRACE("check_for_winner_block round=%d\n", round+1);
 
   assert( round==0 || round==1 );
 
@@ -874,6 +877,9 @@ SQLITE_PRIVATE void check_for_winner_block(plugin *plugin, int round) {
     /* check if the block reached the majority of the votes */
     if( block->height==current_height+1 &&
         block->num_votes[round] >= majority(num_authorized_nodes) ){
+
+      SYNCTRACE("winner_block num_votes=%d active_nodes=%d\n",
+                block->num_votes[round], num_authorized_nodes);
 
       /* commit the new block on this node */
       /* is the winning block open? */
@@ -1171,7 +1177,7 @@ SQLITE_PRIVATE void new_block_timer_cb(uv_timer_t* handle) {
   /* broadcast the block to the peers */
   broadcast_new_block(plugin, block);
 
-  /* start the block wait timer if not yet started */
+  /* is this the first block? */
   start_block_wait_timer(plugin);
 
 }
@@ -1180,6 +1186,7 @@ SQLITE_PRIVATE void new_block_timer_cb(uv_timer_t* handle) {
 
 SQLITE_PRIVATE void start_new_block_timer(plugin *plugin) {
   int64 current_height = plugin->current_block ? plugin->current_block->height : 0;
+  if( plugin->sync_down_state!=DB_STATE_IN_SYNC ) return;
   /* if this node already generated a block for this round
   ** and it is not committed yet */
   if( plugin->last_created_block_height==current_height+1 ) return;
@@ -1188,6 +1195,7 @@ SQLITE_PRIVATE void start_new_block_timer(plugin *plugin) {
   if( !uv_is_active((uv_handle_t*)&plugin->new_block_timer) ){
     int interval = calculate_node_wait_interval(plugin, current_height+1);
     SYNCTRACE("start_new_block_timer interval=%d\n", interval);
+    if( current_height==0 ) interval = 10;
     uv_timer_start(&plugin->new_block_timer, new_block_timer_cb, interval, 0);
   }
 }

@@ -176,10 +176,10 @@ SQLITE_PRIVATE void request_state_update_next(plugin *plugin) {
 
 loc_next:
 
-  /* check if majority of nodes were already contacted */
+  /* check if majority of nodes were already contacted AND at least one block was retrieved */
   count_authorized_nodes(plugin);  /* including off-line nodes */
   count = array_count(plugin->state_update_contacted_nodes) + 1;  /* including this node */
-  if( count >= majority(plugin->total_authorized_nodes) ){
+  if( count >= majority(plugin->total_authorized_nodes) && plugin->current_block ){
     SYNCTRACE("request_state_update_next - majority already contacted\n");
     state_update_finished(plugin);
     return;
@@ -280,6 +280,32 @@ loc_failed:
   /* mark the node as failed */
   array_append(&plugin->state_update_failed_nodes, &to_node->id);
   return SQLITE_ERROR;
+}
+
+/****************************************************************************/
+
+SQLITE_PRIVATE void on_node_is_busy(node *node, void *msg, int size) {
+  plugin *plugin = node->plugin;
+
+  SYNCTRACE("on_node_is_busy\n");
+
+  /* ignore messages from invalid nodes */
+  if( node->id!=plugin->contacted_node_id ){
+    SYNCTRACE("on_uptodate_message - message coming from invalid node: %d\n", node->id);
+    return;
+  }
+
+  if( plugin->contacted_node_id!=0 ){
+    /* mark the node as failed */
+    array_append(&plugin->state_update_failed_nodes, &plugin->contacted_node_id);
+  }
+
+  /* disable the timer */
+  uv_timer_stop(&plugin->state_update_timer);
+
+  /* check on next node */
+  request_state_update_next(plugin);
+
 }
 
 /****************************************************************************/
@@ -458,6 +484,8 @@ SQLITE_PRIVATE void on_apply_state_update(node *node, void *msg, int size) {
   /* update the nodes types on memory */
   plugin_update_nodes_types(plugin);
 
+  count_authorized_nodes(plugin);
+
   SYNCTRACE("on_apply_state_update - OK\n");
 
 loc_exit:
@@ -577,6 +605,18 @@ SQLITE_PRIVATE void on_request_state_update(node *node, void *msg, int size) {
     return;
   }
 
+  if( plugin->sync_down_state==DB_STATE_SYNCHRONIZING ||
+      plugin->is_updating_state ){
+    /* this node is receiving an update */
+    SYNCTRACE("on_request_state_update - this node is receiving an update\n");
+    /* inform that this node is busy, to retry later */
+    map = binn_map();
+    if( binn_map_set_int32(map,PLUGIN_CMD,PLUGIN_BUSY)==TRUE ){
+      send_peer_message(node, map, NULL);
+    }
+    binn_free(map);
+    return;
+  }
 
   /* if there is an open verified block, roll it back */
   if( plugin->open_block ){

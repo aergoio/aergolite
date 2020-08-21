@@ -47,15 +47,10 @@ SQLITE_PRIVATE void send_local_transactions(plugin *plugin) {
       SYNCTRACE("send_local_transactions - no more local transactions - IN SYNC\n");
       plugin->sync_up_state = DB_STATE_IN_SYNC;
       return;
-    } else if( rc!=SQLITE_OK || nonce==0 || log==0 ){
+    } else if( rc!=SQLITE_OK || nonce==0 || log==NULL ){
       sqlite3_log(rc, "send_local_transactions FAILED - nonce=%" INT64_FORMAT, nonce);
       plugin->sync_up_state = DB_STATE_LOCAL_CHANGES;
       return;
-    }
-
-    if( !plugin->peers ){
-      SYNCTRACE("send_local_transactions - no connected nodes\n");
-      goto loc_failed;
     }
 
     rc = process_new_transaction(plugin, plugin->node_id, nonce, log, &txn);
@@ -65,7 +60,7 @@ SQLITE_PRIVATE void send_local_transactions(plugin *plugin) {
       rc = broadcast_transaction(plugin, txn);
     }
 
-    aergolite_free_transaction(log);
+    aergolite_free_transaction(log); log = NULL;
     if( rc ) goto loc_failed;
 
     nonce++;
@@ -74,7 +69,7 @@ SQLITE_PRIVATE void send_local_transactions(plugin *plugin) {
   return;
 
 loc_failed:
-  aergolite_free_transaction(log);
+  if( log ) aergolite_free_transaction(log);
   plugin->sync_up_state = DB_STATE_LOCAL_CHANGES;
 
 }
@@ -233,6 +228,11 @@ SQLITE_PRIVATE int broadcast_transaction(plugin *plugin, struct transaction *txn
   SYNCTRACE("broadcast_transaction"
             " node=%d nonce=%" INT64_FORMAT " sql_count=%d\n",
             txn->node_id, txn->nonce, txn_sql_count(txn->log) );
+
+  if( !plugin->peers ){
+    SYNCTRACE("send_local_transactions - no connected nodes\n");
+    return SQLITE_ERROR;
+  }
 
   plugin->sync_up_state = DB_STATE_SYNCHRONIZING;
 
@@ -562,7 +562,7 @@ loc_next:
     /* is it an authorization? */
     rc = read_authorized_pubkey(txn->log, pubkey, &pklen, NULL);
     if( rc==SQLITE_OK ){
-      rc = on_new_authorization(plugin, txn->log, FALSE);
+      rc = on_new_authorization(plugin, txn->log, TRUE);
     }
 
     binn_free(txn->log);

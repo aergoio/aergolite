@@ -344,6 +344,10 @@ AERGOLITE_API BOOL can_vote_on_block(
 
 SQLITE_PRIVATE int get_num_active_nodes(aergolite *this_node, int64 block_height);
 
+AERGOLITE_API int verify_block_votes(
+  aergolite *this_node, int64 block_height, uchar *block_id, void *votes, BOOL in_state_update
+);
+
 SQLITE_PRIVATE int check_page(aergolite *this_node, Pgno pgno, void *data, int size);
 
 SQLITE_PRIVATE int read_block_header(
