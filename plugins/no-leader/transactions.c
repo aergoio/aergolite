@@ -230,7 +230,7 @@ SQLITE_PRIVATE int broadcast_transaction(plugin *plugin, struct transaction *txn
             txn->node_id, txn->nonce, txn_sql_count(txn->log) );
 
   if( !plugin->peers ){
-    SYNCTRACE("send_local_transactions - no connected nodes\n");
+    SYNCTRACE("broadcast_transaction - no connected nodes\n");
     return SQLITE_ERROR;
   }
 
