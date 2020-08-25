@@ -469,10 +469,15 @@ loc_again1:
 
   /* register the callback function used to sign the admin transactions */
 
-  for(i=1; i<=n; i++){
-    sqlite3_create_function(db[i], "sign_transaction", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC,
+  int exec_from_node = 3;
+
+  i = add_from_node;
+  sqlite3_create_function(db[i], "sign_transaction", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC,
       NULL, &on_sign_transaction, NULL, NULL);
-  }
+
+  i = exec_from_node;
+  sqlite3_create_function(db[i], "sign_transaction", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC,
+      NULL, &on_sign_transaction, NULL, NULL);
 
 
   /* store the admin private and public keys */
@@ -562,8 +567,6 @@ loc_again2:
 
   printf("executing transactions on nodes...");
 
-  int exec_from_node = 3;
-
   db_execute(db[exec_from_node], "create table t1 (name)");
   db_execute(db[exec_from_node], "insert into t1 values ('aa1')");
   db_execute(db[exec_from_node], "insert into t1 values ('aa2')");
@@ -626,12 +629,50 @@ loc_again2:
   }
 
 
-  /* ensure that the data was not replicated to the not authorized nodes */
+  /* ensure that the data was NOT replicated to the non-authorized nodes */
 
   for(i=2; i<=n; i++){
     if( i%2==1 ) continue;
     printf("checking node %d\n", i); fflush(stdout);
     db_check_int(db[i], "select count(*) from sqlite_master", 0);
+  }
+
+
+  /* test non-allowed commands */
+
+  printf("testing non-allowed commands...");
+
+  db_catch(db[add_from_node], "insert into aergolite_nodes (node_id,pubkey) values (111,'test')");
+  db_catch(db[add_from_node], "update aergolite_nodes set last_nonce = 0");
+  db_catch(db[add_from_node], "delete from aergolite_nodes");
+  db_catch(db[add_from_node], "drop table aergolite_nodes");
+  db_catch(db[add_from_node], "alter table aergolite_nodes add column test");
+  db_catch(db[add_from_node], "alter table aergolite_nodes rename to new_name");
+
+  db_catch(db[exec_from_node], "insert into aergolite_nodes (node_id,pubkey) values (111,'test')");
+  db_catch(db[exec_from_node], "update aergolite_nodes set last_nonce = 0");
+  db_catch(db[exec_from_node], "delete from aergolite_nodes");
+  db_catch(db[exec_from_node], "drop table aergolite_nodes");
+  db_catch(db[exec_from_node], "alter table aergolite_nodes add column test");
+  db_catch(db[exec_from_node], "alter table aergolite_nodes rename to new_name");
+
+  db_catch(db[5], "insert into aergolite_nodes (node_id,pubkey) values (111,'test')");
+  db_catch(db[5], "update aergolite_nodes set last_nonce = 0");
+  db_catch(db[5], "delete from aergolite_nodes");
+  db_catch(db[5], "drop table aergolite_nodes");
+  db_catch(db[5], "alter table aergolite_nodes add column test");
+  db_catch(db[5], "alter table aergolite_nodes rename to new_name");
+
+  db_catch(db[4], "insert into aergolite_nodes (node_id,pubkey) values (111,'test')");
+  db_catch(db[4], "update aergolite_nodes set last_nonce = 0");
+  db_catch(db[4], "delete from aergolite_nodes");
+  db_catch(db[4], "drop table aergolite_nodes");
+  db_catch(db[4], "alter table aergolite_nodes add column test");
+  db_catch(db[4], "alter table aergolite_nodes rename to new_name");
+
+
+  for(i=1; i<=n; i++){
+    db_check_int(db[i], "PRAGMA last_nonce", last_nonce[i]);
   }
 
 
@@ -3165,7 +3206,7 @@ int main(){
   check_limit_of_open_files();
 #endif
 
-  //sqlite3_config(SQLITE_CONFIG_LOG, errorLogCallback, NULL);
+  sqlite3_config(SQLITE_CONFIG_LOG, errorLogCallback, NULL);
 
 
 //  test_5_nodes(0);
