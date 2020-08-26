@@ -409,7 +409,7 @@ void test_invalid_admin(int n, int add_from_node, bool bind_to_random_ports, int
     }else{
       sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&admin=%s&password=test&block_interval=%d", i, 4300 + i, pkhex, block_interval);
     }
-    //puts(uri);
+    //puts(uri); fflush(stdout);
     assert( sqlite3_open(uri, &db[i])==SQLITE_OK );
   }
 
@@ -503,12 +503,12 @@ loc_again1:
     char cmd[128];
     sprintf(cmd, "pragma add_node='%s'", node_pubkey[node]);
     if( node%2==0 ){
-      printf("adding node %d to the network - not admin\n", node);
+      printf("adding node %d to the network - not admin\n", node); fflush(stdout);
       memcpy(privkey, user_privkey, 32);
       strcpy(pkhex, user_pkhex);
       db_catch(db[add_from_node], cmd);
     }else{
-      printf("adding node %d to the network - from admin\n", node);
+      printf("adding node %d to the network - from admin\n", node); fflush(stdout);
       memcpy(privkey, admin_privkey, 32);
       strcpy(pkhex, admin_pkhex);
       db_execute(db[add_from_node], cmd);
@@ -524,7 +524,7 @@ loc_again1:
 
   for(node=1; node<=n; node++){
     int nrows;
-    printf("checking node %d\n", node);
+    printf("checking node %d\n", node); fflush(stdout);
 loc_again2:
     sqlite3_finalize(stmt); stmt = NULL;
     rc = sqlite3_prepare_v2(db[node], "pragma nodes", -1, &stmt, NULL);
@@ -544,7 +544,7 @@ loc_again2:
     assert( rc==SQLITE_DONE || rc==SQLITE_OK );
     sqlite3_finalize(stmt); stmt = NULL;
 
-    printf("connected to %d nodes\n", nrows);
+    printf("connected to %d nodes\n", nrows); fflush(stdout);
     if( node<=2 ){
       assert( nrows==n );
     }else if( node%2==0 ){
@@ -565,7 +565,7 @@ loc_again2:
 
   /* execute 3 db transactions on one of the databases */
 
-  printf("executing transactions on nodes...");
+  printf("executing transactions on nodes..."); fflush(stdout);
 
   db_execute(db[exec_from_node], "create table t1 (name)");
   db_execute(db[exec_from_node], "insert into t1 values ('aa1')");
@@ -640,7 +640,7 @@ loc_again2:
 
   /* test non-allowed commands */
 
-  printf("testing non-allowed commands...");
+  printf("testing non-allowed commands..."); fflush(stdout);
 
   db_catch(db[add_from_node], "insert into aergolite_nodes (node_id,pubkey) values (111,'test')");
   db_catch(db[add_from_node], "update aergolite_nodes set last_nonce = 0");
@@ -669,6 +669,29 @@ loc_again2:
   db_catch(db[4], "drop table aergolite_nodes");
   db_catch(db[4], "alter table aergolite_nodes add column test");
   db_catch(db[4], "alter table aergolite_nodes rename to new_name");
+
+
+  db_catch(db[add_from_node], "insert into sqlite_master (name) values ('test')");
+  db_catch(db[add_from_node], "update sqlite_master set name = ''");
+  db_catch(db[add_from_node], "delete from sqlite_master");
+  db_catch(db[add_from_node], "drop table sqlite_master");
+  db_catch(db[add_from_node], "alter table sqlite_master add column test");
+  db_catch(db[add_from_node], "alter table sqlite_master rename to new_name");
+
+  db_catch(db[exec_from_node], "insert into sqlite_master (name) values ('test')");
+  db_catch(db[exec_from_node], "update sqlite_master set name = ''");
+  db_catch(db[exec_from_node], "delete from sqlite_master");
+  db_catch(db[exec_from_node], "drop table sqlite_master");
+  db_catch(db[exec_from_node], "alter table sqlite_master add column test");
+  db_catch(db[exec_from_node], "alter table sqlite_master rename to new_name");
+
+  db_catch(db[5], "insert into sqlite_master (name) values ('test')");
+  db_catch(db[5], "update sqlite_master set name = ''");
+  db_catch(db[5], "delete from sqlite_master");
+  db_catch(db[5], "drop table sqlite_master");
+  db_catch(db[5], "alter table sqlite_master add column test");
+  db_catch(db[5], "alter table sqlite_master rename to new_name");
+
 
 
   for(i=1; i<=n; i++){
@@ -724,7 +747,7 @@ void test_add_nodes(int n, int n_each_time, int add_from_node, bool bind_to_rand
     }else{
       sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&admin=%s&password=test&block_interval=%d", i, 4300 + i, pkhex, block_interval);
     }
-    //puts(uri);
+    //puts(uri); fflush(stdout);
     assert( sqlite3_open(uri, &db[i])==SQLITE_OK );
   }
 
