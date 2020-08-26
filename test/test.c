@@ -670,6 +670,7 @@ loc_again2:
   db_catch(db[4], "alter table aergolite_nodes add column test");
   db_catch(db[4], "alter table aergolite_nodes rename to new_name");
 
+  /* sqlite_master */
 
   db_catch(db[add_from_node], "insert into sqlite_master (name) values ('test')");
   db_catch(db[add_from_node], "update sqlite_master set name = ''");
@@ -691,6 +692,26 @@ loc_again2:
   db_catch(db[5], "drop table sqlite_master");
   db_catch(db[5], "alter table sqlite_master add column test");
   db_catch(db[5], "alter table sqlite_master rename to new_name");
+
+  db_catch(db[4], "insert into sqlite_master (name) values ('test')");
+  db_catch(db[4], "update sqlite_master set name = ''");
+  db_catch(db[4], "delete from sqlite_master");
+  db_catch(db[4], "drop table sqlite_master");
+  db_catch(db[4], "alter table sqlite_master add column test");
+  db_catch(db[4], "alter table sqlite_master rename to new_name");
+
+  /* non-allowed commands for normal nodes */
+
+  db_catch(db[5], "update t1 set name = ''");
+  db_catch(db[5], "delete from t1");
+  db_catch(db[5], "create table t2(name)");
+  db_catch(db[5], "create virtual table t2 using generate_series");
+  db_catch(db[5], "drop table t1");
+  db_catch(db[5], "alter table t1 add column test");
+  db_catch(db[5], "alter table t1 rename to new_name");
+  db_catch(db[5], "create view v1 as select * from t1");
+  db_catch(db[5], "create index i1 on t1 (name)");
+  db_catch(db[5], "create trigger tr1 before insert on t1 begin select raise(FAIL,''); end");
 
 
 
