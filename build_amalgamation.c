@@ -113,6 +113,8 @@ int main() {
   process_file("core", "sqlite3.c", "amalgamation/sqlite3.c");
   process_file("plugins/no-leader", "no-leader.c", "amalgamation/sqlite3.c");
 
+  system("cp core/sqlite3ext.h amalgamation/");
+
 #ifdef _WIN32
   system("del core\\binn.c");
   system("del core\\binn.h");
