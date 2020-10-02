@@ -32,6 +32,23 @@ struct nodeauth {
 };
 
 
+struct raw_tcp_address {
+  char host[64];
+  int port;
+};
+
+struct anchoring {
+  int interval;
+  int interval_type;
+  char contract_address[64];
+  struct raw_tcp_address servers[3];
+};
+
+#define ANCHORING_BLOCKS   1
+#define ANCHORING_MINUTES  2
+#define ANCHORING_HOURS    3
+
+
 /*
 typedef struct blob blob;
 
@@ -142,8 +159,11 @@ struct aergolite {
 
   nodeauth *authorizations;   /* List of node authorizations */
 
+  struct anchoring *anchoring;
+
   BOOL is_full_node;
   BOOL nodes_changed;
+  BOOL config_changed;
 
   int64 block_height;         /* ... */
   struct block active_block;  /* ... */
@@ -366,6 +386,12 @@ SQLITE_PRIVATE int save_block(
   struct block *block
 );
 
+
+SQLITE_PRIVATE int configure_anchoring(aergolite *this_node, char *zRight, Parse *pParse);
+SQLITE_PRIVATE char * get_anchoring_config(aergolite *this_node);
+SQLITE_PRIVATE int parse_anchoring_config(char *config, struct anchoring **panchoring);
+
+SQLITE_PRIVATE void reload_consensus_configs(aergolite *this_node);
 
 SQLITE_PRIVATE int get_last_nonce_db(sqlite3 *db, int iDb, int64 *pnonce);
 SQLITE_PRIVATE char * get_transaction_status_db(sqlite3 *db, int iDb, int64 nonce);
