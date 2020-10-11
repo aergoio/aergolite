@@ -215,6 +215,9 @@ SQLITE_PRIVATE int  disable_aergolite(Pager *pPager);
 SQLITE_API void to_hex(char *source, int size, char *dest);
 SQLITE_API void from_hex(char *source, int size, char *dest);
 
+SQLITE_API int  pubkey_to_address(const void *pubkey, char *address, size_t address_size);
+SQLITE_API BOOL address_to_pubkey(const char *address, size_t address_size, void *pubkey);
+
 SQLITE_PRIVATE void aergoliteCheckUserCommand(sqlite3 *db, Vdbe *p, char *zTrace);
 SQLITE_PRIVATE void aergoliteProcessUserCommand(sqlite3 *db, int iDb, Pager *pPager, char *zSql);
 SQLITE_PRIVATE int  aergoliteCheckExecResult(sqlite3 *db, int rc);

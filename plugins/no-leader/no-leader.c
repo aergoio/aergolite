@@ -214,7 +214,7 @@ SQLITE_PRIVATE int print_allowed_node_cb(
 ){
   struct print_node *data = (struct print_node *) arg;
   struct node *node;
-  char hexpubkey[72], *type;
+  char pubkeystr[56], *type;
 
   /* ignore if it is this node */
   if( memcmp(data->plugin->pubkey,pubkey,pklen)==0 ) goto loc_exit;
@@ -227,8 +227,9 @@ SQLITE_PRIVATE int print_allowed_node_cb(
 
   /* print the offline node */
   type = is_full_node ? "full" : "light";
-  to_hex(pubkey, pklen, hexpubkey);
-  node_list_add(data->vdbe, node_id, hexpubkey, type, "(offline)", "", "", "", "", "", "");
+  //to_hex(pubkey, pklen, pubkeystr);
+  pubkey_to_address(pubkey, pubkeystr, sizeof pubkeystr);
+  node_list_add(data->vdbe, node_id, pubkeystr, type, "(offline)", "", "", "", "", "", "");
 
 loc_exit:
   return SQLITE_OK;
@@ -243,22 +244,23 @@ SQLITE_API void print_node_list(void *arg, void *vdbe) {
   aergolite *this_node = plugin->this_node;
   struct node *node;
   char hostname[256], cpu[256], os[256], app[256], *node_info;
-  char hexpubkey[72], address[32];
+  char pubkeystr[56], address[32];
   int pklen;
 
   /* add this node to the list of nodes (always the first one) */
 
   if( plugin->pubkey )
-    to_hex(plugin->pubkey, plugin->pklen, hexpubkey);
+    //to_hex(plugin->pubkey, plugin->pklen, pubkeystr);
+    pubkey_to_address(plugin->pubkey, pubkeystr, sizeof pubkeystr);
   else
-    hexpubkey[0] = 0;
+    pubkeystr[0] = 0;
   sprintf(address, "%s:%d", plugin->bind->host, plugin->bind->port);
   get_this_device_info(hostname, cpu, os, app);
   node_info = aergolite_get_node_info(this_node);
 
   node_list_add(vdbe,
      plugin->node_id,
-     hexpubkey,
+     pubkeystr,
      plugin->is_full_node ? "full" : "light",
      address,
      hostname,
@@ -273,12 +275,13 @@ SQLITE_API void print_node_list(void *arg, void *vdbe) {
   for(node=plugin->peers; node; node=node->next){
     if( node->conn_state!=CONN_STATE_CONNECTED ) continue;
 
-    to_hex(node->pubkey, node->pklen, hexpubkey);
+    //to_hex(node->pubkey, node->pklen, pubkeystr);
+    pubkey_to_address(node->pubkey, pubkeystr, sizeof pubkeystr);
     sprintf(address, "%s:%d", node->host, node->port);
 
     node_list_add(vdbe,
        node->id,
-       hexpubkey,
+       pubkeystr,
        node->is_full_node ? "full" : "light",
        address,
        node->hostname,

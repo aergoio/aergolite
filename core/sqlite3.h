@@ -11988,6 +11988,9 @@ SQLITE_API char *stripchr(char *mainstr, int separator);
 SQLITE_API void to_hex(char *source, int size, char *dest);
 SQLITE_API void from_hex(char *source, int size, char *dest);
 
+SQLITE_API int  pubkey_to_address(const void *pubkey, char *address, size_t address_size);
+SQLITE_API BOOL address_to_pubkey(const char *address, size_t address_size, void *pubkey);
+
 
 /*
 ** Digital signatures
