@@ -24,6 +24,8 @@ const int wait_time = 150;
 const int wait_time = 250;
 #endif
 
+const int num_system_tables = 2;
+
 /*
 ** Private and public keys for the blockchain admin
 */
@@ -33,6 +35,7 @@ secp256k1_pubkey pubkey_obj;
 secp256k1_context *ecdsa_ctx;
 size_t pklen;
 char pkhex[76];
+char pkstr[56];
 
 /****************************************************************************/
 
@@ -58,6 +61,8 @@ void prepare_blockchain_admin_keys(){
 
   /* get the hexadecimal representation of the public key */
   to_hex((char*)pubkey, pklen, pkhex);
+  /* get the account representation of the public key */
+  pubkey_to_address(pubkey, pkstr, sizeof pkstr);
 
 }
 
@@ -381,7 +386,7 @@ void test_invalid_admin(int n, int add_from_node, bool bind_to_random_ports, int
   unsigned char admin_privkey[32], admin_pubkey[36];
   unsigned char user_privkey[32], user_pubkey[36];
   size_t user_pklen;
-  char admin_pkhex[76], user_pkhex[76];
+  char admin_pkstr[56], user_pkstr[56];
 
   printf("test_invalid_admin(nodes=%d add_from_node=%d random_ports=%s block_interval=%d)...",
          n, add_from_node, bind_to_random_ports ? "yes" : "no", block_interval); fflush(stdout);
@@ -397,17 +402,17 @@ void test_invalid_admin(int n, int add_from_node, bool bind_to_random_ports, int
 
   /* open the connections to the databases using the admin public key */
 
-  sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&admin=%s&password=test&block_interval=%d", pkhex, block_interval);
+  sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&admin=%s&password=test&block_interval=%d", pkstr, block_interval);
   assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
 
-  sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&admin=%s&password=test&block_interval=%d", pkhex, block_interval);
+  sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&admin=%s&password=test&block_interval=%d", pkstr, block_interval);
   assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
 
   for(i=3; i<=n; i++){
     if( bind_to_random_ports ){
-      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&admin=%s&password=test&block_interval=%d", i, pkhex, block_interval);
+      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&admin=%s&password=test&block_interval=%d", i, pkstr, block_interval);
     }else{
-      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&admin=%s&password=test&block_interval=%d", i, 4300 + i, pkhex, block_interval);
+      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&admin=%s&password=test&block_interval=%d", i, 4300 + i, pkstr, block_interval);
     }
     //puts(uri); fflush(stdout);
     assert( sqlite3_open(uri, &db[i])==SQLITE_OK );
@@ -482,7 +487,7 @@ loc_again1:
 
   /* store the admin private and public keys */
   memcpy(admin_privkey, privkey, 32);
-  strcpy(admin_pkhex, pkhex);
+  strcpy(admin_pkstr, pkstr);
 
   /* prepare fake admin private and public keys */
   sqlite3_randomness(32, user_privkey);
@@ -492,7 +497,8 @@ loc_again1:
   rc = secp256k1_ec_pubkey_serialize(ecdsa_ctx, user_pubkey, &user_pklen,
                                      &pubkey_obj, SECP256K1_EC_COMPRESSED);
   assert( rc==1 );
-  to_hex((char*)user_pubkey, user_pklen, user_pkhex);
+  //to_hex((char*)user_pubkey, user_pklen, user_pkhex);
+  pubkey_to_address(user_pubkey, user_pkstr, sizeof user_pkstr);
 
 
   /* add nodes to the network.
@@ -505,12 +511,12 @@ loc_again1:
     if( node%2==0 ){
       printf("adding node %d to the network - not admin\n", node); fflush(stdout);
       memcpy(privkey, user_privkey, 32);
-      strcpy(pkhex, user_pkhex);
+      strcpy(pkstr, user_pkstr);
       db_catch(db[add_from_node], cmd);
     }else{
       printf("adding node %d to the network - from admin\n", node); fflush(stdout);
       memcpy(privkey, admin_privkey, 32);
-      strcpy(pkhex, admin_pkhex);
+      strcpy(pkstr, admin_pkstr);
       db_execute(db[add_from_node], cmd);
       sleep_ms(block_interval);
     }
@@ -518,7 +524,7 @@ loc_again1:
 
   /* restore the blockchain admin keys */
   memcpy(privkey, admin_privkey, 32);
-  strcpy(pkhex, admin_pkhex);
+  strcpy(pkstr, admin_pkstr);
 
   /* ensure that the nodes are included on the blockchain network */
 
@@ -705,7 +711,7 @@ loc_again2:
   db_catch(db[5], "update t1 set name = ''");
   db_catch(db[5], "delete from t1");
   db_catch(db[5], "create table t2(name)");
-  db_catch(db[5], "create virtual table t2 using generate_series");
+  db_catch(db[5], "create virtual table t2 using dbstat");
   db_catch(db[5], "drop table t1");
   db_catch(db[5], "alter table t1 add column test");
   db_catch(db[5], "alter table t1 rename to new_name");
@@ -756,17 +762,17 @@ void test_add_nodes(int n, int n_each_time, int add_from_node, bool bind_to_rand
 
   /* open the connections to the databases using the admin public key */
 
-  sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&admin=%s&password=test&block_interval=%d", pkhex, block_interval);
+  sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&admin=%s&password=test&block_interval=%d", pkstr, block_interval);
   assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
 
-  sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&admin=%s&password=test&block_interval=%d", pkhex, block_interval);
+  sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&admin=%s&password=test&block_interval=%d", pkstr, block_interval);
   assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
 
   for(i=3; i<=n; i++){
     if( bind_to_random_ports ){
-      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&admin=%s&password=test&block_interval=%d", i, pkhex, block_interval);
+      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&admin=%s&password=test&block_interval=%d", i, pkstr, block_interval);
     }else{
-      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&admin=%s&password=test&block_interval=%d", i, 4300 + i, pkhex, block_interval);
+      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&admin=%s&password=test&block_interval=%d", i, 4300 + i, pkstr, block_interval);
     }
     //puts(uri); fflush(stdout);
     assert( sqlite3_open(uri, &db[i])==SQLITE_OK );
@@ -1189,17 +1195,17 @@ void test_reconnection(
 
   /* open the connections to the databases */
 
-  sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
+  sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkstr, block_interval);
   assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
 
-  sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
+  sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s&block_interval=%d", pkstr, block_interval);
   assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
 
   for(i=3; i<=n; i++){
     if( bind_to_random_ports ){
-      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", i, pkhex, block_interval);
+      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", i, pkstr, block_interval);
     }else{
-      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", i, 4300 + i, pkhex, block_interval);
+      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", i, 4300 + i, pkstr, block_interval);
     }
     //puts(uri);
     assert( sqlite3_open(uri, &db[i])==SQLITE_OK );
@@ -1669,7 +1675,7 @@ loc_check_conns:
     for(i=0; active_offline_nodes[i]; i++){
       int node = active_offline_nodes[i];
       printf("reopening node %d in offline mode\n", node);
-      sprintf(uri, "file:db%d.db?blockchain=on&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
+      sprintf(uri, "file:db%d.db?blockchain=on&password=test&admin=%s&block_interval=%d", node, pkstr, block_interval);
       assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
     }
 
@@ -1713,14 +1719,14 @@ loc_check_conns:
     int node = disconnect_nodes[i];
     printf("reconnecting node %d\n", node);
     if( node==1 ){
-      sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
+      sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkstr, block_interval);
     }else if( node==2 ){
-      sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
+      sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s&block_interval=%d", pkstr, block_interval);
     }else{
       if( bind_to_random_ports ){
-        sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
+        sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, pkstr, block_interval);
       }else{
-        sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, 4300 + node, pkhex, block_interval);
+        sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, 4300 + node, pkstr, block_interval);
       }
     }
     assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
@@ -1995,17 +2001,17 @@ void test_new_nodes(
 
   /* open the connections to the databases */
 
-  sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
+  sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkstr, block_interval);
   assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
 
-  sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
+  sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s&block_interval=%d", pkstr, block_interval);
   assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
 
   for(i=3; i<=n_before; i++){
     if( bind_to_random_ports ){
-      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", i, pkhex, block_interval);
+      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", i, pkstr, block_interval);
     }else{
-      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", i, 4300 + i, pkhex, block_interval);
+      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", i, 4300 + i, pkstr, block_interval);
     }
     //puts(uri);
     assert( sqlite3_open(uri, &db[i])==SQLITE_OK );
@@ -2337,7 +2343,7 @@ loc_again2:
     for(i=0; i<n_old_with_content; i++){
       int node = disconnect_nodes[i];
       printf("reopening node %d in offline mode\n", node);
-      sprintf(uri, "file:db%d.db?blockchain=on&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
+      sprintf(uri, "file:db%d.db?blockchain=on&password=test&admin=%s&block_interval=%d", node, pkstr, block_interval);
       assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
     }
 
@@ -2401,14 +2407,14 @@ loc_again2:
       printf("reconnecting node %d\n", node);
     }
     if( node==1 ){
-      sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
+      sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkstr, block_interval);
     }else if( node==2 ){
-      sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
+      sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s&block_interval=%d", pkstr, block_interval);
     }else{
       if( bind_to_random_ports ){
-        sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
+        sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, pkstr, block_interval);
       }else{
-        sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, 4300 + node, pkhex, block_interval);
+        sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, 4300 + node, pkstr, block_interval);
       }
     }
     assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
@@ -2515,7 +2521,7 @@ loc_again2:
     }
     assert(done);
 
-    int total_tables = 1 + 1;
+    int total_tables = num_system_tables + 1;
 
     done = 0;
     for(count=0; !done && count<100; count++){
@@ -2557,7 +2563,7 @@ loc_again2:
     }
     assert(done);
 
-    int total_tables = 1 + 1;
+    int total_tables = num_system_tables + 1;
 
     done = 0;
     for(count=0; !done && count<100; count++){
@@ -2688,14 +2694,14 @@ loc_again2:
       printf("reconnecting node %d\n", node);
     }
     if( node==1 ){
-      sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
+      sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkstr, block_interval);
     }else if( node==2 ){
-      sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
+      sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s&block_interval=%d", pkstr, block_interval);
     }else{
       if( bind_to_random_ports ){
-        sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
+        sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, pkstr, block_interval);
       }else{
-        sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, 4300 + node, pkhex, block_interval);
+        sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, 4300 + node, pkstr, block_interval);
       }
     }
     assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
@@ -2787,14 +2793,14 @@ loc_again2:
       int node = disconnect_nodes[i];
       printf("reconnecting node %d\n", node);
       if( node==1 ){
-        sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
+        sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&password=test&admin=%s&block_interval=%d", pkstr, block_interval);
       }else if( node==2 ){
-        sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s&block_interval=%d", pkhex, block_interval);
+        sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&password=test&admin=%s&block_interval=%d", pkstr, block_interval);
       }else{
         if( bind_to_random_ports ){
-          sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, pkhex, block_interval);
+          sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, pkstr, block_interval);
         }else{
-          sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, 4300 + node, pkhex, block_interval);
+          sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&password=test&admin=%s&block_interval=%d", node, 4300 + node, pkstr, block_interval);
         }
       }
       assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
@@ -2873,7 +2879,7 @@ loc_again2:
                         + n_old_with_content * num_offline_txns
                         + num_offline_txns;
 
-    int num_tables = 2;
+    int num_tables = num_system_tables + 1;
 
     for(i=1; i<=n_after2; i++){
 
@@ -2974,17 +2980,17 @@ void test_incoming_txn_visibility(int n, int txn_interval, int block_interval, b
 
   /* open the connections to the databases using the admin public key */
 
-  sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&admin=%s&password=test&block_interval=%d", pkhex, block_interval);
+  sprintf(uri, "file:db1.db?blockchain=on&bind=4301&discovery=127.0.0.1:4302&admin=%s&password=test&block_interval=%d", pkstr, block_interval);
   assert( sqlite3_open(uri, &db[1])==SQLITE_OK );
 
-  sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&admin=%s&password=test&block_interval=%d", pkhex, block_interval);
+  sprintf(uri, "file:db2.db?blockchain=on&bind=4302&discovery=127.0.0.1:4301&admin=%s&password=test&block_interval=%d", pkstr, block_interval);
   assert( sqlite3_open(uri, &db[2])==SQLITE_OK );
 
   for(i=3; i<=n; i++){
     if( bind_to_random_ports ){
-      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&admin=%s&password=test&block_interval=%d", i, pkhex, block_interval);
+      sprintf(uri, "file:db%d.db?blockchain=on&discovery=127.0.0.1:4301,127.0.0.1:4302&admin=%s&password=test&block_interval=%d", i, pkstr, block_interval);
     }else{
-      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&admin=%s&password=test&block_interval=%d", i, 4300 + i, pkhex, block_interval);
+      sprintf(uri, "file:db%d.db?blockchain=on&bind=%d&discovery=127.0.0.1:4301,127.0.0.1:4302&admin=%s&password=test&block_interval=%d", i, 4300 + i, pkstr, block_interval);
     }
     //puts(uri);
     assert( sqlite3_open(uri, &db[i])==SQLITE_OK );
