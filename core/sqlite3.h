@@ -11928,8 +11928,7 @@ AERGOLITE_API void node_list_add(void *vdbe,
   char *os,
   char *hostname,
   char *app,
-  char *extra,
-  char *external
+  char *extra
 );
 
 
@@ -11985,8 +11984,8 @@ SQLITE_API void *sqlite3_malloc_zero(int64 n);
 SQLITE_API void *sqlite3_memdup(void *source, int size);
 SQLITE_API char *sqlite3_strdup(char *text);
 SQLITE_API char *stripchr(char *mainstr, int separator);
-SQLITE_API void to_hex(char *source, int size, char *dest);
-SQLITE_API void from_hex(char *source, int size, char *dest);
+SQLITE_API void to_hex(const char *source, int size, char *dest);
+SQLITE_API void from_hex(const char *source, int size, char *dest);
 
 SQLITE_API int  pubkey_to_address(const void *pubkey, char *address, size_t address_size);
 SQLITE_API BOOL address_to_pubkey(const char *address, size_t address_size, void *pubkey);

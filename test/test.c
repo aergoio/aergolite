@@ -439,14 +439,14 @@ loc_again1:
     assert( rc==SQLITE_OK );
     assert( stmt!=NULL );
 
-    // node_id | pubkey | type | address | CPU | OS | hostname | app | node_info | external |
+    // node_id | pubkey | type | address | CPU | OS | hostname | app | node_info |
 
-    assert( sqlite3_column_count(stmt)==10 );
+    assert( sqlite3_column_count(stmt)==9 );
     nrows = 0;
 
     while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
-      char *external = (char*)sqlite3_column_text(stmt, 9);
-      assert( external && strcmp(external,"yes")==0 );
+      char *type = (char*)sqlite3_column_text(stmt, 2);
+      assert( type && strcmp(type,"unauthorized")==0 );
 
       /* count how many peers this node is connected to */
       nrows++;
@@ -537,9 +537,9 @@ loc_again2:
     assert( rc==SQLITE_OK );
     assert( stmt!=NULL );
 
-    // node_id | pubkey | type | address | CPU | OS | hostname | app | node_info | external |
+    // node_id | pubkey | type | address | CPU | OS | hostname | app | node_info |
 
-    assert( sqlite3_column_count(stmt)==10 );
+    assert( sqlite3_column_count(stmt)==9 );
 
     nrows = 0;
     while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
@@ -799,14 +799,14 @@ loc_again1:
     assert( rc==SQLITE_OK );
     assert( stmt!=NULL );
 
-    // node_id | pubkey | type | address | CPU | OS | hostname | app | node_info | external |
+    // node_id | pubkey | type | address | CPU | OS | hostname | app | node_info |
 
-    assert( sqlite3_column_count(stmt)==10 );
+    assert( sqlite3_column_count(stmt)==9 );
     nrows = 0;
 
     while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
-      char *external = (char*)sqlite3_column_text(stmt, 9);
-      assert( external && strcmp(external,"yes")==0 );
+      char *type = (char*)sqlite3_column_text(stmt, 2);
+      assert( type && strcmp(type,"unauthorized")==0 );
 
       /* count how many peers this node is connected to */
       nrows++;
@@ -877,27 +877,26 @@ loc_again2:
       assert( rc==SQLITE_OK );
       assert( stmt!=NULL );
 
-      // node_id | pubkey | type | address | CPU | OS | hostname | app | node_info | external |
+      // node_id | pubkey | type | address | CPU | OS | hostname | app | node_info |
 
-      assert( sqlite3_column_count(stmt)==10 );
+      assert( sqlite3_column_count(stmt)==9 );
       nrows = 0;
 
       while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
         char *nodepk = (char*)sqlite3_column_text(stmt, 1);
-        char *external = (char*)sqlite3_column_text(stmt, 9);
-        assert( nodepk && external );
+        char *type = (char*)sqlite3_column_text(stmt, 2);
+        assert( nodepk && type );
         /* identify the node by the public key */
         for(int j=1; j<=n; j++){
           if( strcmp(node_pubkey[j], nodepk)==0 ){
             if( in_array_list(j,included_nodes) ){
-              //assert( external[0]==0 ); /* internal node */
-              if( external[0]=='y' ){     /* "yes" */
+              if( strcmp(type,"unauthorized")==0 ){
                 printf("."); fflush(stdout);
                 sleep_ms(wait_time);
                 goto loc_again2;
               }
             }else{
-              assert( external[0]=='y' );  /* external node */
+              assert( strcmp(type,"unauthorized")==0 );
             }
           }
         }
@@ -1233,14 +1232,14 @@ loc_again1:
     assert( rc==SQLITE_OK );
     assert( stmt!=NULL );
 
-    // node_id | pubkey | type | address | CPU | OS | hostname | app | node_info | external |
+    // node_id | pubkey | type | address | CPU | OS | hostname | app | node_info |
 
-    assert( sqlite3_column_count(stmt)==10 );
+    assert( sqlite3_column_count(stmt)==9 );
     nrows = 0;
 
     while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
-      char *external = (char*)sqlite3_column_text(stmt, 9);
-      assert( external && strcmp(external,"yes")==0 );
+      char *type = (char*)sqlite3_column_text(stmt, 2);
+      assert( type && strcmp(type,"unauthorized")==0 );
 
       /* count how many peers this node is connected to */
       nrows++;
@@ -1337,20 +1336,19 @@ loc_again2:
     assert( rc==SQLITE_OK );
     assert( stmt!=NULL );
 
-    // node_id | pubkey | type | address | CPU | OS | hostname | app | node_info | external |
+    // node_id | pubkey | type | address | CPU | OS | hostname | app | node_info |
 
-    assert( sqlite3_column_count(stmt)==10 );
+    assert( sqlite3_column_count(stmt)==9 );
     nrows = 0;
 
     while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
       char *nodepk = (char*)sqlite3_column_text(stmt, 1);
-      char *external = (char*)sqlite3_column_text(stmt, 9);
-      assert( nodepk && external );
+      char *type = (char*)sqlite3_column_text(stmt, 2);
+      assert( nodepk && type );
       /* identify the node by the public key */
       for(int j=1; j<=n; j++){
         if( strcmp(node_pubkey[j], nodepk)==0 ){
-          //assert( external[0]==0 ); /* internal node */
-          if( external[0]=='y' ){     /* "yes" */
+          if( strcmp(type,"unauthorized")==0 ){
             printf("authorization for node %d has not arrived\n", j); fflush(stdout);
             sleep_ms(wait_time);
             goto loc_again2;
@@ -1389,15 +1387,14 @@ loc_check_conns:
     while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
       char *type = (char*)sqlite3_column_text(stmt, 2);
       char *address = (char*)sqlite3_column_text(stmt, 3);
-      char *external = (char*)sqlite3_column_text(stmt, 9);
       if( address[0]!='(' ) npeers++;
-      if( external[0]=='y' ) nexternal++;
+      if( strcmp(type,"unauthorized")==0 ) nexternal++;
       else nauths++;
       if( strcmp(type,"full")==0 ) nfull++;
     }
     assert( rc==SQLITE_DONE || rc==SQLITE_OK );
     sqlite3_finalize(stmt); stmt = NULL;
-    printf("node %d connected to %d nodes (%d external). total of %d authorized nodes (%d full)\n", i, npeers-1, nexternal, nauths, nfull);
+    printf("node %d connected to %d nodes (%d unauthorized). total of %d authorized nodes (%d full)\n", i, npeers-1, nexternal, nauths, nfull);
     if( nexternal>0 ) has_external = true;
     if( nfull!=num_full_nodes ) missing_node_type = true;
   }
@@ -1745,15 +1742,15 @@ loc_check_conns2:
     assert( rc==SQLITE_OK );
     assert( stmt!=NULL );
     while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
+      char *type = (char*)sqlite3_column_text(stmt, 2);
       char *address = (char*)sqlite3_column_text(stmt, 3);
-      char *external = (char*)sqlite3_column_text(stmt, 9);
       if( address[0]!='(' ) npeers++;
-      if( external[0]=='y' ){ nexternal++; /* printf(" -- external: %s\n", address); */ }
+      if( strcmp(type,"unauthorized")==0 ){ nexternal++; /* printf(" -- external: %s\n", address); */ }
       else nauths++;
     }
     assert( rc==SQLITE_DONE || rc==SQLITE_OK );
     sqlite3_finalize(stmt); stmt = NULL;
-    printf("node %d connected to %d nodes (%d external). total of %d authorized nodes\n", i, npeers-1, nexternal, nauths);
+    printf("node %d connected to %d nodes (%d unauthorized). total of %d authorized nodes\n", i, npeers-1, nexternal, nauths);
     if( nexternal>0 ) has_external = true;
   }
 
@@ -2034,7 +2031,7 @@ void test_new_nodes(
     rc = sqlite3_prepare_v2(db[i], "pragma nodes", -1, &stmt, NULL);
     assert( rc==SQLITE_OK );
     assert( stmt!=NULL );
-    assert( sqlite3_column_count(stmt)==10 );
+    assert( sqlite3_column_count(stmt)==9 );
     assert( sqlite3_step(stmt)==SQLITE_ROW );
     /* the first item has info about the requester node */
     char *p = (char*)sqlite3_column_text(stmt, 1);
@@ -2084,20 +2081,19 @@ loc_again2:
     assert( rc==SQLITE_OK );
     assert( stmt!=NULL );
 
-    // node_id | pubkey | type | address | CPU | OS | hostname | app | node_info | external |
+    // node_id | pubkey | type | address | CPU | OS | hostname | app | node_info |
 
-    assert( sqlite3_column_count(stmt)==10 );
+    assert( sqlite3_column_count(stmt)==9 );
     nrows = 0;
 
     while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
       char *nodepk = (char*)sqlite3_column_text(stmt, 1);
-      char *external = (char*)sqlite3_column_text(stmt, 9);
-      assert( nodepk && external );
+      char *type = (char*)sqlite3_column_text(stmt, 2);
+      assert( nodepk && type );
       /* identify the node by the public key */
       for(int j=1; j<=n_before; j++){
         if( strcmp(node_pubkey[j], nodepk)==0 ){
-          //assert( external[0]==0 ); /* internal node */
-          if( external[0]=='y' ){     /* "yes" */
+          if( strcmp(type,"unauthorized")==0 ){
             printf("authorization for node %d has not arrived\n", j); fflush(stdout);
             sleep_ms(wait_time);
             goto loc_again2;
@@ -2437,7 +2433,7 @@ loc_again2:
     rc = sqlite3_prepare_v2(db[node], "pragma nodes", -1, &stmt, NULL);
     assert( rc==SQLITE_OK );
     assert( stmt!=NULL );
-    assert( sqlite3_column_count(stmt)==10 );
+    assert( sqlite3_column_count(stmt)==9 );
     assert( sqlite3_step(stmt)==SQLITE_ROW );
     /* the first item has info about the requester node */
     char *p = (char*)sqlite3_column_text(stmt, 1);
@@ -2725,7 +2721,7 @@ loc_again2:
     rc = sqlite3_prepare_v2(db[node], "pragma nodes", -1, &stmt, NULL);
     assert( rc==SQLITE_OK );
     assert( stmt!=NULL );
-    assert( sqlite3_column_count(stmt)==10 );
+    assert( sqlite3_column_count(stmt)==9 );
     assert( sqlite3_step(stmt)==SQLITE_ROW );
     /* the first item has info about the requester node */
     char *p = (char*)sqlite3_column_text(stmt, 1);
@@ -3017,14 +3013,14 @@ loc_again1:
     assert( rc==SQLITE_OK );
     assert( stmt!=NULL );
 
-    // node_id | pubkey | type | address | CPU | OS | hostname | app | node_info | external |
+    // node_id | pubkey | type | address | CPU | OS | hostname | app | node_info |
 
-    assert( sqlite3_column_count(stmt)==10 );
+    assert( sqlite3_column_count(stmt)==9 );
     nrows = 0;
 
     while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
-      char *external = (char*)sqlite3_column_text(stmt, 9);
-      assert( external && strcmp(external,"yes")==0 );
+      char *type = (char*)sqlite3_column_text(stmt, 2);
+      assert( type && strcmp(type,"unauthorized")==0 );
 
       /* count how many peers this node is connected to */
       nrows++;

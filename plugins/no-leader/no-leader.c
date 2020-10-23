@@ -87,6 +87,16 @@ SQLITE_PRIVATE char * getConnType(int type) {
 
 /*****************************************************************************/
 
+SQLITE_PRIVATE char * get_node_type(BOOL is_authorized, BOOL is_full_node) {
+
+  if( !is_authorized ) return "unauthorized";
+
+  return is_full_node ? "full" : "light";
+
+}
+
+/*****************************************************************************/
+
 SQLITE_API char * get_protocol_status(void *arg, BOOL extended) {
   plugin *plugin = (struct plugin *) arg;
   aergolite *this_node = plugin->this_node;
@@ -226,10 +236,10 @@ SQLITE_PRIVATE int print_allowed_node_cb(
   }
 
   /* print the offline node */
-  type = is_full_node ? "full" : "light";
+  type = get_node_type(TRUE, is_full_node);
   //to_hex(pubkey, pklen, pubkeystr);
   pubkey_to_address(pubkey, pubkeystr, sizeof pubkeystr);
-  node_list_add(data->vdbe, node_id, pubkeystr, type, "(offline)", "", "", "", "", "", "");
+  node_list_add(data->vdbe, node_id, pubkeystr, type, "(offline)", "", "", "", "", "");
 
 loc_exit:
   return SQLITE_OK;
@@ -244,7 +254,7 @@ SQLITE_API void print_node_list(void *arg, void *vdbe) {
   aergolite *this_node = plugin->this_node;
   struct node *node;
   char hostname[256], cpu[256], os[256], app[256], *node_info;
-  char pubkeystr[56], address[32];
+  char pubkeystr[56], address[32], *type;
   int pklen;
 
   /* add this node to the list of nodes (always the first one) */
@@ -254,6 +264,7 @@ SQLITE_API void print_node_list(void *arg, void *vdbe) {
     pubkey_to_address(plugin->pubkey, pubkeystr, sizeof pubkeystr);
   else
     pubkeystr[0] = 0;
+  type = get_node_type(plugin->is_authorized, plugin->is_full_node);
   sprintf(address, "%s:%d", plugin->bind->host, plugin->bind->port);
   get_this_device_info(hostname, cpu, os, app);
   node_info = aergolite_get_node_info(this_node);
@@ -261,20 +272,20 @@ SQLITE_API void print_node_list(void *arg, void *vdbe) {
   node_list_add(vdbe,
      plugin->node_id,
      pubkeystr,
-     plugin->is_full_node ? "full" : "light",
+     type,
      address,
      hostname,
      cpu,
      os,
      app,
-     node_info ? node_info : "",
-     plugin->is_authorized ? "" : "yes");
+     node_info ? node_info : "");
 
   /* iterate over the connected nodes */
 
   for(node=plugin->peers; node; node=node->next){
     if( node->conn_state!=CONN_STATE_CONNECTED ) continue;
 
+    type = get_node_type(node->is_authorized, node->is_full_node);
     //to_hex(node->pubkey, node->pklen, pubkeystr);
     pubkey_to_address(node->pubkey, pubkeystr, sizeof pubkeystr);
     sprintf(address, "%s:%d", node->host, node->port);
@@ -282,14 +293,13 @@ SQLITE_API void print_node_list(void *arg, void *vdbe) {
     node_list_add(vdbe,
        node->id,
        pubkeystr,
-       node->is_full_node ? "full" : "light",
+       type,
        address,
        node->hostname,
        node->cpu,
        node->os,
        node->app,
-       node->info ? node->info : "",
-       node->is_authorized ? "" : "yes");
+       node->info ? node->info : "");
 
   }
 
