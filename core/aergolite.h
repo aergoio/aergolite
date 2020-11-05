@@ -181,9 +181,9 @@ struct aergolite {
 
   binn *processed_local_txns; /* local transactions processed on the blockchain */
 
-  BOOL   useSqliteRowids;     /* do not use node id in the rowids */
+  BOOL  useSqliteRowids;      /* do not use node id in the rowids */
 
-  BOOL   db_is_ready;         /* if the app can read and write from/to the database */
+  BOOL  db_is_ready;          /* if the app can read and write from/to the database */
 };
 
 
@@ -406,3 +406,7 @@ SQLITE_PRIVATE char * protocol_status_json(Pager *pPager, BOOL extended);
 
 SQLITE_PRIVATE int set_current_node_info(sqlite3 *db, const char *name, char *info);
 SQLITE_PRIVATE char * get_current_node_info(sqlite3 *db, const char *name);
+
+#define AERGOLITE_MAIN_DB       1  /* used by both threads */
+#define AERGOLITE_CONSENSUS_DB  2  /* used only by the worker thread */
+#define AERGOLITE_STATE_DB      3  /* used only by the worker thread */

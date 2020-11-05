@@ -276,7 +276,10 @@ struct txn_list {
 
 struct request {
   struct request *next;
+  int64 block_height;     /* for block request */
   int64 transaction_id;
+  int64 height;           /* for transaction request */
+  int   seq;
   void *contacted_nodes;
   uv_timer_t timer;
 };
@@ -355,6 +358,8 @@ struct plugin {
   void *state_update_contacted_nodes;
   void *state_update_failed_nodes;
 
+  BOOL downloading_block_bodies;
+
   int sync_down_state;        /* downstream synchronization state */
   int sync_up_state;          /* upstream synchronization state */
 };
@@ -404,6 +409,7 @@ SQLITE_PRIVATE void send_new_blocks(plugin *plugin, node *node);
 SQLITE_PRIVATE void send_block_votes(plugin *plugin, node *node);
 SQLITE_PRIVATE void rollback_block(plugin *plugin);
 SQLITE_PRIVATE void discard_uncommitted_blocks(plugin *plugin);
+SQLITE_PRIVATE void request_missing_blocks(plugin *plugin, int64 last_retrieved);
 
 /* event loop and timers */
 

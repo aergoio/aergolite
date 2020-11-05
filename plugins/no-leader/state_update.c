@@ -115,6 +115,10 @@ SQLITE_PRIVATE void state_update_finished(plugin *plugin){
   //  start_upstream_db_sync(plugin);
   //}
 
+  if( plugin->is_full_node && plugin->current_block ){
+    request_missing_blocks(plugin, 0);
+  }
+
 }
 
 /****************************************************************************/

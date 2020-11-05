@@ -148,7 +148,7 @@ SQLITE_PRIVATE void on_get_transaction(node *node, void *msg, int size) {
   SYNCTRACE("on_get_transaction - request from node %d - tid=%" INT64_FORMAT "\n", node->id, tid);
 
   map = binn_map();
-  if( !map ) return;  //goto loc_failed;
+  if( !map ) return;
 
   /* check if the transaction is in the mempool */
   for( txn=plugin->mempool; txn; txn=txn->next ){
@@ -157,10 +157,11 @@ SQLITE_PRIVATE void on_get_transaction(node *node, void *msg, int size) {
 
   if( txn ){
     rc = SQLITE_OK;
-  }else{
+  }else if( plugin->is_full_node ){
     /* load it from the database */
-    //txn = &tx1;
-    //rc = aergolite_get_transaction(this_node, tid, &txn->node_id, &txn->nonce, &txn->log);
+    txn = &tx1;
+    rc = aergolite_get_transaction(this_node, tid, &txn->node_id, &txn->nonce, &txn->log);
+  }else{
     rc = SQLITE_NOTFOUND;
   }
 
@@ -181,11 +182,11 @@ SQLITE_PRIVATE void on_get_transaction(node *node, void *msg, int size) {
     goto loc_exit;
   }
 
-  send_peer_message(node, map, NULL);  // on_local_transaction_sent);
+  send_peer_message(node, map, NULL);
 
 loc_exit:
 
-  if (map) binn_free(map);
+  if( map ) binn_free(map);
 
 }
 
@@ -497,7 +498,6 @@ loc_exit:
 */
 SQLITE_PRIVATE void on_new_remote_transaction(node *node, void *msg, int size) {
   plugin *plugin = node->plugin;
-  struct transaction *txn;
   int node_id;
   int64 nonce;
   void *log;

@@ -11809,6 +11809,23 @@ AERGOLITE_API int aergolite_verify_transaction(
   char *datetime
 );
 
+AERGOLITE_API int aergolite_get_transaction(
+  aergolite *this_node,
+  int64 tid,
+  int *pnode_id,
+  int64 *pnonce,
+  void **plog
+);
+
+AERGOLITE_API int aergolite_save_transaction(
+  aergolite *this_node,
+  int64 block_height,
+  int seq,
+  int node_id,
+  int64 nonce,
+  void *log
+);
+
 
 /*
 ** Blocks | State agreements
@@ -11821,6 +11838,18 @@ AERGOLITE_API int aergolite_commit_block(aergolite *this_node, void *header, voi
 AERGOLITE_API int aergolite_apply_block(aergolite *this_node, void *header, void *body, void *votes);
 AERGOLITE_API int aergolite_rollback_block(aergolite *this_node);
 AERGOLITE_API int aergolite_verify_block_header(aergolite *this_node, void *header, void *body, int *pnode_id, int64 *pheight, void *id);
+
+AERGOLITE_API int aergolite_get_block(
+  aergolite *this_node,
+  int64 height,
+  void **pheader,
+  void **pbody,
+  void **pvotes
+);
+
+AERGOLITE_API int aergolite_save_block(
+  aergolite *this_node, void *header, void *body, void *votes
+);
 
 
 /*
@@ -11950,30 +11979,23 @@ AERGOLITE_API char*  aergolite_get_node_config_blob(aergolite *this_node, char *
 
 
 /*
-** Local queue database
+** Database functions
 */
 
-AERGOLITE_API int aergolite_queue_db_exec(aergolite *this_node, const char *sql, ...);
+#define AERGOLITE_MAIN_DB       1  /* used by both threads */
+#define AERGOLITE_CONSENSUS_DB  2  /* used only by the worker thread */
+#define AERGOLITE_STATE_DB      3  /* used only by the worker thread */
 
-AERGOLITE_API int aergolite_queue_db_query_int32(aergolite *this_node, int *pvalue, char *sql, ...);
-AERGOLITE_API int aergolite_queue_db_query_int64(aergolite *this_node, int64 *pvalue, char *sql, ...);
-AERGOLITE_API int aergolite_queue_db_query_double(aergolite *this_node, double *pvalue, char *sql, ...);
-AERGOLITE_API int aergolite_queue_db_query_str(aergolite *this_node, char **pvalue, char *sql, ...);
-AERGOLITE_API int aergolite_queue_db_query_blob(aergolite *this_node, char **pvalue, int *psize, char *sql, ...);
-/* Returned memory from _str and _blob must be released with sqlite3_free() */
+AERGOLITE_API sqlite3* aergolite_get_db_connection(aergolite *this_node, int id);
 
-/*
-** Consensus database
-*/
-
-AERGOLITE_API int aergolite_consensus_db_exec(aergolite *this_node, const char *sql, ...);
-
-AERGOLITE_API int aergolite_consensus_db_query_int32(aergolite *this_node, int *pvalue, char *sql, ...);
-AERGOLITE_API int aergolite_consensus_db_query_int64(aergolite *this_node, int64 *pvalue, char *sql, ...);
-AERGOLITE_API int aergolite_consensus_db_query_double(aergolite *this_node, double *pvalue, char *sql, ...);
-AERGOLITE_API int aergolite_consensus_db_query_str(aergolite *this_node, char **pvalue, char *sql, ...);
-AERGOLITE_API int aergolite_consensus_db_query_blob(aergolite *this_node, char **pvalue, int *psize, char *sql, ...);
-/* Returned memory from _str and _blob must be released with sqlite3_free() */
+AERGOLITE_API int aergolite_db_exec(sqlite3 *db, const char *sql, ...);
+AERGOLITE_API int aergolite_db_query_int32(int *pvalue, sqlite3 *db, char *sql, ...);
+AERGOLITE_API int aergolite_db_query_int64(int64 *pvalue, sqlite3 *db, char *sql, ...);
+AERGOLITE_API int aergolite_db_query_double(double *pvalue, sqlite3 *db, char *sql, ...);
+/* returned memory must be released with sqlite3_free */
+AERGOLITE_API int aergolite_db_query_str(char **pvalue, sqlite3 *db, char *sql, ...);
+/* returned memory must be released with sqlite3_free */
+AERGOLITE_API int aergolite_db_query_blob(char **pvalue, int *psize, sqlite3 *db, char *sql, ...);
 
 
 /*

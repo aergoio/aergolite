@@ -1073,7 +1073,8 @@ SQLITE_PRIVATE void worker_thread_on_close(uv_handle_t *handle) {
         sqlite3_free(handle->data);
       }
     }
-    if( ((uv_timer_t*)handle)->timer_cb==request_transaction_timer_cb ){
+    if( ((uv_timer_t*)handle)->timer_cb==request_transaction_timer_cb ||
+        ((uv_timer_t*)handle)->timer_cb==request_block_timer_cb ){
       struct request *request = container_of(handle, struct request, timer);
       array_free(&request->contacted_nodes);
       llist_remove(&plugin->requests, request);
@@ -1198,6 +1199,11 @@ SQLITE_PRIVATE void worker_thread_on_peer_message(uv_msg_t *stream, void *msg, i
     SYNCTRACE("   received message: PLUGIN_NEW_TRANSACTION\n");
     on_new_remote_transaction(node, msg, size);
     break;
+
+  case PLUGIN_REQUESTED_BLOCK:
+    SYNCTRACE("   received message: PLUGIN_REQUESTED_BLOCK\n");
+    on_requested_block(node, msg, size);
+    break;
   case PLUGIN_NEW_BLOCK:
     SYNCTRACE("   received message: PLUGIN_NEW_BLOCK\n");
     on_new_block(node, msg, size);
@@ -1235,12 +1241,10 @@ SQLITE_PRIVATE void worker_thread_on_peer_message(uv_msg_t *stream, void *msg, i
     SYNCTRACE("   received message: PLUGIN_GET_TRANSACTION\n");
     on_get_transaction(node, msg, size);
     break;
-/*
   case PLUGIN_GET_BLOCK:
     SYNCTRACE("   received message: PLUGIN_GET_BLOCK\n");
     on_get_block(node, msg, size);
     break;
-*/
 
   default:
     SYNCTRACE("   ---> unknown received message!  cmd=0x%x  <---\n", cmd);

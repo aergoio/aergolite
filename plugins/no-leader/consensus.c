@@ -502,8 +502,9 @@ SQLITE_PRIVATE int commit_block(plugin *plugin, struct block *block){
 
   /* mark the used transactions on the mempool */
   binn_list_foreach(list, value) {
+    int64 txn_id = value.vint64 & 0x7fffffffffffffff;
     for( txn=plugin->mempool; txn; txn=txn->next ){
-      if( txn->id==value.vint64 ){
+      if( txn->id==txn_id ){
         txn->block_height = block->height;
       }
     }
