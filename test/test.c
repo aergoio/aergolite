@@ -1416,9 +1416,7 @@ loc_check_conns:
 
   /* execute 3 db transactions on one of the databases */
 
-// (later or in other fn) configurable: if it does this now or after leader election, how many txns, by which node
-
-  printf("executing transactions on nodes...");
+  puts("executing transactions on nodes..."); fflush(stdout);
 
   int exec_from_node = 3;
 
@@ -1431,61 +1429,6 @@ loc_check_conns:
   for(i=1; i<=n; i++){
     db_check_int(db[i], "PRAGMA last_nonce", last_nonce[i]);
   }
-
-
-#if 0
-  /* waiting for leader election */
-
-  printf("waiting for leader election"); fflush(stdout);
-
-  int last_leader_id = 0;
-
-  for(i=1; i<=n; i++){
-    char *leader_id_str = NULL;
-    done = 0;
-    for(count=0; !done && count<100; count++){
-      char *result;
-      if( count>0 ) sleep_ms(wait_time);
-      rc = db_query_str(&result, db[i], "pragma protocol_status");
-      assert(rc==SQLITE_OK);
-      //done = strstr(result,"\"is_leader\": true")>0 || strstr(result,"\"leader\": null")==0;
-
-      if( strstr(result,"\"is_leader\": true")>0 ){
-        leader_id_str = strip(result, "\"node_id\": ");
-      }else if( strstr(result,"\"leader\": null")==0 ){
-        leader_id_str = strip(result, "\"leader\": ");
-      }
-      if( leader_id_str ){
-        int leader_id;
-        strip(result, ",");
-        leader_id = atoi(leader_id_str);
-        if( leader_id!=last_leader_id && last_leader_id!=0 ){
-          printf("\n leader_id1=%d leader_id2=%d\n", leader_id, last_leader_id);
-          assert( leader_id==last_leader_id );
-        }
-        last_leader_id = leader_id;
-        done = 1;
-      }
-
-      sqlite3_free(result);
-      printf("."); fflush(stdout);
-    }
-    if( !done ){
-      puts("");
-      for(i=1; i<=n; i++){
-        char *result;
-        rc = db_query_str(&result, db[i], "pragma protocol_status");
-        assert(rc==SQLITE_OK);
-        printf("--- node %d ---\n", i);
-        puts(result);
-        puts("");
-        sqlite3_free(result);
-      }
-    }
-    assert(done);
-  }
-#endif
-  puts("");
 
 
   /* wait until the transactions are processed in a new block */
@@ -1767,19 +1710,6 @@ loc_check_conns2:
     int node = disconnect_nodes[i];
 
     printf("checking node %d\n", node); fflush(stdout);
-
-#if 0
-    done = 0;
-    for(count=0; !done && count<100; count++){
-      char *result;
-      if( count>0 ) sleep_ms(wait_time);
-      rc = db_query_str(&result, db[node], "pragma protocol_status");
-      assert(rc==SQLITE_OK);
-      done = strstr(result,"\"is_leader\": true")>0 || strstr(result,"\"leader\": null")==0;
-      sqlite3_free(result);
-    }
-    assert(done);
-#endif
 
     done = 0;
     for(count=0; !done && count<100; count++){
@@ -2464,19 +2394,6 @@ loc_again2:
 
     printf("checking node %d", node); fflush(stdout);
 
-#if 0
-    done = 0;
-    for(count=0; !done && count<100; count++){
-      char *result;
-      if( count>0 ) sleep_ms(wait_time);
-      rc = db_query_str(&result, db[node], "pragma protocol_status");
-      assert(rc==SQLITE_OK);
-      done = strstr(result,"\"is_leader\": true")>0 || strstr(result,"\"leader\": null")==0;
-      sqlite3_free(result);
-    }
-    assert(done);
-#endif
-
     if( last_nonce[node]==0 ){ puts(""); continue; }
 
     done = 0;
@@ -2810,26 +2727,6 @@ loc_again2:
   /* check if the transactions are processed in a new block */
 
   if( n_after2 >= majority(n) ){
-
-#if 0
-    printf("waiting for leader election"); fflush(stdout);
-
-    for(i=0; active_online_nodes[i]; i++){
-      int node = active_online_nodes[i];
-      done = 0;
-      for(count=0; !done && count<100; count++){
-        char *result;
-        if( count>0 ) sleep_ms(wait_time);
-        rc = db_query_str(&result, db[node], "pragma protocol_status");
-        assert(rc==SQLITE_OK);
-        done = strstr(result,"\"is_leader\": true")>0 || strstr(result,"\"leader\": null")==0;
-        sqlite3_free(result);
-        printf("."); fflush(stdout);
-      }
-      assert(done);
-    }
-    puts("");
-#endif
 
     /* count how many peers each node is connected to */
     for(i=0; active_online_nodes[i]; i++){
