@@ -83,6 +83,8 @@ struct block_vote {
 struct block {
   struct block *next;
   int64 height;
+  unsigned char id[32];
+  unsigned char prev_hash[32];
   int txn_count;
   void *header;
   void *body;
@@ -91,7 +93,6 @@ struct block {
   int  body_id;
   BOOL verify_ok;
 #ifdef AERGOLITE_AMALGAMATION
-  unsigned char id[32];
   unsigned char vrf_proof[81];
   unsigned char vrf_output[32];
   unsigned int  wait_time;
@@ -166,6 +167,7 @@ struct aergolite {
   BOOL config_changed;
 
   int64 block_height;         /* ... */
+  unsigned char block_id[32]; /* ... */
   struct block active_block;  /* ... */
   void *txn_ids;              /* The transactions on a specific block */
   void *mod_pages;            /* The modified pages on a specific block */
@@ -379,6 +381,7 @@ SQLITE_PRIVATE int read_block_header(
   int  *pnode_id,
   int64 *ptimestamp,
   int64 *pblock_height,
+  char **pprev_hash,
   char **ptxns_hash,
   char **pstate_hash,
   void *id

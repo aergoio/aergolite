@@ -430,11 +430,11 @@ SQLITE_PRIVATE int verify_block(plugin *plugin, struct block *block){
   }
 
   /* get the list of transactions ids */
-  list = binn_map_list(block->body, BODY_TXN_IDS);  //  BLOCK_TRANSACTIONS);
+  list = binn_map_list(block->body, BODY_TXN_IDS);
 
   /* start a new block */
   rc = aergolite_begin_block(this_node);
-  if( rc ) goto loc_failed;
+  if( rc ) goto loc_failed2;
 
   /* execute the transactions from the local mempool */
   binn_list_foreach(list, value) {
@@ -446,12 +446,10 @@ SQLITE_PRIVATE int verify_block(plugin *plugin, struct block *block){
     /* x */
     rc = aergolite_execute_transaction(this_node, txn->node_id, txn->nonce, txn->log);
     if( rc==SQLITE_BUSY ){  /* try again later */
-      aergolite_rollback_block(this_node);
-      return rc;
+      goto loc_failed;
     }
     if( (rc!=SQLITE_OK) != (value.vint64<0) ){
       sqlite3_log(rc, "verify_block - transaction with different result");
-      aergolite_rollback_block(this_node);
       goto loc_failed;
     }
   }
@@ -473,6 +471,9 @@ SQLITE_PRIVATE int verify_block(plugin *plugin, struct block *block){
   return SQLITE_OK;
 
 loc_failed:
+  aergolite_rollback_block(this_node);
+
+loc_failed2:
   SYNCTRACE("verify_block FAILED\n");
   if( rc!=SQLITE_BUSY ){
     if( plugin->sync_down_state!=DB_STATE_SYNCHRONIZING ){
@@ -498,7 +499,7 @@ SQLITE_PRIVATE int commit_block(plugin *plugin, struct block *block){
   if( rc ) goto loc_failed;
 
   /* get the list of transactions ids */
-  list = binn_map_list(block->body, BODY_TXN_IDS);  //  BLOCK_TRANSACTIONS);
+  list = binn_map_list(block->body, BODY_TXN_IDS);
 
   /* mark the used transactions on the mempool */
   binn_list_foreach(list, value) {

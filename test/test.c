@@ -3161,9 +3161,6 @@ int main(){
 //  test_n_nodes(100, true);
 
 
-  test_invalid_admin(12, 1, true, BLOCK_INTERVAL);
-
-
   test_add_nodes(
     /* total nodes         */ 12,
     /* added at each time  */ 3,
@@ -3197,6 +3194,9 @@ int main(){
     /* txn interval        */ BLOCK_INTERVAL / 4,
     /* block interval      */ BLOCK_INTERVAL / 2,
     /* bind to random port */ true);
+
+
+  test_invalid_admin(12, 1, true, BLOCK_INTERVAL);
 
 
   test_reconnection(10, false, BLOCK_INTERVAL,
