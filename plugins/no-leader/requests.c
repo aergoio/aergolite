@@ -542,7 +542,7 @@ SQLITE_PRIVATE void request_missing_blocks(plugin *plugin, int64 last_retrieved)
   sqlite3_stmt *stmt=NULL;
   char *sql;
   int64 start, end, last_block, height;
-  int rc;
+  int rc, result;
 
   SYNCTRACE("request_missing_blocks last_retrieved=%" INT64_FORMAT "\n", last_retrieved);
 
@@ -561,33 +561,45 @@ SQLITE_PRIVATE void request_missing_blocks(plugin *plugin, int64 last_retrieved)
     goto loc_check_blocks_without_body;
   }
 
-  /* find the missing ids on a sequence, from start to end */
-  sql = "WITH sequence AS (SELECT $start AS x UNION SELECT x+1 FROM sequence WHERE x < $end) "
-        "SELECT x FROM sequence WHERE x NOT IN (SELECT height FROM blocks)";
+  /* does this node has all the blocks? */
+  sql = "SELECT count(*)=max(height) FROM blocks";
+  rc = aergolite_db_query_int32(&result, db, sql, NULL);
+  assert( rc==SQLITE_OK );
+  if( rc ) return;
+  if( result==0 ){
 
-  /* prepare a statement for reuse with new bound values */
-  rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
-  if( rc!=SQLITE_OK || !stmt ) goto loc_exit;
+    /* find the missing ids on a sequence, from start to end */
+    sql = "WITH sequence AS (SELECT $start AS x UNION SELECT x+1 FROM sequence WHERE x < $end) "
+          "SELECT x FROM sequence WHERE x NOT IN (SELECT height FROM blocks)";
 
-  for(end=last_retrieved-1; end>0 && rc==SQLITE_OK; end-=512){
-    start = end - 512;
-    if( start<1 ) start = 1;
+    /* prepare a statement for reuse with new bound values */
+    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    if( rc!=SQLITE_OK || !stmt ) goto loc_exit;
 
-    sqlite3_bind_int64(stmt, 1, start);
-    sqlite3_bind_int64(stmt, 2, end);
+    for(end=last_retrieved-1; end>0 && rc==SQLITE_OK; end-=512){
+      start = end - 512;
+      if( start<1 ) start = 1;
 
-    while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
-      /* found a missing block. request it to other nodes */
-      height = sqlite3_column_int64(stmt, 0);
-      goto loc_send_request;
+      SYNCTRACE("request_missing_blocks checking range %" INT64_FORMAT " to %"
+                INT64_FORMAT "\n", start, end);
+
+      sqlite3_bind_int64(stmt, 1, start);
+      sqlite3_bind_int64(stmt, 2, end);
+
+      while( (rc=sqlite3_step(stmt))==SQLITE_ROW ){
+        /* found a missing block. request it to other nodes */
+        height = sqlite3_column_int64(stmt, 0);
+        goto loc_send_request;
+      }
+
+      if( rc==SQLITE_DONE ) rc = SQLITE_OK;
     }
 
-    if( rc==SQLITE_DONE ) rc = SQLITE_OK;
-  }
+    /* if execution reached this point, it either is an error or there is no
+    ** missing blocks on the database */
+    if( rc ) goto loc_exit;
 
-  /* if execution reached this point, it either is an error or there is no
-  ** missing blocks on the database */
-  if( rc ) goto loc_exit;
+  }
 
 
   /* verify the chain of blocks */
