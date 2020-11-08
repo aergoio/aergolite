@@ -163,6 +163,9 @@ struct aergolite {
   struct anchoring *anchoring;
 
   BOOL is_full_node;
+  char state_integrity[32];
+  char chain_integrity[32];
+
   BOOL nodes_changed;
   BOOL config_changed;
 
