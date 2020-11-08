@@ -11851,6 +11851,8 @@ AERGOLITE_API int aergolite_save_block(
   aergolite *this_node, void *header, void *body, void *votes
 );
 
+AERGOLITE_API int aergolite_verify_history(aergolite *this_node);
+
 
 /*
 ** Authorized nodes

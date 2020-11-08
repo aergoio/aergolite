@@ -590,6 +590,14 @@ SQLITE_PRIVATE void request_missing_blocks(plugin *plugin, int64 last_retrieved)
   if( rc ) goto loc_exit;
 
 
+  /* verify the chain of blocks */
+  rc = aergolite_verify_history(this_node);
+  if( rc ){
+    sqlite3_log(SQLITE_INVALID, "invalid chain of blocks");
+    goto loc_exit;
+  }
+
+
   /* start checking for blocks without body */
   plugin->downloading_block_bodies = TRUE;
   last_retrieved = last_block + 1;
