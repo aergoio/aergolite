@@ -454,11 +454,9 @@ There are 2 ways to retrieve status:
 1. Locally via PRAGMA commands
 2. Remotely sending status requests via UDP packets
 
-The status are divided in 2 parts:
-
 ### Blockchain status
 
-This has information about the local blockchain and database.
+This has information about the local blockchain, the local database and the network.
 
 It can be queried locally using the command:
 
@@ -470,79 +468,63 @@ It will return a result in JSON format like the following:
 
 ```
 {
-"use_blockchain": true,
-"blockchain": {
-  "last_block": 125,
-  "state_hash": "..."
-},
-"local_nonce": 3,
-"local_changes": {
-  "num_transactions": 3
-}
-}
-```
+  "use_blockchain": true,
 
-This status information does not depend on the selected consensus protocol. It has always the above format.
+  "blockchain": {
+    "last_block": 150,
+    "state_hash": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+    "integrity": {
+      "state": "OK",
+      "chain": "pruned"
+    }
+  },
 
+  "node": {
+    "id": 1366464921,
+    "pubkey": "..............",
+    "type": "light",
+    "local_transactions": {
+      "processed": 17,
+      "unprocessed": 2,
+      "total": 19
+    }
+  },
 
-### Network and consensus protocol status
+  "mempool": {
+    "num_transactions": 2
+  },
 
-It can be queried using the command:
+  "network": {
+    num_authorized_nodes: 25,
+    num_connected_peers: 21
+  },
 
-```
-PRAGMA protocol_status
-```
-
-The information returned depends on the selected consensus protocol.
-
-For the `no-leader` consensus protocol the result is in this format:
-
-```
-{
-"use_blockchain": true,
-"node_id": 692281563,
-"num_peers": 3,
-"mempool": {
-  "num_transactions": 0
-},
-"sync_down_state": "in sync",
-"sync_up_state": "in sync"
+  "downstream_state": "in sync",
+  "upstream_state": "in sync"
 }
 ```
 
-We can also return extended information using the command:
+### Mempool status
+
+It returns the pending transactions on the local mempool.
 
 ```
-PRAGMA protocol_status(1)
+PRAGMA mempool
 ```
 
-In this case the returned data will contain the list of connected nodes:
+It will return a result in JSON format like the following:
 
 ```
-{
-"use_blockchain": true,
-"node_id": 1506405147,
-"peers": [{
-  "node_id": 692281563,
-  "conn_type": "outgoing",
-  "address": "192.168.1.45:4329"
-},{
-  "node_id": 1617834522,
-  "conn_type": "outgoing",
-  "address": "192.168.1.42:4329"
-},{
-  "node_id": 1772633815,
-  "conn_type": "incoming",
-  "address": "192.168.1.47:38024"
-}],
-"mempool": {
-  "num_transactions": 0
-},
-"sync_down_state": "unknown",
-"sync_up_state": "in sync"
-}
+[{
+  "id": 17698765927658,
+  "node_id": 123,
+  "nonce": 18,
+  "timestamp": "2020-11-30 09:55:13",
+  "commands": [
+    "INSERT INTO test VALUES ('hello world!')"
+  ]
+}]
 ```
-
 
 ### Application defined node information
 
