@@ -247,7 +247,7 @@ This ensures that:
 1. The nodes can verify that the received commands come from the blockchain administrator
 2. A node will not join a network that is not owned by you
 
-This is done via the `admin` parameter, where the public key must be in hex format.
+This is done via the `admin` parameter, where the public key can be in native or hex format.
 
 Example:
 
@@ -402,8 +402,6 @@ After listing the connected nodes with the above command the blockchain administ
 PRAGMA add_node="<public key>"
 ```
 
-The public key must be in hex format.
-
 Only the blockchain administrator can add nodes to the network.
 
 The first node to be authorized must be the one in which the command is being executed.
@@ -454,6 +452,20 @@ There are 2 ways to retrieve status:
 1. Locally via PRAGMA commands
 2. Remotely sending status requests via UDP packets
 
+
+### Database status
+
+Your application must check if the local database is ready for read and write before any SQL command is executed.
+
+This checking is done with the command:
+
+```
+PRAGMA db_is_ready
+```
+
+It returns `1` when the application can read from and write to the database, otherwise it returns `0`.
+
+
 ### Blockchain status
 
 This has information about the local blockchain, the local database and the network.
@@ -481,7 +493,7 @@ It will return a result in JSON format like the following:
 
   "node": {
     "id": 1366464921,
-    "pubkey": "..............",
+    "pubkey": "AmNdtXoBk6mYwgq2XDsx8pW9cvmoTQ3bp7v7kJxBcckvrC8HWBrE",
     "type": "light",
     "local_transactions": {
       "processed": 17,
