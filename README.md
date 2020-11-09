@@ -8,25 +8,20 @@ AergoLite allows us to have a replicated SQLite database secured by a private an
 
 Each app has a local replica of the database.
 
-New database transactions are distributed to all the peers and once they reach a consensus on the order of execution all the nodes can execute the transactions.
+New database transactions are distributed to all the peers and once they reach a consensus on the order of execution all the nodes execute the transactions. As the order of execution of these transactions is the same, all the nodes have the same resulting database content.
 
-As the order of execution of these transactions is the same, all the nodes have the same resulting database content.
-
-Apps can also write to the local database when they are off-line. The database transactions are stored on a local queue and sent to the network once the connectivity is reestablished.
-
-The application will read the new state of the database after the off-line modifications, and it can check if the off-line transactions were processed by the global consensus. If rejected, the database will return to the previous state.
-
-Once the consensus is reached, the internal previous states are deleted.
+Apps can also write to the local database when they are off-line. The database transactions are stored on a local queue and sent to the network once the connectivity is reestablished. The application will read the new state of the database after the off-line modifications, and it can check if the off-line transactions were processed by the global consensus. If rejected, the database will return to the previous state.
 
 AergoLite uses **special blockchain technology** focused on **resource constrained devices**.
 
-It is not like Bitcoin (that consumes a lot of energy). No proof-of-work is used and the nodes do not need to keep all the history of blocks and transactions.
+The consensus protocol uses a **Verifiable Random Function (VRF)** to determine which node will produce the next block, and the nodes cannot discover which node is selected ahead of time. Making it safe against Denial of Service (DoS) attacks.
 
-The consensus algorithm uses a *Verifiable Random Function (VRF)* to determine which node will produce the next block, and the nodes cannot discover which node is selected ahead of time. Making it safe against Denial of Service (DoS) attacks.
+AergoLite uses **absolute finality**. Once the nodes reach consensus on a new block and the transactions are confirmed there is no way back. Also there is no need to create new blocks if there are no transactions to be processed (unlike with probabilistic finality).
 
-AergoLite uses *absolute finality*. Once the nodes reach consensus on a new block they can discard the previous one. Only the last block is kept on the nodes. Optionally we can setup some nodes to keep all the history for audit reasons.
+Only the last block is required to check the blockchain and the database state integrity, therefore the nodes do not need to keep and verify all the history of blocks and transactions.
+It is also possible to setup some nodes to keep all the history for audit reasons.
 
-It also uses a *hash of the database state*. This lets the nodes to check if they have exactly the same content on the database, protects against intentional modifications on the database file and also works as an integrity check to detect failures on the storage media.
+It also uses a **hash of the database state**. This lets the nodes to check if they have exactly the same content on the database, protects against intentional modifications on the database file and also works as an integrity check to detect failures on the storage media.
 
 This final hash is updated using only the modified pages on each new block. It does not need to load the entire database to calculate the new state. The integrity check is also only made when a new db page is loaded. This drastically increases the database performance.
 
@@ -664,7 +659,7 @@ sqlite3_create_function(db, "update_notification", 1, SQLITE_UTF8 | SQLITE_DETER
 
 ## Block interval
 
-Blocks are created by randomly selected nodes on each round when using the `no-leader` consensus protocol (default).
+Blocks are created by randomly selected nodes on each round.
 
 AergoLite does not produce empty blocks. If there is no transaction to be processed, then no block is created.
 
