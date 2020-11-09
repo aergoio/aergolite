@@ -11733,7 +11733,7 @@ AERGOLITE_API int aergolite_plugin_register(
   void* (*xInit)(aergolite*, char* uri), /* initializes a new plugin instance */
   void (*xEnd)(void*),                   /* terminates the instance */
   void (*xOnNewLocalTransaction)(void*,void*), /* on_new_local_transaction notification */
-  char* (*xStatus)(void*, int extended), /* used to retrieve the protocol status */
+  void (*xStatus)(void*, sqlite3_str *str),    /* used to retrieve the protocol status */
   void (*xNodeInfo)(void*, char*),       /* node info changed */
   void (*xNodeList)(void*, void*)        /* used to retrieve the node list */
 );

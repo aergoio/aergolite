@@ -87,7 +87,7 @@ SQLITE_PRIVATE char * getConnType(int type) {
 
 /*****************************************************************************/
 
-SQLITE_PRIVATE char * get_node_type(BOOL is_authorized, BOOL is_full_node) {
+char * get_node_type(BOOL is_authorized, BOOL is_full_node) {
 
   if( !is_authorized ) return "unauthorized";
 
@@ -97,48 +97,52 @@ SQLITE_PRIVATE char * get_node_type(BOOL is_authorized, BOOL is_full_node) {
 
 /*****************************************************************************/
 
-SQLITE_API char * get_protocol_status(void *arg, BOOL extended) {
+SQLITE_API void get_protocol_status(void *arg, sqlite3_str *str) {
   plugin *plugin = (struct plugin *) arg;
   aergolite *this_node = plugin->this_node;
   struct node *node;
-  sqlite3_str *str = sqlite3_str_new(NULL);
 
-  sqlite3_str_appendall(str, "{\n\"use_blockchain\": true,\n");
+/*
+  "mempool": {
+    "num_transactions": 0
+  },
 
-  sqlite3_str_appendf(str, "\"node_id\": %d,\n", plugin->node_id);
-//sqlite3_str_appendf(str, "\"db_is_ready\": %s,\n", plugin->db_is_ready ? "true" : "false");
+  "throughput": {
+    "blocks_per_minute": 12,
+    "txns_per_minute": 12
+  },
 
-  if( extended ){
+  "network": {
+    num_authorized_nodes: 5,
+    num_connected_peers: 3
+  },
 
-    sqlite3_str_appendf(str, "\"peers\": [");
+  "downstream_state": "unknown",
+  "upstream_state": "unknown"
+*/
 
-    for( node=plugin->peers; node; node=node->next ){
-      if( node->conn_state!=CONN_STATE_CONNECTED ) continue;
-      if( !node->is_authorized ) continue;
+  {
+    struct transaction *txn;
+    int num_transactions = 0;
 
-      if( node != plugin->peers ){
-        sqlite3_str_appendchar(str,1, ',');
+    for( txn=plugin->mempool; txn; txn=txn->next ){
+      if( txn->block_height==0 ){
+        num_transactions++;
       }
-      sqlite3_str_appendall(str, "{\n");
-
-      sqlite3_str_appendf(str, "  \"node_id\": %d,\n", node->id);
-      if( node->info ){
-        sqlite3_str_appendf(str, "  \"node_info\": \"%s\",\n", node->info);
-      }
-      sqlite3_str_appendf(str, "  \"conn_type\": \"%s\",\n", getConnType(node->conn_type));
-      sqlite3_str_appendf(str, "  \"address\": \"%s:%d\"\n", node->host, node->port);
-      //sqlite3_str_appendf(str, "  \"conn_state\": \"%s\",\n", getConnState(node->conn_state));
-      //sqlite3_str_appendf(str, "  \"db_state\": \"%s\"\n", getSyncState(node->db_state));
-      //sqlite3_str_appendf(str, "  \"last_sync\": %lld\n", node->last_sync);
-
-      sqlite3_str_appendchar(str, 1, '}');
     }
 
-    sqlite3_str_appendall(str, "],\n");
+    sqlite3_str_appendall(str, "  \"mempool\": {\n");
+    sqlite3_str_appendf  (str, "    \"num_transactions\": %d\n", num_transactions);
+    sqlite3_str_appendall(str, "  },\n\n");
+  }
 
-  }else{
 
+  {
+    int num_authorizations;
     int num_peers;
+
+    count_authorized_nodes(plugin);
+    num_authorizations = plugin->total_authorized_nodes;
 
     num_peers = 0;
     for( node=plugin->peers; node; node=node->next ){
@@ -147,63 +151,25 @@ SQLITE_API char * get_protocol_status(void *arg, BOOL extended) {
       }
     }
 
-    sqlite3_str_appendf(str, "\"num_peers\": %d,\n", num_peers);
-
+    sqlite3_str_appendall(str, "  \"network\": {\n");
+    sqlite3_str_appendf  (str, "    \"num_authorized_nodes\": %d,\n", num_authorizations);
+    sqlite3_str_appendf  (str, "    \"num_connected_peers\": %d\n", num_peers);
+    sqlite3_str_appendall(str, "  },\n\n");
   }
 
-  sqlite3_str_appendall(str, "\"mempool\": {\n");
 
-  {
-    struct transaction *txn, *last = NULL;
-    int num_transactions = 0;
-
-    for( txn=plugin->mempool; txn; txn=txn->next ){
-      if( txn->block_height==0 ){
-        num_transactions++;
-        last = txn;
-      }
-    }
-
-    sqlite3_str_appendf(str, "  \"num_transactions\": %d", num_transactions);
-
-    if( last ){
-      sqlite3_str_appendall(str, ",\n  \"last_transaction\": ");
-      if( extended ){
-        sqlite3_str_appendall(str, "{\n");
-        sqlite3_str_appendf(str, "    \"id\": %lld,\n", last->id);
-        sqlite3_str_appendf(str, "    \"node_id\": %d,\n", last->node_id);
-        sqlite3_str_appendf(str, "    \"nonce\": %lld,\n", last->nonce);
-        sqlite3_str_appendf(str, "    \"timestamp\": \"%s\"\n", last->datetime);
-        sqlite3_str_appendall(str, "  }");
-      }else{
-        sqlite3_str_appendf(str, "%lld", last->id);
-      }
-    }
-
-    sqlite3_str_appendchar(str, 1, '\n');
-  }
-
-  sqlite3_str_appendall(str, "},\n");
-
-  sqlite3_str_appendf(str, "\"sync_down_state\": \"%s\",\n", getSyncState(plugin->sync_down_state));
-
+  sqlite3_str_appendf(str, "  \"downstream_state\": \"%s\",\n", getSyncState(plugin->sync_down_state));
 #if 0
   if( plugin->sync_down_state==DB_STATE_SYNCHRONIZING ){
     double progress = 0.0;
     if( plugin->total_pages>0 ){  /* to avoid division by zero */
       progress = ((double)plugin->downloaded_pages) / plugin->total_pages * 100;
     }
-    sqlite3_str_appendf(str, "\"sync_down_progress\": %f,\n", progress);
+    sqlite3_str_appendf(str, "  \"download_progress\": %f,\n", progress);
   }
 #endif
+  sqlite3_str_appendf(str, "  \"upstream_state\": \"%s\"\n", getSyncState(plugin->sync_up_state));
 
-  sqlite3_str_appendf(str, "\"sync_up_state\": \"%s\"\n", getSyncState(plugin->sync_up_state));
-
-  //sqlite3_str_appendf(str, "\"last_sync\": %lld\n", plugin->last_sync);
-
-  sqlite3_str_appendchar(str, 1, '}');
-
-  return sqlite3_str_finish(str);
 }
 
 /****************************************************************************/
@@ -323,31 +289,6 @@ SQLITE_PRIVATE void on_blockchain_status_request(
   aergolite *this_node = plugin->this_node;
 
   char *status = aergolite_get_blockchain_status(this_node);
-  if( status ){
-    send_udp_message(plugin, sender, status);
-    sqlite3_free(status);
-  }
-
-}
-
-/****************************************************************************/
-
-/* a broadcast message requesting protocol status info */
-SQLITE_PRIVATE void on_protocol_status_request(
-  plugin *plugin,
-  uv_udp_t *socket,
-  const struct sockaddr *sender,
-  char *sender_ip,
-  char *arg
-){
-  char *status;
-  BOOL extended = 0;
-
-  if( arg && strcmp(arg,"1")==0 ){  /* extended status info */
-    extended = 1;
-  }
-
-  status = get_protocol_status(plugin, extended);
   if( status ){
     send_udp_message(plugin, sender, status);
     sqlite3_free(status);
@@ -1696,8 +1637,6 @@ SQLITE_PRIVATE void node_thread(void *arg) {
   /* register UDP message handlers */
   /* a broadcast message requesting blockchain status info */
   register_udp_message("blockchain_status", on_blockchain_status_request);
-  /* a broadcast message requesting consensus protocol status info */
-  register_udp_message("protocol_status", on_protocol_status_request);
   /* a broadcast message requesting node info */
   register_udp_message("node_info", on_node_info_request);
 

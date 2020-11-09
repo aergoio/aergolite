@@ -199,7 +199,7 @@ struct aergolite_plugin {
   void* (*xInit)(aergolite*, char* uri); /* initializes a new plugin instance */
   void (*xEnd)(void*);                   /* terminates the instance */
   void (*xOnNewLocalTransaction)(void*,void*); /* on_new_local_transaction notification */
-  char* (*xStatus)(void*, int extended); /* used to retrieve the protocol status */
+  void (*xStatus)(void*, sqlite3_str *str);    /* used to retrieve the protocol status */
   void (*xNodeInfo)(void*, char*);       /* node info changed */
   void (*xNodeList)(void*, void*);       /* used to retrieve the node list */
 };
@@ -302,7 +302,7 @@ SQLITE_PRIVATE void reload_authorizations(aergolite *this_node);
 SQLITE_PRIVATE void save_auth_nonces(aergolite *this_node);
 SQLITE_PRIVATE void reload_auth_nonces(aergolite *this_node);
 
-AERGOLITE_API int is_node_authorized(aergolite *this_node, char *pubkey, int pklen, int *pnode_id);
+AERGOLITE_API BOOL is_node_authorized(aergolite *this_node, char *pubkey, int *pnode_id);
 
 AERGOLITE_API int aergolite_verify_authorization(
   aergolite *this_node,
@@ -416,3 +416,5 @@ SQLITE_PRIVATE char * get_current_node_info(sqlite3 *db, const char *name);
 #define AERGOLITE_MAIN_DB       1  /* used by both threads */
 #define AERGOLITE_CONSENSUS_DB  2  /* used only by the worker thread */
 #define AERGOLITE_STATE_DB      3  /* used only by the worker thread */
+
+char * get_node_type(BOOL is_authorized, BOOL is_full_node);
