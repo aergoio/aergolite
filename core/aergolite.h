@@ -200,6 +200,7 @@ struct aergolite_plugin {
   void (*xEnd)(void*);                   /* terminates the instance */
   void (*xOnNewLocalTransaction)(void*,void*); /* on_new_local_transaction notification */
   void (*xStatus)(void*, sqlite3_str *str);    /* used to retrieve the protocol status */
+  char*(*xMempool)(void*);               /* pragma mempool */
   void (*xNodeInfo)(void*, char*);       /* node info changed */
   void (*xNodeList)(void*, void*);       /* used to retrieve the node list */
 };
@@ -407,8 +408,7 @@ SQLITE_PRIVATE char * get_transaction_status_db(sqlite3 *db, int iDb, int64 nonc
 
 SQLITE_PRIVATE char * blockchain_status_json_db(sqlite3 *db, const char *name);
 SQLITE_PRIVATE char * blockchain_status_json(Pager *pPager);
-SQLITE_PRIVATE char * protocol_status_json_db(sqlite3 *db, const char *name, BOOL extended);
-SQLITE_PRIVATE char * protocol_status_json(Pager *pPager, BOOL extended);
+SQLITE_PRIVATE char * get_mempool_status_db(sqlite3 *db, const char *name);
 
 SQLITE_PRIVATE int set_current_node_info(sqlite3 *db, const char *name, char *info);
 SQLITE_PRIVATE char * get_current_node_info(sqlite3 *db, const char *name);

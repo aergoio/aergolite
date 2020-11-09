@@ -174,6 +174,53 @@ SQLITE_API void get_protocol_status(void *arg, sqlite3_str *str) {
 
 /****************************************************************************/
 
+SQLITE_API char * get_mempool_status(void *arg) {
+  plugin *plugin = (struct plugin *) arg;
+  sqlite3_str *str = sqlite3_str_new(NULL);
+  struct transaction *txn;
+  binn_iter iter;
+  binn item;
+  int count=0, sql_count;
+
+  sqlite3_str_appendchar(str, 1, '[');
+
+  for( txn=plugin->mempool; txn; txn=txn->next ){
+    if( txn->block_height==0 ){
+      count++;
+      if( count>1 ){
+        sqlite3_str_appendchar(str, 1, ',');
+      }
+      sqlite3_str_appendall(str, "{\n");
+      sqlite3_str_appendf  (str, "  \"id\": %lld,\n", txn->id);
+      sqlite3_str_appendf  (str, "  \"node_id\": %d,\n", txn->node_id);
+      sqlite3_str_appendf  (str, "  \"nonce\": %lld,\n", txn->nonce);
+      sqlite3_str_appendf  (str, "  \"timestamp\": \"%s\",\n", txn->datetime);
+      sqlite3_str_appendf  (str, "  \"commands\": [");
+      sql_count = 0;
+      binn_list_foreach(txn->log, item){
+        if( item.type==BINN_STRING ){
+          char *sql = item.ptr;
+          sql_count++;
+          if( sql_count>1 ){
+            sqlite3_str_appendchar(str, 1, ',');
+          }
+          sqlite3_str_appendchar(str, 1, '\n');
+          sqlite3_str_appendf(str, "    \"%w\"", sql);
+        }
+      }
+      sqlite3_str_appendchar(str, 1, '\n');
+      sqlite3_str_appendall(str, "  ]\n");
+      sqlite3_str_appendchar(str, 1, '}');
+    }
+  }
+
+  sqlite3_str_appendchar(str, 1, ']');
+
+  return sqlite3_str_finish(str);
+}
+
+/****************************************************************************/
+
 struct print_node {
   plugin *plugin;
   void   *vdbe;
@@ -2192,6 +2239,7 @@ int register_noleader_plugin(){
     plugin_end,
     on_new_local_transaction,
     get_protocol_status,
+    get_mempool_status,
     on_local_node_info_changed,
     print_node_list
   );

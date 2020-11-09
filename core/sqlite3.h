@@ -11734,6 +11734,7 @@ AERGOLITE_API int aergolite_plugin_register(
   void (*xEnd)(void*),                   /* terminates the instance */
   void (*xOnNewLocalTransaction)(void*,void*), /* on_new_local_transaction notification */
   void (*xStatus)(void*, sqlite3_str *str),    /* used to retrieve the protocol status */
+  char*(*xMempool)(void*),               /* pragma mempool */
   void (*xNodeInfo)(void*, char*),       /* node info changed */
   void (*xNodeList)(void*, void*)        /* used to retrieve the node list */
 );
