@@ -1,5 +1,48 @@
 #!/bin/bash
 
+set -e
+
+# binn
+
+if [[ ! -d ../binn ]] ; then
+git clone --depth=1 https://github.com/liteserver/binn ../binn
+fi
+
+if [[ ! -f ../binn/ios/libbinn.a ]] ; then
+cd ../binn
+./makeios
+cd -
+fi
+
+# libuv
+
+if [[ ! -d ../libuv ]] ; then
+git clone --depth=1 https://github.com/libuv/libuv ../libuv
+fi
+
+if [[ ! -f ../libuv/ios/libuv.a ]] ; then
+cd ../libuv
+wget https://gist.githubusercontent.com/kroggen/aed5776b74b6353c715d27b19051ada8/raw/04092577bb8f95f9c4075f871d3a3a27300c2887/makeios
+./autogen.sh
+./makeios
+cd -
+fi
+
+# secp256k1-vrf
+
+if [[ ! -d ../secp256k1-vrf ]] ; then
+git clone --depth=1 https://github.com/aergoio/secp256k1-vrf ../secp256k1-vrf
+fi
+
+if [[ ! -f ../secp256k1-vrf/ios/libsecp256k1-vrf.a ]] ; then
+cd ../secp256k1-vrf
+./makeios
+cd -
+fi
+
+
+# aergolite
+
 PLATFORMPATH="/Applications/Xcode.app/Contents/Developer/Platforms"
 TOOLSPATH="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin"
 export IPHONEOS_DEPLOYMENT_TARGET="8.0"
@@ -103,4 +146,4 @@ mv libaergolite.dylib $pwd/ios/
 make clean
 
 echo ""
-echo "done. files in the ios folder"
+echo "done. the files are in the ios folder"
