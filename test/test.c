@@ -120,6 +120,7 @@ void check_limit_of_open_files() {
     if( atoi(buf)<4096 ){
       puts("\nrun the command bellow to increase the limit of open files:\n\n"
            "    ulimit -Sn 4096\n");
+      pclose(fp);
       exit(1);
     }
   }
