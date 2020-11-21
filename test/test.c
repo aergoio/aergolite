@@ -134,9 +134,9 @@ void delete_files(int n){
   int i;
   for(i=1; i<=n; i++){
     unlinkf("db%d.db", i);
-    unlinkf("db%d.db-loc", i);
-    unlinkf("db%d.db-con", i);
-    unlinkf("db%d.db-rot", i);
+    unlinkf("db%d.db-local", i);
+    unlinkf("db%d.db-consensus", i);
+    unlinkf("db%d.db-rotation", i);
     unlinkf("db%d.db-shm", i);
     unlinkf("db%d.db-state", i);
     unlinkf("db%d.db-state-wal", i);
