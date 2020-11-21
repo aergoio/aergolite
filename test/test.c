@@ -24,6 +24,8 @@ const int wait_time = 150;
 const int wait_time = 250;
 #endif
 
+const int wait_repeat = 200;
+
 const int num_system_tables = 2;
 
 /*
@@ -216,7 +218,7 @@ void test_5_nodes(int bind_to_random_ports){
   /* wait until the transactions are processed in a new block */
 
   done = 0;
-  for(count=0; !done && count<100; count++){
+  for(count=0; !done && count<wait_repeat; count++){
     char *result;
     sleep_ms(wait_time);
     rc = db_query_str(&result, db1, "PRAGMA transaction_status(4)");
@@ -233,7 +235,7 @@ void test_5_nodes(int bind_to_random_ports){
   /* db2 */
 
   done = 0;
-  for(count=0; !done && count<100; count++){
+  for(count=0; !done && count<wait_repeat; count++){
     int result;
     if( count>0 ) sleep_ms(wait_time);
     rc = db_query_int32(&result, db2, "select count(*) from sqlite_master where name='t1'");
@@ -244,7 +246,7 @@ void test_5_nodes(int bind_to_random_ports){
   assert(done);
 
   done = 0;
-  for(count=0; !done && count<100; count++){
+  for(count=0; !done && count<wait_repeat; count++){
     int result;
     if( count>0 ) sleep_ms(wait_time);
     rc = db_query_int32(&result, db2, "select count(*) from t1");
@@ -264,7 +266,7 @@ void test_5_nodes(int bind_to_random_ports){
   /* db3 */
 
   done = 0;
-  for(count=0; !done && count<100; count++){
+  for(count=0; !done && count<wait_repeat; count++){
     int result;
     if( count>0 ) sleep_ms(wait_time);
     rc = db_query_int32(&result, db3, "select count(*) from sqlite_master where name='t1'");
@@ -275,7 +277,7 @@ void test_5_nodes(int bind_to_random_ports){
   assert(done);
 
   done = 0;
-  for(count=0; !done && count<100; count++){
+  for(count=0; !done && count<wait_repeat; count++){
     int result;
     if( count>0 ) sleep_ms(wait_time);
     rc = db_query_int32(&result, db3, "select count(*) from t1");
@@ -295,7 +297,7 @@ void test_5_nodes(int bind_to_random_ports){
   /* db4 */
 
   done = 0;
-  for(count=0; !done && count<100; count++){
+  for(count=0; !done && count<wait_repeat; count++){
     int result;
     if( count>0 ) sleep_ms(wait_time);
     rc = db_query_int32(&result, db4, "select count(*) from sqlite_master where name='t1'");
@@ -306,7 +308,7 @@ void test_5_nodes(int bind_to_random_ports){
   assert(done);
 
   done = 0;
-  for(count=0; !done && count<100; count++){
+  for(count=0; !done && count<wait_repeat; count++){
     int result;
     if( count>0 ) sleep_ms(wait_time);
     rc = db_query_int32(&result, db4, "select count(*) from t1");
@@ -326,7 +328,7 @@ void test_5_nodes(int bind_to_random_ports){
   /* db5 */
 
   done = 0;
-  for(count=0; !done && count<100; count++){
+  for(count=0; !done && count<wait_repeat; count++){
     int result;
     if( count>0 ) sleep_ms(wait_time);
     rc = db_query_int32(&result, db5, "select count(*) from sqlite_master where name='t1'");
@@ -337,7 +339,7 @@ void test_5_nodes(int bind_to_random_ports){
   assert(done);
 
   done = 0;
-  for(count=0; !done && count<100; count++){
+  for(count=0; !done && count<wait_repeat; count++){
     int result;
     if( count>0 ) sleep_ms(wait_time);
     rc = db_query_int32(&result, db5, "select count(*) from t1");
@@ -588,7 +590,7 @@ loc_again2:
   /* wait until the transactions are processed in a new block */
 
   done = 0;
-  for(count=0; !done && count<100; count++){
+  for(count=0; !done && count<wait_repeat; count++){
     char *result;
     sleep_ms(wait_time);
     rc = db_query_str(&result, db[exec_from_node], "PRAGMA transaction_status(3)");
@@ -610,7 +612,7 @@ loc_again2:
     printf("checking node %d\n", i); fflush(stdout);
 
     done = 0;
-    for(count=0; !done && count<100; count++){
+    for(count=0; !done && count<wait_repeat; count++){
       int result;
       if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from sqlite_master where name='t1'");
@@ -620,7 +622,7 @@ loc_again2:
     assert(done);
 
     done = 0;
-    for(count=0; !done && count<100; count++){
+    for(count=0; !done && count<wait_repeat; count++){
       int result;
       if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from t1");
@@ -947,7 +949,7 @@ loc_again2:
   printf("waiting until node %d is ready\n", exec_from_node); fflush(stdout);
 
   done = 0;
-  for(count=0; !done && count<100; count++){
+  for(count=0; !done && count<wait_repeat; count++){
     int result;
     if( count>0 ) sleep_ms(wait_time);
     rc = db_query_int32(&result, db[exec_from_node], "PRAGMA db_is_ready");
@@ -975,7 +977,7 @@ loc_again2:
   /* wait until the transactions are processed in a new block */
 
   done = 0;
-  for(count=0; !done && count<100; count++){
+  for(count=0; !done && count<wait_repeat; count++){
     char *result;
     sleep_ms(wait_time);
     rc = db_query_str(&result, db[exec_from_node], "PRAGMA transaction_status(3)");
@@ -996,7 +998,7 @@ loc_again2:
     printf("checking node %d\n", i); fflush(stdout);
 
     done = 0;
-    for(count=0; !done && count<100; count++){
+    for(count=0; !done && count<wait_repeat; count++){
       int result;
       if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from sqlite_master where name='t1'");
@@ -1006,7 +1008,7 @@ loc_again2:
     assert(done);
 
     done = 0;
-    for(count=0; !done && count<100; count++){
+    for(count=0; !done && count<wait_repeat; count++){
       int result;
       if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from t1");
@@ -1028,7 +1030,7 @@ loc_again2:
     printf("waiting until node %d is ready\n", i); fflush(stdout);
 
     done = 0;
-    for(count=0; !done && count<100; count++){
+    for(count=0; !done && count<wait_repeat; count++){
       int result;
       if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "PRAGMA db_is_ready");
@@ -1068,7 +1070,7 @@ loc_again2:
     printf("waiting new block on node %d", i); fflush(stdout);
 
     done = 0;
-    for(count=0; !done && count<100; count++){
+    for(count=0; !done && count<wait_repeat; count++){
       char query[64], *result;
       sleep_ms(wait_time);
       sprintf(query, "PRAGMA transaction_status(%d)", last_nonce[i]);
@@ -1092,7 +1094,7 @@ loc_again2:
     printf("checking node %d\n", i); fflush(stdout);
 
     done = 0;
-    for(count=0; !done && count<100; count++){
+    for(count=0; !done && count<wait_repeat; count++){
       int result;
       if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from sqlite_master where name='t2'");
@@ -1102,7 +1104,7 @@ loc_again2:
     assert(done);
 
     done = 0;
-    for(count=0; !done && count<100; count++){
+    for(count=0; !done && count<wait_repeat; count++){
       int result;
       if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from t1");
@@ -1437,7 +1439,7 @@ loc_check_conns:
   printf("waiting for new block"); fflush(stdout);
 
   done = 0;
-  for(count=0; !done && count<100; count++){
+  for(count=0; !done && count<wait_repeat; count++){
     char *result;
     sleep_ms(wait_time);
     rc = db_query_str(&result, db[exec_from_node], "PRAGMA transaction_status(3)");
@@ -1458,7 +1460,7 @@ loc_check_conns:
     printf("checking node %d\n", i); fflush(stdout);
 
     done = 0;
-    for(count=0; !done && count<100; count++){
+    for(count=0; !done && count<wait_repeat; count++){
       int result;
       if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from sqlite_master where name='t1'");
@@ -1468,7 +1470,7 @@ loc_check_conns:
     assert(done);
 
     done = 0;
-    for(count=0; !done && count<100; count++){
+    for(count=0; !done && count<wait_repeat; count++){
       int result;
       if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from t1");
@@ -1493,7 +1495,7 @@ loc_check_conns:
       sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[i]);
       //db_check_str(db[i], sql, "processed");
       done = 0;
-      for(count=0; !done && count<100; count++){
+      for(count=0; !done && count<wait_repeat; count++){
         char *result;
         if( count>0 ) sleep_ms(wait_time);
         rc = db_query_str(&result, db[i], sql);
@@ -1550,7 +1552,7 @@ loc_check_conns:
         int node = active_online_nodes[i];
 
         done = 0;
-        for(count=0; !done && count<200; count++){
+        for(count=0; !done && count<wait_repeat; count++){
           char *result, sql[128];
           if( count>0 ) sleep_ms(wait_time);
           sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[node]);
@@ -1575,7 +1577,7 @@ loc_check_conns:
         printf("checking node %d\n", i); fflush(stdout);
 
         done = 0;
-        for(count=0; !done && count<100; count++){
+        for(count=0; !done && count<wait_repeat; count++){
           int result;
           if( count>0 ) sleep_ms(wait_time);
           rc = db_query_int32(&result, db[i], "select count(*) from sqlite_master where name='t1'");
@@ -1585,7 +1587,7 @@ loc_check_conns:
         assert(done);
 
         done = 0;
-        for(count=0; !done && count<100; count++){
+        for(count=0; !done && count<wait_repeat; count++){
           int result;
           if( count>0 ) sleep_ms(wait_time);
           rc = db_query_int32(&result, db[i], "select count(*) from t1");
@@ -1713,7 +1715,7 @@ loc_check_conns2:
     printf("checking node %d\n", node); fflush(stdout);
 
     done = 0;
-    for(count=0; !done && count<100; count++){
+    for(count=0; !done && count<wait_repeat; count++){
       int result;
       if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[node], "select count(*) from t1");
@@ -1751,7 +1753,7 @@ loc_check_conns2:
     printf("checking node %d\n", i); fflush(stdout);
 
     done = 0;
-    for(count=0; !done && count<100; count++){
+    for(count=0; !done && count<wait_repeat; count++){
       int result;
       if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from t1");
@@ -1775,7 +1777,7 @@ loc_check_conns2:
     printf("waiting until node %d is ready\n", i); fflush(stdout);
 
     done = 0;
-    for(count=0; !done && count<100; count++){
+    for(count=0; !done && count<wait_repeat; count++){
       int result;
       if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "PRAGMA db_is_ready");
@@ -1816,7 +1818,7 @@ loc_check_conns2:
       int node = active_nodes_on_reconnect[i];
 
       done = 0;
-      for(count=0; !done && count<200; count++){
+      for(count=0; !done && count<wait_repeat; count++){
         char *result, sql[128];
         if( count>0 ) sleep_ms(wait_time);
         sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[node]);
@@ -1839,7 +1841,7 @@ loc_check_conns2:
       printf("checking node %d\n", i); fflush(stdout);
 
       done = 0;
-      for(count=0; !done && count<100; count++){
+      for(count=0; !done && count<wait_repeat; count++){
         int result;
         if( count>0 ) sleep_ms(wait_time);
         rc = db_query_int32(&result, db[i], "select count(*) from t1");
@@ -2060,7 +2062,7 @@ loc_again2:
   printf("waiting until node %d is ready\n", starting_node); fflush(stdout);
 
   done = 0;
-  for(count=0; !done && count<100; count++){
+  for(count=0; !done && count<wait_repeat; count++){
     int result;
     if( count>0 ) sleep_ms(wait_time);
     rc = db_query_int32(&result, db[starting_node], "PRAGMA db_is_ready");
@@ -2088,7 +2090,7 @@ loc_again2:
   /* wait until the transactions are processed in a new block */
 
   done = 0;
-  for(count=0; !done && count<100; count++){
+  for(count=0; !done && count<wait_repeat; count++){
     char query[64], *result;
     sleep_ms(wait_time);
     sprintf(query, "PRAGMA transaction_status(%d)", last_nonce[starting_node]);
@@ -2110,7 +2112,7 @@ loc_again2:
     printf("checking node %d\n", i); fflush(stdout);
 
     done = 0;
-    for(count=0; !done && count<100; count++){
+    for(count=0; !done && count<wait_repeat; count++){
       int result;
       if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from sqlite_master where name='t1'");
@@ -2120,7 +2122,7 @@ loc_again2:
     assert(done);
 
     done = 0;
-    for(count=0; !done && count<100; count++){
+    for(count=0; !done && count<wait_repeat; count++){
       int result;
       if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from t1");
@@ -2138,7 +2140,7 @@ loc_again2:
       sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[i]);
       //db_check_str(db[i], sql, "processed");
       done = 0;
-      for(count=0; !done && count<100; count++){
+      for(count=0; !done && count<wait_repeat; count++){
         char *result;
         if( count>0 ) sleep_ms(wait_time);
         rc = db_query_str(&result, db[i], sql);
@@ -2191,7 +2193,7 @@ loc_again2:
       }
 
       done = 0;
-      for(count=0; !done && count<100; count++){
+      for(count=0; !done && count<wait_repeat; count++){
         int result;
         if( count>0 ) sleep_ms(wait_time);
         rc = db_query_int32(&result, db[node], "PRAGMA db_is_ready");
@@ -2217,7 +2219,7 @@ loc_again2:
       if( last_nonce[node]==0 ) continue;
 
       done = 0;
-      for(count=0; !done && count<200; count++){
+      for(count=0; !done && count<wait_repeat; count++){
         char *result, sql[128];
         if( count>0 ) sleep_ms(wait_time);
         sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[node]);
@@ -2242,7 +2244,7 @@ loc_again2:
       printf("checking node %d\n", i); fflush(stdout);
 
       done = 0;
-      for(count=0; !done && count<100; count++){
+      for(count=0; !done && count<wait_repeat; count++){
         int result;
         if( count>0 ) sleep_ms(wait_time);
         rc = db_query_int32(&result, db[i], "select count(*) from t1");
@@ -2284,7 +2286,7 @@ loc_again2:
       }
 
       done = 0;
-      for(count=0; !done && count<100; count++){
+      for(count=0; !done && count<wait_repeat; count++){
         int result;
         if( count>0 ) sleep_ms(wait_time);
         rc = db_query_int32(&result, db[node], "PRAGMA db_is_ready");
@@ -2398,7 +2400,7 @@ loc_again2:
     if( last_nonce[node]==0 ){ puts(""); continue; }
 
     done = 0;
-    for(count=0; !done && count<200; count++){
+    for(count=0; !done && count<wait_repeat; count++){
       char *result, sql[128];
       if( count>0 ) sleep_ms(wait_time);
       sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[node]);
@@ -2426,7 +2428,7 @@ loc_again2:
     int total_rows = 2 + new_blocks_on_net * num_txns_per_block + n_old_with_content * num_offline_txns;
 
     done = 0;
-    for(count=0; !done && count<100; count++){
+    for(count=0; !done && count<wait_repeat; count++){
       int result;
       if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[node], "select count(*) from t1");
@@ -2438,7 +2440,7 @@ loc_again2:
     int total_tables = num_system_tables + 1;
 
     done = 0;
-    for(count=0; !done && count<100; count++){
+    for(count=0; !done && count<wait_repeat; count++){
       int result;
       if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[node], "select count(*) from sqlite_master where type='table'");
@@ -2468,7 +2470,7 @@ loc_again2:
     int total_rows = 2 + new_blocks_on_net * num_txns_per_block + n_old_with_content * num_offline_txns;
 
     done = 0;
-    for(count=0; !done && count<100; count++){
+    for(count=0; !done && count<wait_repeat; count++){
       int result;
       if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from t1");
@@ -2480,7 +2482,7 @@ loc_again2:
     int total_tables = num_system_tables + 1;
 
     done = 0;
-    for(count=0; !done && count<100; count++){
+    for(count=0; !done && count<wait_repeat; count++){
       int result;
       if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from sqlite_master where type='table'");
@@ -2752,7 +2754,7 @@ loc_again2:
       int node = active_online_nodes[i];
       if( last_nonce[node]==0 ) continue;
       done = 0;
-      for(count=0; !done && count<200; count++){
+      for(count=0; !done && count<wait_repeat; count++){
         char *result, sql[128];
         if( count>0 ) sleep_ms(wait_time);
         sprintf(sql, "PRAGMA transaction_status(%d)", last_nonce[node]);
@@ -2782,7 +2784,7 @@ loc_again2:
       printf("checking node %d\n", i); fflush(stdout);
 
       done = 0;
-      for(count=0; !done && count<100; count++){
+      for(count=0; !done && count<wait_repeat; count++){
         int result;
         if( count>0 ) sleep_ms(wait_time);
         rc = db_query_int32(&result, db[i], "select count(*) from t1");
@@ -2792,7 +2794,7 @@ loc_again2:
       assert(done);
 
       done = 0;
-      for(count=0; !done && count<100; count++){
+      for(count=0; !done && count<wait_repeat; count++){
         int result;
         if( count>0 ) sleep_ms(wait_time);
         rc = db_query_int32(&result, db[i], "select count(*) from sqlite_master where type='table'");
@@ -2815,7 +2817,7 @@ loc_again2:
     printf("checking that no new block is generated"); fflush(stdout);
 
     done = 0;
-    for(count=0, i=0; !done && count<100; count++){
+    for(count=0, i=0; !done && count<wait_repeat; count++){
       int node = active_online_nodes[i];
       if( node==0 ){
         i = 0;
@@ -2983,7 +2985,7 @@ loc_again1:
     printf("waiting until node %d is ready\n", i); fflush(stdout);
 
     done = 0;
-    for(count=0; !done && count<100; count++){
+    for(count=0; !done && count<wait_repeat; count++){
       int result;
       if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "PRAGMA db_is_ready");
@@ -3021,7 +3023,7 @@ loc_again1:
     printf("checking node %d\n", i); fflush(stdout);
 
     done = 0;
-    for(count=0; !done && count<100; count++){
+    for(count=0; !done && count<wait_repeat; count++){
       int result;
       if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from sqlite_master where name like 't%'");
@@ -3116,7 +3118,7 @@ loc_again1:
     printf("checking node %d\n", i); fflush(stdout);
 
     done = 0;
-    for(count=0; !done && count<100; count++){
+    for(count=0; !done && count<wait_repeat; count++){
       int result;
       if( count>0 ) sleep_ms(wait_time);
       rc = db_query_int32(&result, db[i], "select count(*) from t1");
