@@ -9,7 +9,7 @@
 typedef unsigned char uchar;
 
 
-#define AERGOLITE_USE_SHORT_FILENAMES
+//#define AERGOLITE_USE_SHORT_FILENAMES
 
 
 typedef struct aergolite aergolite;
