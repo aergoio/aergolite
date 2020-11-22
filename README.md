@@ -47,7 +47,7 @@ Supported programming languages:
 * C
 * C++
 * Java
-* Javascript / node.js
+* Javascript (Node.js)
 * Python
 * .Net (C# and VB)
 * Ruby
@@ -57,7 +57,12 @@ Supported programming languages:
 
 And probably any other that has support for SQLite.
 
-Most of these languages are supported via wrappers.
+Most of these languages are supported via existing wrappers.
+
+
+## Pre-compiled binaries
+
+Check the [releases](https://github.com/aergoio/aergolite/releases)
 
 
 ## Compiling and installing
@@ -167,6 +172,8 @@ Generate static and dynamic libraries with the command:
 ```
 
 They can be included as a module on iOS projects.
+You can also copy them to the `AergoLite` sub-folder from the
+[AergoLite.swift](https://github.com/aergoio/AergoLite.swift) wrapper
 
 
 ## Automated Tests
@@ -401,9 +408,36 @@ Only the blockchain administrator can add nodes to the network.
 
 The first node to be authorized must be the one in which the command is being executed.
 
-The authorizations for new nodes must be executed on nodes that are already authorized.
+The authorizations for other nodes must be executed on nodes that are already authorized.
 
-The above command will be sent to the Ledger device to be signed if the device is connected, otherwise it will fire the user transaction signature callback where the transaction must be signed using the blockchain administrator private key.
+The above command will be sent to the Ledger device to be signed if the device is connected, otherwise it will fire the transaction signature callback where the transaction must be signed using the blockchain administrator private key.
+
+
+## Specifying the node type
+
+By default a node is authorized as a light node (does not keep the history of blocks). To authorize it as a full node add `full:` before the node's public key:
+
+```
+PRAGMA add_node="full:<public key>"
+```
+
+To modify a node's type after it was already authorized, use the `node_type` command. It has this format:
+
+```
+PRAGMA node_type="<type>:<nodes>"
+```
+
+The type can be `full` or `light`. The "nodes" is a comma separated list of node identifiers (public key or node id) or `*` for all the authorized nodes.
+
+Here are some examples:
+
+```
+PRAGMA node_type="full:Am12..abc1"
+PRAGMA node_type="full:Am12..abc1,Am12..abc2,Am12..abc3"
+PRAGMA node_type="full:1287649477,3817592406,2373041549"
+PRAGMA node_type="full:*"
+PRAGMA node_type="light:1287649477"
+```
 
 
 ## Signing transactions
@@ -575,18 +609,18 @@ Where `<nonce>` should be replaced by the transaction's nonce. eg: `PRAGMA trans
 
 It will return
 
-On full nodes: (not yet implemented)
+On full nodes:
 
 * `unprocessed`: the transaction was not yet processed by the network
 * `included`: a consensus was reached and the transaction was included on a block
 * `rejected`: a consensus was reached and the transaction was rejected
 
-On pruned nodes:
+On light nodes:
 
 * `unprocessed`: the transaction was not yet processed by the network
 * `processed`: the transaction was processed by the network and a consensus was reached on its result
 
-Pruned nodes do not keep information about specific transactions.
+Light nodes do not keep information about specific transactions.
 
 
 ### Transaction Notification
@@ -678,7 +712,7 @@ If the block interval is not specified then the library will use a default value
 
 ## Limitations
 
-This first version uses a fully connected network for communication between the nodes. It works with up to 200 nodes on the automated tests. Future versions will also contain a gossip based protocol to support thousands of nodes.
+This first version uses a fully connected network for communication between the nodes. It works with up to 200 nodes on the automated tests. Soon it will also contain a gossip based protocol to support millions of nodes.
 
 Only 1 connection to each database file. If there are many applications needing to access the db file, each application must have its own copy of the database, configured as a separate node.
 
