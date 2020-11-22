@@ -161,6 +161,7 @@ make install
 
 Use the [SQLite Android Bindings](https://github.com/aergoio/aergolite-tools/tree/master/wrappers/SQLite_Android_Bindings)
 to generate an `aar` file and then include it on the Android Studio project.
+A sample project is available [here](https://github.com/aergoio/aergolite-tools/tree/master/projects/AndroidStudio-NativeInterface)
 
 
 ### For iOS
@@ -415,7 +416,7 @@ The above command will be sent to the Ledger device to be signed if the device i
 
 ## Specifying the node type
 
-By default a node is authorized as a light node (does not keep the history of blocks). To authorize it as a full node add `full:` before the node's public key:
+By default a node is authorized as a **light** node (does not keep the history of blocks). To authorize it as a **full** node add `full:` before the node's public key:
 
 ```
 PRAGMA add_node="full:<public key>"
@@ -450,8 +451,8 @@ These transactions need to be signed to be accepted by the network and included 
 
 Two entities can sign transactions:
 
-* the administrator
-* each authorized node
+* The administrator
+* Each authorized node
 
 If the transaction requires special rights, the AergoLite library will send it to be signed by the adminstrator. Otherwise it will automatically sign it using the node's private key.
 
@@ -579,9 +580,9 @@ The text value can be a single node identifier or it can contain many informatio
 
 This information is kept on memory locally and also sent to the connected peers. It is not saved on the database and it is dynamic: the next time this command is executed with a different value it will replace the previous one.
 
-The last set value can be retrieved locally using the `PRAGMA node_info` command.
+The last set value for this node can be retrieved locally using the `PRAGMA node_info` command.
 
-It will also appear in the result of the `PRAGMA protocol_status(1)` command on its peer nodes.
+It is possible to view the values from the connected nodes in the result of the `PRAGMA nodes` command in the `extra` field.
 
 
 ### Last nonce
