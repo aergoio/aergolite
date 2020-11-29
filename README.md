@@ -233,15 +233,13 @@ is an user that has its own private + public key pair.
 The blockchain administrator can:
 
 * Add nodes to the blockchain network
-* Remove nodes from the blockchain network
 * Execute reserved SQL commands
 
 In future versions it will also be able to:
 
-* Authorize nodes to execute blocked SQL commands
+* Remove nodes from the blockchain network
 * Add users to the network
-* Authorize users to execute specific SQL commands
-* Create smart contracts
+* Create smart contracts to let nodes to execute blocked SQL commands
 
 You will need to inform the public key of the blockchain administrator on each participating node.
 
@@ -273,8 +271,8 @@ Only the administrator is able to execute all the SQL commands.
 Future versions may allow nodes to execute smart contracts created by the administrator that can
 include any SQL command.
 
-All of this enforces the requirement for an attacker of controlling the majority of the nodes on
-the network to be able to defeat it.
+All of this enforces the requirement for an attacker to control the majority of the nodes on
+the network to be able to attack it.
 
 
 ## Private key protection
