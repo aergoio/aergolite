@@ -720,3 +720,34 @@ Only 1 connection to each database file. If there are many applications needing 
 The numbering of rows in rowid tables (those who use an integer as the primary key) is different from SQLite. The first 32-bit are the node id and the remaining 32-bit are sequential per node. This also means that each node can create up to 2^32 rows on each rowid table.
 
 As in any multi-master replication system, conflicts can happen. The entire transaction can be aborted in some cases, so take this into consideration. See above how the app can check the status of the transaction.
+
+
+## Licensing
+
+AergoLite is released under one of the two options bellow:
+
+1. AGPLv3
+
+This means that your application must comply with this license, including releasing its source code and being published under a compatible GPL.
+
+2. COMMERCIAL LICENSE
+
+If the above conditions do not fit your requirements, or if you want better support and services, contact us to acquire a commercial license.
+
+
+## About Us
+
+AergoLite was developed by Bernardo Ramos at:
+
+[![aergo logo](https://user-images.githubusercontent.com/7624275/100549737-8e89c500-3253-11eb-96b3-585916ed0883.png)](https://aergo.io/)
+
+Aergo has a [public blockchain](https://aergoscan.io/) with support for [smart contracts](https://ide.aergo.io/) in Lua.
+
+It will support relational data storage and SQL on smart contracts soon, currently available in our testnet and on private chains.
+
+
+## Support
+
+Low priority support is available at our [forum](https://aergolite.aergo.io/forum/)
+
+Special enterprise support is also available. Contact us via e-mail: aergolite AT aergo DOT io
