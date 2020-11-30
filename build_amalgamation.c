@@ -101,19 +101,34 @@ int main() {
   //system("cp ../binn/src/binn.h core/");
 #endif
 
+#ifdef _WIN32
+  system("mkdir -p amalgamation");
+  system("del /Q amalgamation\\*");
+#else
   system("mkdir -p amalgamation");
   system("rm amalgamation/*");
+#endif
 
-  system("echo \"#define AERGOLITE_AMALGAMATION  1\" > amalgamation/sqlite3.c");
-  system("echo \"#define HAVE_STDINT_H  1\" >> amalgamation/sqlite3.c");
-  system("echo \"#define HAVE_INTTYPES_H  1\" >> amalgamation/sqlite3.c");
-  system("echo \"#define HAVE_USLEEP  1\" >> amalgamation/sqlite3.c");
+#ifdef _WIN32
+  system("echo #define AERGOLITE_AMALGAMATION  1 >  amalgamation/sqlite3.c");
+  system("echo #define HAVE_STDINT_H           1 >> amalgamation/sqlite3.c");
+  system("echo #define HAVE_USLEEP             1 >> amalgamation/sqlite3.c");
+#else
+  system("echo \"#define AERGOLITE_AMALGAMATION  1\" >  amalgamation/sqlite3.c");
+  system("echo \"#define HAVE_STDINT_H           1\" >> amalgamation/sqlite3.c");
+  system("echo \"#define HAVE_INTTYPES_H         1\" >> amalgamation/sqlite3.c");
+  system("echo \"#define HAVE_USLEEP             1\" >> amalgamation/sqlite3.c");
+#endif
 
   process_file("core", "sqlite3.h", "amalgamation/sqlite3.h");
   process_file("core", "sqlite3.c", "amalgamation/sqlite3.c");
   process_file("plugins/no-leader", "no-leader.c", "amalgamation/sqlite3.c");
 
+#ifdef _WIN32
+  system("copy core\\sqlite3ext.h amalgamation\\");
+#else
   system("cp core/sqlite3ext.h amalgamation/");
+#endif
 
 #ifdef _WIN32
   system("del core\\binn.c");
