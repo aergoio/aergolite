@@ -746,6 +746,6 @@ It will support relational data storage and SQL on smart contracts soon, current
 
 ## Support
 
-Low priority support is available at our [forum](https://aergolite.aergo.io/forum/)
+Low priority support is available at our [Forum](https://aergolite-forum.aergo.io/)
 
-Special enterprise support is also available. Contact us via e-mail: aergolite AT aergo DOT io
+Special enterprise support is also available. Contact us via e-mail: aergolite *AT* aergo *DOT* io
