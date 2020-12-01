@@ -233,6 +233,7 @@ struct node_nonce {
   int64 last_nonce;
 };
 
+#ifndef AERGOLITE_AMALGAMATION
 struct transaction {
   struct transaction *next;
   int node_id;
@@ -243,7 +244,6 @@ struct transaction {
   int64 block_height;
 };
 
-#ifndef AERGOLITE_AMALGAMATION
 struct block_vote {
   struct block_vote *next;
   int   node_id;
