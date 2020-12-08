@@ -102,7 +102,7 @@ cd ..
 git clone --depth=1 https://github.com/aergoio/secp256k1-vrf
 cd secp256k1-vrf
 ./autogen.sh
-./configure
+./configure --disable-benchmarks
 make
 sudo make install
 cd ..

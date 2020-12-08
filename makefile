@@ -17,12 +17,17 @@ else
   endif
 endif
 
+LIBS = -lbinn -luv -lsecp256k1-vrf
+SHELL_LIBS = -lbinn
+
 ifeq ($(TARGET_OS),Windows)
     CFLAGS   = -I../libuv/include -I../binn/src -DUSE_UV_CALLBACK
     LFLAGS   = -L../libuv/.libs -L../binn
     IMPLIB   = aergolite-0.1
     LIBRARY  = aergolite-0.1.dll
     LDFLAGS  += -static-libgcc -static-libstdc++
+    LIBS     = -lbinn-3.0 -llibuv -lsecp256k1-vrf
+    SHELL_LIBS = -lbinn-3.0
 else ifeq ($(TARGET_OS),iPhoneOS)
     LIBRARY = libaergolite.dylib
     CFLAGS += -fPIC -fvisibility=hidden -DUSE_UV_CALLBACK
@@ -81,8 +86,9 @@ LIBFLAGS := $(LIBFLAGS) $(CFLAGS) -DSQLITE_HAS_CODEC -DSQLITE_USE_URI=1 -DSQLITE
 
 
 all:      $(LIBRARY) $(SSHELL)
-
 debug:    $(LIBRARY) $(SSHELL)
+standalone: $(LIBRARY) $(SSHELL)
+static:   libaergolite.a
 
 ios:      libaergolite.a libaergolite.dylib
 iostest:  libaergolite.a libaergolite.dylib
@@ -90,6 +96,9 @@ iostest:  libaergolite.a libaergolite.dylib
 debug:    export LIBFLAGS := -g -DSQLITE_DEBUG=1 -DDEBUGPRINT=1 $(DEBUGFLAGS) $(LIBFLAGS)
 
 valgrind: export LIBFLAGS := -g -DSQLITE_DEBUG=1 $(DEBUGFLAGS) $(LIBFLAGS)
+
+standalone: export LIBS := ../binn/libbinn.a ../libuv/.libs/libuv.a ../secp256k1-vrf/.libs/libsecp256k1-vrf.a -lgmp
+standalone: export SHELL_LIBS := ../binn/libbinn.a
 
 
 OBJECTS = sqlite3.o plugin-no-leader.o
@@ -102,7 +111,7 @@ libaergolite.a: $(OBJECTS)
 
 # Windows
 aergolite-0.1.dll: $(OBJECTS)
-	$(CC) -shared -Wl,--out-implib,$(IMPLIB).lib $^ -o $@ $(LFLAGS) -lbinn-3.0 -llibuv -lsecp256k1-vrf -lws2_32
+	$(CC) -shared -Wl,--out-implib,$(IMPLIB).lib $^ -o $@ $(LFLAGS) $(LIBS) -lws2_32
 ifeq ($(MAKECMDGOALS),valgrind)
 else ifeq ($(MAKECMDGOALS),debug)
 else
@@ -111,7 +120,7 @@ endif
 
 # OSX
 libaergolite.0.dylib: $(OBJECTS)
-	$(CC) -dynamiclib -install_name "$(INSTNAME)" -current_version $(CURR_VERSION) -compatibility_version $(COMPAT_VERSION) $^ -o $@ $(LDFLAGS) -lbinn -luv -lsecp256k1-vrf -ldl
+	$(CC) -dynamiclib -install_name "$(INSTNAME)" -current_version $(CURR_VERSION) -compatibility_version $(COMPAT_VERSION) $^ -o $@ $(LDFLAGS) $(LIBS) -ldl
 ifeq ($(MAKECMDGOALS),valgrind)
 else ifeq ($(MAKECMDGOALS),debug)
 else
@@ -124,7 +133,7 @@ endif
 
 # iOS
 libaergolite.dylib: $(OBJECTS)
-	$(CC) -dynamiclib -o $@ $^ $(LDFLAGS) -lbinn -luv -lsecp256k1-vrf -ldl
+	$(CC) -dynamiclib -o $@ $^ $(LDFLAGS) $(LIBS) -ldl
 ifeq ($(MAKECMDGOALS),valgrind)
 else ifeq ($(MAKECMDGOALS),debug)
 else
@@ -133,7 +142,7 @@ endif
 
 # Linux / Unix
 libaergolite.so.0.0.1: $(OBJECTS)
-	$(CC) -shared -Wl,-soname,$(SONAME) $^ -o $@ $(LDFLAGS) -lbinn -luv -lsecp256k1-vrf -ldl
+	$(CC) -shared -Wl,-soname,$(SONAME) $^ -o $@ $(LDFLAGS) $(LIBS) -ldl
 ifeq ($(MAKECMDGOALS),valgrind)
 else ifeq ($(MAKECMDGOALS),debug)
 else
@@ -154,11 +163,11 @@ plugin-no-leader.o: plugins/no-leader/no-leader.c plugins/no-leader/no-leader.h 
 
 $(SSHELL): shell.o $(LIBRARY)
 ifeq ($(TARGET_OS),Windows)
-	$(CC) $< -o $@ -L. -l$(IMPLIB) $(LFLAGS) -lbinn-3.0
+	$(CC) $< -o $@ -L. -l$(IMPLIB) $(LFLAGS) $(SHELL_LIBS)
 else ifeq ($(TARGET_OS),Mac)
-	$(CC) $< -o $@ -L. -l$(IMPLIB) -ldl -lbinn -lreadline
+	$(CC) $< -o $@ -L. -l$(IMPLIB) -ldl $(SHELL_LIBS) -lreadline
 else
-	$(CC) $< -o $@ -Wl,-rpath,$(LIBPATH) -L. -l$(IMPLIB) -lbinn -lreadline -ldl
+	$(CC) $< -o $@ -Wl,-rpath,$(LIBPATH) -L. -l$(IMPLIB) $(SHELL_LIBS) -lreadline -ldl
 endif
 	strip $(SSHELL)
 
