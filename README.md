@@ -65,6 +65,19 @@ Most of these languages are supported via existing wrappers.
 Check the [releases](https://github.com/aergoio/aergolite/releases)
 
 
+## Docker images
+
+* [Base](https://hub.docker.com/r/aergo/aergolite) (with libraries and the SQLite shell, it can also be used to add C/C++ applications)
+* [Python](https://hub.docker.com/r/aergo/aergolite-python)
+* [Node.js](https://hub.docker.com/r/aergo/aergolite-nodejs)
+
+To build the images locally:
+
+```
+make docker
+```
+
+
 ## Compiling and installing
 
 ### On Linux and Mac
@@ -102,7 +115,7 @@ cd ..
 git clone --depth=1 https://github.com/aergoio/secp256k1-vrf
 cd secp256k1-vrf
 ./autogen.sh
-./configure --disable-benchmarks
+./configure --disable-benchmark
 make
 sudo make install
 cd ..
@@ -144,7 +157,7 @@ cd ..
 git clone --depth=1 https://github.com/aergoio/secp256k1-vrf
 cd secp256k1-vrf
 ./autogen.sh
-./configure --with-bignum=no
+./configure --with-bignum=no --disable-benchmark
 make
 make install
 cd ..
