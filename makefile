@@ -82,7 +82,7 @@ endif
 LIBFLAGS := $(LIBFLAGS) $(CFLAGS) -DSQLITE_HAS_CODEC -DSQLITE_USE_URI=1 -DSQLITE_ENABLE_JSON1 -DSQLITE_THREADSAFE=1 -DHAVE_USLEEP -DHAVE_STDINT_H -DHAVE_INTTYPES_H -DSQLITE_ENABLE_COLUMN_METADATA
 
 
-.PHONY:  install debug test valgrind clean amalgamation
+.PHONY:  install debug test valgrind clean amalgamation docker
 
 
 all:      $(LIBRARY) $(SSHELL)
@@ -240,6 +240,13 @@ else	# Linux
 	cd test && LD_LIBRARY_PATH=..:/usr/local/lib python test.py -v
 endif
 endif
+
+
+docker:
+	cd docker/base    && docker build -t aergo/aergolite .
+	cd docker/python  && docker build -t aergo/aergolite-python .
+	cd docker/node.js && docker build -t aergo/aergolite-nodejs .
+	cd docker/java    && docker build -t aergo/aergolite-java .
 
 
 # variables:
