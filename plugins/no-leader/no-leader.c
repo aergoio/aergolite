@@ -13,7 +13,9 @@
 #endif
 
 #include <ctype.h>   /* for isdigit */
+#if !defined(USE_UV_CALLBACK) && !defined(_WIN32) && !defined(__ANDROID__)
 #include <unistd.h>  /* for unlink */
+#endif
 
 #include "no-leader.h"
 

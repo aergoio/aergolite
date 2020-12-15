@@ -22,13 +22,18 @@ bool base58_decode(const char *b58, size_t b58sz, void *bin, size_t *binszp){
   const unsigned char *b58u = (unsigned char*) b58;
   unsigned char *binu = (unsigned char*) bin;
   size_t outisz = (binsz + 3) / 4;
+#ifdef _MSC_VER
+  uint32_t *outi = sqlite3_malloc(outisz * sizeof(uint32_t));
+#else
   uint32_t outi[outisz];
+#endif
   uint64_t t;
   uint32_t c;
   size_t i, j;
   uint8_t bytesleft = binsz % 4;
   uint32_t zeromask = bytesleft ? (0xffffffff << (bytesleft * 8)) : 0;
   unsigned zerocount = 0;
+  bool retval = false;
 
   if (!b58sz) b58sz = strlen(b58);
 
@@ -41,9 +46,9 @@ bool base58_decode(const char *b58, size_t b58sz, void *bin, size_t *binszp){
 
   for ( ; i < b58sz; i++)  {
     // high-bit set on invalid digit
-    if (b58u[i] & 0x80) return false;
+    if (b58u[i] & 0x80) goto loc_exit;
     // invalid base58 digit
-    if (b58digits_map[b58u[i]] == -1) return false;
+    if (b58digits_map[b58u[i]] == -1) goto loc_exit;
     c = (unsigned) b58digits_map[b58u[i]];
     for (j = outisz; j--; ) {
       t = ((uint64_t)outi[j]) * 58 + c;
@@ -51,9 +56,9 @@ bool base58_decode(const char *b58, size_t b58sz, void *bin, size_t *binszp){
       outi[j] = t & 0xffffffff;
     }
     // output number too big (carry to the next int32)
-    if (c) return false;
+    if (c) goto loc_exit;
     // output number too big (last int32 filled too far)
-    if (outi[0] & zeromask) return false;
+    if (outi[0] & zeromask) goto loc_exit;
   }
 
   j = 0;
@@ -84,7 +89,13 @@ bool base58_decode(const char *b58, size_t b58sz, void *bin, size_t *binszp){
   }
   *binszp += zerocount;
 
-  return true;
+  retval = true;
+
+loc_exit:
+#ifdef _MSC_VER
+  sqlite3_free(outi);
+#endif
+  return retval;
 }
 
 static bool double_sha256(void *hash, const void *data, size_t len){
@@ -123,12 +134,17 @@ bool base58_encode(const void *data, size_t binsz, char *b58, size_t *b58sz){
   int carry;
   size_t i, j, high, zcount = 0;
   size_t size;
+  bool retval = false;
 
   while (zcount < binsz && !bin[zcount])
     zcount++;
 
   size = (binsz - zcount) * 138 / 100 + 1;
+#ifdef _MSC_VER
+  uint8_t *buf = sqlite3_malloc(size * sizeof(uint8_t));
+#else
   uint8_t buf[size];
+#endif
   memset(buf, 0, size);
 
   for (i = zcount, high = size - 1; i < binsz; i++, high = j) {
@@ -143,7 +159,7 @@ bool base58_encode(const void *data, size_t binsz, char *b58, size_t *b58sz){
 
   if (*b58sz <= zcount + size - j) {
     *b58sz = zcount + size - j + 1;
-    return false;
+    goto loc_exit;
   }
 
   if (zcount)
@@ -153,9 +169,39 @@ bool base58_encode(const void *data, size_t binsz, char *b58, size_t *b58sz){
   b58[i] = '\0';
   *b58sz = i + 1;
 
-  return true;
+  retval = true;
+
+loc_exit:
+#ifdef _MSC_VER
+  sqlite3_free(buf);
+#endif
+  return retval;
 }
 
+#ifdef _MSC_VER
+bool base58check_encode(const void *data, size_t datasz, uint8_t ver, char *b58c, size_t *b58c_sz){
+  uint8_t *buf, *hash;
+  bool retval = false;
+
+  buf = sqlite3_malloc(1 + datasz + 0x20);
+  if (!buf) return false;
+
+  hash = &buf[1 + datasz];
+
+  buf[0] = ver;
+  memcpy(&buf[1], data, datasz);
+  if (!double_sha256(hash, buf, datasz + 1)) {
+    *b58c_sz = 0;
+    goto loc_exit;
+  }
+
+  retval = base58_encode(buf, 1 + datasz + 4, b58c, b58c_sz);
+
+loc_exit:
+  sqlite3_free(buf);
+  return retval;
+}
+#else
 bool base58check_encode(const void *data, size_t datasz, uint8_t ver, char *b58c, size_t *b58c_sz){
   uint8_t buf[1 + datasz + 0x20];
   uint8_t *hash = &buf[1 + datasz];
@@ -169,3 +215,4 @@ bool base58check_encode(const void *data, size_t datasz, uint8_t ver, char *b58c
 
   return base58_encode(buf, 1 + datasz + 4, b58c, b58c_sz);
 }
+#endif

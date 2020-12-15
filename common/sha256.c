@@ -29,7 +29,7 @@
 #define SIG1(x) (ROTRIGHT(x,17) ^ ROTRIGHT(x,19) ^ ((x) >> 10))
 
 /**************************** VARIABLES *****************************/
-static const uint k[64] = {
+static const uint kk[64] = {
 	0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
 	0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
 	0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
@@ -60,7 +60,7 @@ void sha256_transform(SHA256_CTX *ctx, const uchar data[])
 	h = ctx->state[7];
 
 	for (i = 0; i < 64; ++i) {
-		t1 = h + EP1(e) + CH(e,f,g) + k[i] + m[i];
+		t1 = h + EP1(e) + CH(e,f,g) + kk[i] + m[i];
 		t2 = EP0(a) + MAJ(a,b,c);
 		h = g;
 		g = f;
