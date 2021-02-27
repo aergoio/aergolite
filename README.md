@@ -1,3 +1,4 @@
+<p align="right"><a href="README-zh.md">中文</a></p>
 <p align="center"><img width="65%" src="https://user-images.githubusercontent.com/7624275/92685476-2390b800-f30e-11ea-9edc-980b0e66c0ad.png" alt="AergoLite"></p>
 
 <h1 align="center">SQLite with Blockchain</h1>
