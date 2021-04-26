@@ -21,8 +21,8 @@ LIBS = -lbinn -luv -lsecp256k1-vrf
 SHELL_LIBS = -lbinn
 
 ifeq ($(TARGET_OS),Windows)
-    CFLAGS   = -I../libuv/include -I../binn/src -DUSE_UV_CALLBACK
-    LFLAGS   = -L../libuv/.libs -L../binn
+    CFLAGS   = -I../libuv/include -I../binn/src -I../secp256k1-vrf/include -D_WIN32 -DUSE_UV_CALLBACK
+    LFLAGS   = -L../libuv/.libs -L../binn -L../secp256k1-vrf/.libs
     IMPLIB   = aergolite-0.1
     LIBRARY  = aergolite-0.1.dll
     LDFLAGS  += -static-libgcc -static-libstdc++
