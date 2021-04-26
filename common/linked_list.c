@@ -60,3 +60,28 @@ SQLITE_PRIVATE void llist_remove(void *pfirst, void *pto_del) {
 
   to_del->next = NULL;
 }
+
+SQLITE_PRIVATE int llist_count(void *list) {
+  llitem *item = (llitem *) list;
+  int count = 0;
+
+  while (item) {
+    count++;
+    item = item->next;
+  }
+
+  return count;
+}
+
+SQLITE_PRIVATE void* llist_get(void *list, int pos) {
+  llitem *item = (llitem *) list;
+  int count = 0;
+
+  while (item) {
+    if (count==pos) return item;
+    count++;
+    item = item->next;
+  }
+
+  return NULL;
+}
