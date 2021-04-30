@@ -266,6 +266,9 @@ SQLITE_PRIVATE int  open_detached_worker_db(aergolite *this_node, sqlite3 **pwor
 SQLITE_PRIVATE int  open_main_db_connection2(aergolite *this_node);
 SQLITE_PRIVATE int  open_worker_db(aergolite *this_node);
 
+SQLITE_PRIVATE int  pagerOpenWalNew(Pager *pPager);
+SQLITE_PRIVATE int  pagerCloseWalNew(aergolite *this_node);
+
 SQLITE_PRIVATE BOOL is_valid_node_type(char *type);
 SQLITE_PRIVATE int  read_node_authorization(char *sql, char *pubkey, int *ppklen, char *type);
 AERGOLITE_API  int  read_authorized_pubkey(void *log, char *pubkey, int *ppklen, char *type);
