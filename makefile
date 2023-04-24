@@ -1,3 +1,7 @@
+CC    ?= gcc
+STRIP ?= strip
+AR    ?= ar
+
 ifneq ($(OS_NAME),)
   TARGET_OS = $(OS_NAME)
 else
@@ -65,10 +69,6 @@ else
     IMPLIB   = aergolite
 endif
 
-CC    = gcc
-STRIP = strip
-AR    = ar
-
 SHORT = sqlite3
 
 # the item below cannot be called SHELL because it's a reserved name
@@ -82,20 +82,23 @@ endif
 LIBFLAGS := $(LIBFLAGS) $(CFLAGS) -DSQLITE_HAS_CODEC -DSQLITE_USE_URI=1 -DSQLITE_ENABLE_JSON1 -DSQLITE_THREADSAFE=1 -DHAVE_USLEEP -DHAVE_STDINT_H -DHAVE_INTTYPES_H -DSQLITE_ENABLE_COLUMN_METADATA
 
 
-.PHONY:  install debug test valgrind clean amalgamation docker
+.PHONY:  install debug test sanitizer valgrind clean amalgamation docker
 
 
-all:      $(LIBRARY) $(SSHELL)
-debug:    $(LIBRARY) $(SSHELL)
+all:        $(LIBRARY) $(SSHELL)
+debug:      $(LIBRARY) $(SSHELL)
 standalone: $(LIBRARY) $(SSHELL)
-static:   libaergolite.a
+static:     libaergolite.a
 
-ios:      libaergolite.a libaergolite.dylib
-iostest:  libaergolite.a libaergolite.dylib
+ios:        libaergolite.a libaergolite.dylib
+iostest:    libaergolite.a libaergolite.dylib
 
-debug:    export LIBFLAGS := -g -DSQLITE_DEBUG=1 -DDEBUGPRINT=1 $(DEBUGFLAGS) $(LIBFLAGS)
+debug:      export LIBFLAGS := -g -DSQLITE_DEBUG=1 -DDEBUGPRINT=1 $(DEBUGFLAGS) $(LIBFLAGS)
 
-valgrind: export LIBFLAGS := -g -DSQLITE_DEBUG=1 $(DEBUGFLAGS) $(LIBFLAGS)
+valgrind:   export LIBFLAGS := -g -DSQLITE_DEBUG=1 $(DEBUGFLAGS) $(LIBFLAGS)
+sanitizer:  export CFLAGS   := -g -DSQLITE_DEBUG=1 -fsanitize=address -fno-omit-frame-pointer $(DEBUGFLAGS) $(CFLAGS)
+sanitizer:  export LIBFLAGS := -g -DSQLITE_DEBUG=1 -fsanitize=address -fno-omit-frame-pointer $(DEBUGFLAGS) $(LIB_CFLAGS)
+sanitizer:  export LDFLAGS := $(LDFLAGS) -fsanitize=address -fno-omit-frame-pointer
 
 standalone: export LIBS := ../binn/libbinn.a ../libuv/.libs/libuv.a ../secp256k1-vrf/.libs/libsecp256k1-vrf.a -lgmp
 standalone: export SHELL_LIBS := ../binn/libbinn.a
@@ -179,6 +182,8 @@ amalgamation:
 	./build_amalgamation
 
 install:
+	mkdir -p $(INCPATH)
+	mkdir -p $(EXEPATH)
 	mkdir -p $(LIBPATH)
 	mkdir -p $(LIBPATH2)
 	cp $(LIBRARY) $(LIBPATH)/
@@ -191,8 +196,12 @@ else
 	cd $(LIBPATH2) && ln -sf ../$(LIBRARY) $(LIBNICK3)
 	cd $(LIBPATH2) && ln -sf $(LIBNICK3) $(LIBNICK4)
 endif
-	cp core/sqlite3.h $(INCPATH)
-	cp $(SSHELL) $(EXEPATH)
+	cp core/sqlite3.h $(INCPATH)/
+	cp core/sqlite3ext.h $(INCPATH)/
+	cp $(SSHELL) $(EXEPATH)/
+ifeq ($(TARGET_OS),Linux)
+	ldconfig
+endif
 
 clean:
 	rm -f *.o libaergolite.a libaergolite.dylib $(LIBRARY) $(LIBNICK1) $(LIBNICK2) $(LIBNICK3) $(LIBNICK4) $(IMPLIB).lib $(SSHELL) test/runtest
@@ -200,45 +209,33 @@ clean:
 test/runtest: test/test.c test/db_functions.c
 	$(CC) -std=gnu99 $(CFLAGS) $< -o $@ -L. -l$(IMPLIB) -lsecp256k1-vrf
 
-test: test/runtest
+test: $(LIBRARY) test/runtest
 ifeq ($(TARGET_OS),Mac)
 	cd test && DYLD_LIBRARY_PATH=..:/usr/local/lib ./runtest
 else
 	cd test && LD_LIBRARY_PATH=..:/usr/local/lib ./runtest
 endif
 
-valgrind: $(LIBRARY) test/runtest
+valgrind: only-linux $(LIBRARY) test/runtest
 ifeq ($(TARGET_OS),Mac)
 	cd test && DYLD_LIBRARY_PATH=..:/usr/local/lib valgrind --leak-check=full --show-leak-kinds=all ./runtest
 else
 	cd test && LD_LIBRARY_PATH=..:/usr/local/lib valgrind --leak-check=full --show-leak-kinds=all ./runtest
 endif
 
-test2: test/test.py
-ifeq ($(TARGET_OS),Windows)
-ifeq ($(PY_HOME),)
-	@echo "PY_HOME is not set"
-else
-	cd $(PY_HOME)/DLLs && [ ! -f sqlite3-orig.dll ] && mv sqlite3.dll sqlite3-orig.dll || true
-	cp $(LIBRARY) $(PY_HOME)/DLLs/sqlite3.dll
-	cd test && python test.py -v
-endif
-else
+# test with address sanitizer
+sanitizer: only-linux clean $(LIBRARY) test/runtest
 ifeq ($(TARGET_OS),Mac)
-#ifneq ($(shell python -c "import pysqlite2.dbapi2" 2> /dev/null; echo $$?),0)
-#ifneq ($(shell [ -d $(LIBPATH2) ]; echo $$?),0)
-#	@echo "run 'sudo make install' first"
-#endif
-#	git clone --depth=1 https://github.com/ghaering/pysqlite
-#	cd pysqlite && echo "include_dirs=$(INCPATH)" >> setup.cfg
-#	cd pysqlite && echo "library_dirs=$(LIBPATH2)" >> setup.cfg
-#	cd pysqlite && python setup.py build
-#	cd pysqlite && sudo python setup.py install
-#endif
-	cd test && python test.py -v
-else	# Linux
-	cd test && LD_LIBRARY_PATH=..:/usr/local/lib python test.py -v
+	cd test && DYLD_LIBRARY_PATH=..:/usr/local/lib ./runtest
+else
+	cd test && LD_LIBRARY_PATH=..:/usr/local/lib ./runtest
 endif
+
+only-linux:
+ifeq ($(TARGET_OS),Linux)
+else
+	@echo "Currently only supported on Linux"
+	@exit 1
 endif
 
 
