@@ -97,7 +97,7 @@ debug:      export LIBFLAGS := -g -DSQLITE_DEBUG=1 -DDEBUGPRINT=1 $(DEBUGFLAGS) 
 
 valgrind:   export LIBFLAGS := -g -DSQLITE_DEBUG=1 $(DEBUGFLAGS) $(LIBFLAGS)
 sanitizer:  export CFLAGS   := -g -DSQLITE_DEBUG=1 -fsanitize=address -fno-omit-frame-pointer $(DEBUGFLAGS) $(CFLAGS)
-sanitizer:  export LIBFLAGS := -g -DSQLITE_DEBUG=1 -fsanitize=address -fno-omit-frame-pointer $(DEBUGFLAGS) $(LIB_CFLAGS)
+sanitizer:  export LIBFLAGS := -g -DSQLITE_DEBUG=1 -fsanitize=address -fno-omit-frame-pointer $(DEBUGFLAGS) $(LIBFLAGS)
 sanitizer:  export LDFLAGS := $(LDFLAGS) -fsanitize=address -fno-omit-frame-pointer
 
 standalone: export LIBS := ../binn/libbinn.a ../libuv/.libs/libuv.a ../secp256k1-vrf/.libs/libsecp256k1-vrf.a -lgmp
@@ -147,6 +147,7 @@ endif
 libaergolite.so.0.0.1: $(OBJECTS)
 	$(CC) -shared -Wl,-soname,$(SONAME) $^ -o $@ $(LDFLAGS) $(LIBS) -ldl
 ifeq ($(MAKECMDGOALS),valgrind)
+else ifeq ($(MAKECMDGOALS),sanitizer)
 else ifeq ($(MAKECMDGOALS),debug)
 else
 	$(STRIP) $@
