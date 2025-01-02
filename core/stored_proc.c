@@ -2314,6 +2314,10 @@ SQLITE_PRIVATE int execute_expression(Vdbe *v, command *cmd, bool* bool_result){
   // bind variables
   bindLocalVariables(cmd->procedure, cmd->stmt);
 
+  // set the node_id and do_not_log flags
+  ((Vdbe*)cmd->stmt)->node_id = v->node_id;  /* new records should use the node_id of the caller */
+  ((Vdbe*)cmd->stmt)->do_not_log = 1;        /* execute it locally, not included on the blockchain */
+
   // execute the expression
   rc = sqlite3_step(cmd->stmt);
   if( rc!=SQLITE_ROW ){
@@ -2754,6 +2758,10 @@ SQLITE_PRIVATE int executeStatementCommand(Vdbe *v, command *cmd) {
     bindLocalVariables(procedure, cmd->stmt);
   }
 
+  // set the node_id and do_not_log flags
+  ((Vdbe*)cmd->stmt)->node_id = v->node_id;  /* new records should use the node_id of the caller */
+  ((Vdbe*)cmd->stmt)->do_not_log = 1;        /* execute it locally, not included on the blockchain */
+
   // execute the prepared statement
   do {
     rc = sqlite3_step(cmd->stmt);
@@ -2882,6 +2890,9 @@ SQLITE_PRIVATE int executeSetCommand(Vdbe *v, command *cmd) {
   if( procedure->vars!=NULL ){
     bindLocalVariables(procedure, cmd->stmt);
   }
+
+  ((Vdbe*)cmd->stmt)->node_id = v->node_id;  /* new records should use the node_id of the caller */
+  ((Vdbe*)cmd->stmt)->do_not_log = 1;        /* execute it locally, not included on the blockchain */
 
   // execute the prepared statement
   do {
