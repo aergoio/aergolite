@@ -158,7 +158,7 @@ endif
 	ln -sf $(LIBNICK3) $(LIBNICK4)
 
 
-sqlite3.o: core/sqlite3.c core/aergolite.h core/single_instance.h core/single_instance.c common/sha256.c common/sha256.h common/checksum.c common/linked_list.c common/array.c
+sqlite3.o: core/sqlite3.c core/aergolite.h core/single_instance.h core/single_instance.c common/sha256.c common/sha256.h common/checksum.c common/linked_list.c common/array.c core/stored_proc.c
 	$(CC) $(LIBFLAGS) -c $< -o $@
 
 plugin-no-leader.o: plugins/no-leader/no-leader.c plugins/no-leader/no-leader.h plugins/no-leader/node_discovery.c plugins/no-leader/allowed_nodes.c plugins/no-leader/requests.c plugins/no-leader/state_update.c plugins/no-leader/transactions.c plugins/no-leader/block_producer.c plugins/no-leader/consensus.c common/sha256.c common/sha256.h plugins/common/uv_functions.c plugins/common/uv_msg_framing.c plugins/common/uv_msg_framing.h plugins/common/uv_send_message.c plugins/common/uv_callback.c plugins/common/uv_callback.h core/sqlite3.h
