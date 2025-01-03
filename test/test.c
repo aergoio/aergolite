@@ -26,7 +26,7 @@ const int wait_time = 250;
 
 const int wait_repeat = 200;
 
-const int num_system_tables = 2;
+const int num_system_tables = 3;
 
 /*
 ** Private and public keys for the blockchain admin
@@ -515,7 +515,7 @@ loc_again1:
       printf("adding node %d to the network - not admin\n", node); fflush(stdout);
       memcpy(privkey, user_privkey, 32);
       strcpy(pkstr, user_pkstr);
-      db_catch(db[add_from_node], cmd);
+      db_catch(db[add_from_node], cmd, "signature failed");
     }else{
       printf("adding node %d to the network - from admin\n", node); fflush(stdout);
       memcpy(privkey, admin_privkey, 32);
@@ -579,8 +579,10 @@ loc_again2:
   db_execute(db[exec_from_node], "create table t1 (name)");
   db_execute(db[exec_from_node], "insert into t1 values ('aa1')");
   db_execute(db[exec_from_node], "insert into t1 values ('aa2')");
+  db_execute(db[exec_from_node], "create procedure add2(@a, @b) begin ASSERT @a > 0 AND @b > 0, 'negative arguments are not allowed: %d, %d', @a, @b; RETURN @a + @b; end");
+  db_execute(db[exec_from_node], "create procedure insert_on_t1(@name) begin insert into t1 values (@name); end");
 
-  last_nonce[exec_from_node] += 3;
+  last_nonce[exec_from_node] += 5;
 
   for(i=1; i<=n; i++){
     db_check_int(db[i], "PRAGMA last_nonce", last_nonce[i]);
@@ -593,7 +595,7 @@ loc_again2:
   for(count=0; !done && count<wait_repeat; count++){
     char *result;
     sleep_ms(wait_time);
-    rc = db_query_str(&result, db[exec_from_node], "PRAGMA transaction_status(3)");
+    rc = db_query_str(&result, db[exec_from_node], "PRAGMA transaction_status(5)");
     assert(rc==SQLITE_OK);
     done = (strcmp(result,"processed")==0);
     sqlite3_free(result);
@@ -634,6 +636,9 @@ loc_again2:
     db_check_int(db[i], "select count(*) from t1", 2);
     db_check_int(db[i], "select count(*) from t1 where name='aa1'", 1);
     db_check_int(db[i], "select count(*) from t1 where name='aa2'", 1);
+    db_check_int(db[i], "select count(*) from aergolite_stored_procedures", 2);
+    db_check_int(db[i], "select count(*) from aergolite_stored_procedures where name='add2'", 1);
+    db_check_int(db[i], "select count(*) from aergolite_stored_procedures where name='insert_on_t1'", 1);
 
   }
 
@@ -651,81 +656,169 @@ loc_again2:
 
   printf("testing non-allowed commands..."); fflush(stdout);
 
-  db_catch(db[add_from_node], "insert into aergolite_nodes (node_id,pubkey) values (111,'test')");
-  db_catch(db[add_from_node], "update aergolite_nodes set last_nonce = 0");
-  db_catch(db[add_from_node], "delete from aergolite_nodes");
-  db_catch(db[add_from_node], "drop table aergolite_nodes");
-  db_catch(db[add_from_node], "alter table aergolite_nodes add column test");
-  db_catch(db[add_from_node], "alter table aergolite_nodes rename to new_name");
+  db_catch(db[add_from_node], "insert into aergolite_nodes (node_id,pubkey) values (111,'test')", "not authorized");
+  db_catch(db[add_from_node], "update aergolite_nodes set last_nonce = 0", "not authorized");
+  db_catch(db[add_from_node], "delete from aergolite_nodes", "not authorized");
+  db_catch(db[add_from_node], "drop table aergolite_nodes", "not authorized");
+  db_catch(db[add_from_node], "alter table aergolite_nodes add column test", "not authorized");
+  db_catch(db[add_from_node], "alter table aergolite_nodes rename to new_name", "not authorized");
 
-  db_catch(db[exec_from_node], "insert into aergolite_nodes (node_id,pubkey) values (111,'test')");
-  db_catch(db[exec_from_node], "update aergolite_nodes set last_nonce = 0");
-  db_catch(db[exec_from_node], "delete from aergolite_nodes");
-  db_catch(db[exec_from_node], "drop table aergolite_nodes");
-  db_catch(db[exec_from_node], "alter table aergolite_nodes add column test");
-  db_catch(db[exec_from_node], "alter table aergolite_nodes rename to new_name");
+  db_catch(db[exec_from_node], "insert into aergolite_nodes (node_id,pubkey) values (111,'test')", "not authorized");
+  db_catch(db[exec_from_node], "update aergolite_nodes set last_nonce = 0", "not authorized");
+  db_catch(db[exec_from_node], "delete from aergolite_nodes", "not authorized");
+  db_catch(db[exec_from_node], "drop table aergolite_nodes", "not authorized");
+  db_catch(db[exec_from_node], "alter table aergolite_nodes add column test", "not authorized");
+  db_catch(db[exec_from_node], "alter table aergolite_nodes rename to new_name", "not authorized");
 
-  db_catch(db[5], "insert into aergolite_nodes (node_id,pubkey) values (111,'test')");
-  db_catch(db[5], "update aergolite_nodes set last_nonce = 0");
-  db_catch(db[5], "delete from aergolite_nodes");
-  db_catch(db[5], "drop table aergolite_nodes");
-  db_catch(db[5], "alter table aergolite_nodes add column test");
-  db_catch(db[5], "alter table aergolite_nodes rename to new_name");
+  db_catch(db[5], "insert into aergolite_nodes (node_id,pubkey) values (111,'test')", "not authorized");
+  db_catch(db[5], "update aergolite_nodes set last_nonce = 0", "not authorized");
+  db_catch(db[5], "delete from aergolite_nodes", "not authorized");
+  db_catch(db[5], "drop table aergolite_nodes", "not authorized");
+  db_catch(db[5], "alter table aergolite_nodes add column test", "not authorized");
+  db_catch(db[5], "alter table aergolite_nodes rename to new_name", "not authorized");
 
-  db_catch(db[4], "insert into aergolite_nodes (node_id,pubkey) values (111,'test')");
-  db_catch(db[4], "update aergolite_nodes set last_nonce = 0");
-  db_catch(db[4], "delete from aergolite_nodes");
-  db_catch(db[4], "drop table aergolite_nodes");
-  db_catch(db[4], "alter table aergolite_nodes add column test");
-  db_catch(db[4], "alter table aergolite_nodes rename to new_name");
+  db_catch(db[4], "insert into aergolite_nodes (node_id,pubkey) values (111,'test')", "no such table: aergolite_nodes");
+  db_catch(db[4], "update aergolite_nodes set last_nonce = 0", "no such table: aergolite_nodes");
+  db_catch(db[4], "delete from aergolite_nodes", "no such table: aergolite_nodes");
+  db_catch(db[4], "drop table aergolite_nodes", "no such table: aergolite_nodes");
+  db_catch(db[4], "alter table aergolite_nodes add column test", "no such table: aergolite_nodes");
+  db_catch(db[4], "alter table aergolite_nodes rename to new_name", "no such table: aergolite_nodes");
+
+  /* aergolite_stored_procedures */
+
+  db_catch(db[add_from_node], "insert into aergolite_stored_procedures (name, is_function, code) values ('test', 0, 'select 1')", "not authorized");
+  db_catch(db[add_from_node], "update aergolite_stored_procedures set code = 'select 2' where name = 'test'", "not authorized");
+  db_catch(db[add_from_node], "delete from aergolite_stored_procedures", "not authorized");
+  db_catch(db[add_from_node], "drop table aergolite_stored_procedures", "not authorized");
+  db_catch(db[add_from_node], "alter table aergolite_stored_procedures add column test", "not authorized");
+  db_catch(db[add_from_node], "alter table aergolite_stored_procedures rename to new_name", "not authorized");
+
+  db_catch(db[exec_from_node], "insert into aergolite_stored_procedures (name, is_function, code) values ('test', 0, 'select 1')", "not authorized");
+  db_catch(db[exec_from_node], "update aergolite_stored_procedures set code = 'select 2' where name = 'test'", "not authorized");
+  db_catch(db[exec_from_node], "delete from aergolite_stored_procedures", "not authorized");
+  db_catch(db[exec_from_node], "drop table aergolite_stored_procedures", "not authorized");
+  db_catch(db[exec_from_node], "alter table aergolite_stored_procedures add column test", "not authorized");
+  db_catch(db[exec_from_node], "alter table aergolite_stored_procedures rename to new_name", "not authorized");
+
+  db_catch(db[5], "insert into aergolite_stored_procedures (name, is_function, code) values ('test', 0, 'select 1')", "not authorized");
+  db_catch(db[5], "update aergolite_stored_procedures set code = 'select 2' where name = 'test'", "not authorized");
+  db_catch(db[5], "delete from aergolite_stored_procedures", "not authorized");
+  db_catch(db[5], "drop table aergolite_stored_procedures", "not authorized");
+  db_catch(db[5], "alter table aergolite_stored_procedures add column test", "not authorized");
+  db_catch(db[5], "alter table aergolite_stored_procedures rename to new_name", "not authorized");
+
+  db_catch(db[4], "insert into aergolite_stored_procedures (name, is_function, code) values ('test', 0, 'select 1')", "no such table: aergolite_stored_procedures");
+  db_catch(db[4], "update aergolite_stored_procedures set code = 'select 2' where name = 'test'", "no such table: aergolite_stored_procedures");
+  db_catch(db[4], "delete from aergolite_stored_procedures", "no such table: aergolite_stored_procedures");
+  db_catch(db[4], "drop table aergolite_stored_procedures", "no such table: aergolite_stored_procedures");
+  db_catch(db[4], "alter table aergolite_stored_procedures add column test", "no such table: aergolite_stored_procedures");
+  db_catch(db[4], "alter table aergolite_stored_procedures rename to new_name", "no such table: aergolite_stored_procedures");
 
   /* sqlite_master */
 
-  db_catch(db[add_from_node], "insert into sqlite_master (name) values ('test')");
-  db_catch(db[add_from_node], "update sqlite_master set name = ''");
-  db_catch(db[add_from_node], "delete from sqlite_master");
-  db_catch(db[add_from_node], "drop table sqlite_master");
-  db_catch(db[add_from_node], "alter table sqlite_master add column test");
-  db_catch(db[add_from_node], "alter table sqlite_master rename to new_name");
+  db_catch(db[add_from_node], "insert into sqlite_master (name) values ('test')", "table sqlite_master may not be");
+  db_catch(db[add_from_node], "update sqlite_master set name = ''", "table sqlite_master may not be");
+  db_catch(db[add_from_node], "delete from sqlite_master", "table sqlite_master may not be");
+  db_catch(db[add_from_node], "drop table sqlite_master", "table sqlite_master may not be");
+  db_catch(db[add_from_node], "alter table sqlite_master add column test", "table sqlite_master may not be");
+  db_catch(db[add_from_node], "alter table sqlite_master rename to new_name", "table sqlite_master may not be");
 
-  db_catch(db[exec_from_node], "insert into sqlite_master (name) values ('test')");
-  db_catch(db[exec_from_node], "update sqlite_master set name = ''");
-  db_catch(db[exec_from_node], "delete from sqlite_master");
-  db_catch(db[exec_from_node], "drop table sqlite_master");
-  db_catch(db[exec_from_node], "alter table sqlite_master add column test");
-  db_catch(db[exec_from_node], "alter table sqlite_master rename to new_name");
+  db_catch(db[exec_from_node], "insert into sqlite_master (name) values ('test')", "table sqlite_master may not be");
+  db_catch(db[exec_from_node], "update sqlite_master set name = ''", "table sqlite_master may not be");
+  db_catch(db[exec_from_node], "delete from sqlite_master", "table sqlite_master may not be");
+  db_catch(db[exec_from_node], "drop table sqlite_master", "table sqlite_master may not be");
+  db_catch(db[exec_from_node], "alter table sqlite_master add column test", "table sqlite_master may not be");
+  db_catch(db[exec_from_node], "alter table sqlite_master rename to new_name", "table sqlite_master may not be");
 
-  db_catch(db[5], "insert into sqlite_master (name) values ('test')");
-  db_catch(db[5], "update sqlite_master set name = ''");
-  db_catch(db[5], "delete from sqlite_master");
-  db_catch(db[5], "drop table sqlite_master");
-  db_catch(db[5], "alter table sqlite_master add column test");
-  db_catch(db[5], "alter table sqlite_master rename to new_name");
+  db_catch(db[5], "insert into sqlite_master (name) values ('test')", "table sqlite_master may not be");
+  db_catch(db[5], "update sqlite_master set name = ''", "table sqlite_master may not be");
+  db_catch(db[5], "delete from sqlite_master", "table sqlite_master may not be");
+  db_catch(db[5], "drop table sqlite_master", "table sqlite_master may not be");
+  db_catch(db[5], "alter table sqlite_master add column test", "table sqlite_master may not be");
+  db_catch(db[5], "alter table sqlite_master rename to new_name", "table sqlite_master may not be");
 
-  db_catch(db[4], "insert into sqlite_master (name) values ('test')");
-  db_catch(db[4], "update sqlite_master set name = ''");
-  db_catch(db[4], "delete from sqlite_master");
-  db_catch(db[4], "drop table sqlite_master");
-  db_catch(db[4], "alter table sqlite_master add column test");
-  db_catch(db[4], "alter table sqlite_master rename to new_name");
+  db_catch(db[4], "insert into sqlite_master (name) values ('test')", "table sqlite_master may not be");
+  db_catch(db[4], "update sqlite_master set name = ''", "table sqlite_master may not be");
+  db_catch(db[4], "delete from sqlite_master", "table sqlite_master may not be");
+  db_catch(db[4], "drop table sqlite_master", "table sqlite_master may not be");
+  db_catch(db[4], "alter table sqlite_master add column test", "table sqlite_master may not be");
+  db_catch(db[4], "alter table sqlite_master rename to new_name", "table sqlite_master may not be");
 
   /* non-allowed commands for normal nodes */
 
-  db_catch(db[5], "update t1 set name = ''");
-  db_catch(db[5], "delete from t1");
-  db_catch(db[5], "create table t2(name)");
-  db_catch(db[5], "create virtual table t2 using dbstat");
-  db_catch(db[5], "drop table t1");
-  db_catch(db[5], "alter table t1 add column test");
-  db_catch(db[5], "alter table t1 rename to new_name");
-  db_catch(db[5], "create view v1 as select * from t1");
-  db_catch(db[5], "create index i1 on t1 (name)");
-  db_catch(db[5], "create trigger tr1 before insert on t1 begin select raise(FAIL,''); end");
-
+  db_catch(db[5], "create procedure test_add1(@a, @b) begin ASSERT @a > 0 AND @b > 0, 'negative arguments are not allowed: %d, %d', @a, @b; RETURN @a + @b; end", "access permission denied");
+  db_catch(db[5], "insert into t1 values ('aa3')", "access permission denied");
+  db_catch(db[5], "update t1 set name = ''", "access permission denied");
+  db_catch(db[5], "delete from t1", "access permission denied");
+  db_catch(db[5], "create table t2(name)", "access permission denied");
+  db_catch(db[5], "create virtual table t2 using dbstat", "no such module: dbstat");
+  db_catch(db[5], "drop table t1", "access permission denied");
+  db_catch(db[5], "alter table t1 add column test", "access permission denied");
+  db_catch(db[5], "alter table t1 rename to new_name", "access permission denied");
+  db_catch(db[5], "create view v1 as select * from t1", "access permission denied");
+  db_catch(db[5], "create index i1 on t1 (name)", "access permission denied");
+  db_catch(db[5], "create trigger tr1 before insert on t1 begin select raise(FAIL,''); end", "access permission denied");
+  db_catch(db[5], "create procedure test_add2(@a, @b) begin ASSERT @a > 0 AND @b > 0, 'negative arguments are not allowed: %d, %d', @a, @b; RETURN @a + @b; end", "access permission denied");
 
 
   for(i=1; i<=n; i++){
     db_check_int(db[i], "PRAGMA last_nonce", last_nonce[i]);
+  }
+
+
+  /* test calling stored procedures */
+
+  db_execute(db[exec_from_node], "call insert_on_t1('aa3')");
+  db_execute(db[add_from_node], "call insert_on_t1('aa4')");
+  db_execute(db[5], "call insert_on_t1('aa5')");
+
+  last_nonce[exec_from_node]++;
+  last_nonce[add_from_node]++;
+  last_nonce[5]++;
+
+  for(i=1; i<=n; i++){
+    db_check_int(db[i], "PRAGMA last_nonce", last_nonce[i]);
+  }
+
+  /* wait until the transactions are processed in a new block */
+
+  done = 0;
+  for(count=0; !done && count<wait_repeat; count++){
+    char *result;
+    sleep_ms(wait_time);
+    rc = db_query_str(&result, db[exec_from_node], "PRAGMA transaction_status(6)");
+    assert(rc==SQLITE_OK);
+    done = (strcmp(result,"processed")==0);
+    sqlite3_free(result);
+    printf("."); fflush(stdout);
+  }
+  assert(done);
+
+  puts("");
+
+  /* check if the data was replicated to the other nodes */
+
+  for(i=1; i<=n; i++){
+    if( i%2==0 ) continue;
+
+    printf("checking node %d\n", i); fflush(stdout);
+
+    done = 0;
+    for(count=0; !done && count<wait_repeat; count++){
+      int result;
+      if( count>0 ) sleep_ms(wait_time);
+      rc = db_query_int32(&result, db[i], "select count(*) from t1");
+      assert(rc==SQLITE_OK);
+      done = (result>2);
+    }
+    assert(done);
+
+    db_check_int(db[i], "select count(*) from t1", 5);
+    db_check_int(db[i], "select count(*) from t1 where name='aa1'", 1);
+    db_check_int(db[i], "select count(*) from t1 where name='aa2'", 1);
+    db_check_int(db[i], "select count(*) from t1 where name='aa3'", 1);
+    db_check_int(db[i], "select count(*) from t1 where name='aa4'", 1);
+    db_check_int(db[i], "select count(*) from t1 where name='aa5'", 1);
   }
 
 
@@ -1620,6 +1713,9 @@ loc_check_conns:
       printf("reopening node %d in offline mode\n", node);
       sprintf(uri, "file:db%d.db?blockchain=on&password=test&admin=%s&block_interval=%d", node, pkstr, block_interval);
       assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
+      /* register the callback function used to sign the admin transactions */
+      sqlite3_create_function(db[node], "sign_transaction", 1, SQLITE_UTF8,
+        NULL, &on_sign_transaction, NULL, NULL);
     }
 
     puts("executing new transactions on offline nodes...");
@@ -1673,6 +1769,9 @@ loc_check_conns:
       }
     }
     assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
+    /* register the callback function used to sign the admin transactions */
+    sqlite3_create_function(db[node], "sign_transaction", 1, SQLITE_UTF8,
+      NULL, &on_sign_transaction, NULL, NULL);
   }
 
 
@@ -2274,6 +2373,9 @@ loc_again2:
       printf("reopening node %d in offline mode\n", node);
       sprintf(uri, "file:db%d.db?blockchain=on&password=test&admin=%s&block_interval=%d", node, pkstr, block_interval);
       assert( sqlite3_open(uri, &db[node])==SQLITE_OK );
+      /* register the callback function used to sign the admin transactions */
+      sqlite3_create_function(db[node], "sign_transaction", 1, SQLITE_UTF8,
+        NULL, &on_sign_transaction, NULL, NULL);
     }
 
     puts("executing new transactions on offline nodes...");
