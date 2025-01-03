@@ -271,22 +271,59 @@ Example:
 ```
 
 
-## Immutability
+## Security
 
-Trust based solutions allow specific users or nodes to execute any SQL command on the database.
+Basic replication solutions allow nodes to execute any SQL command on the database.
 They are not secure because an attacker acquiring control of a single node can delete and/or
 overwrite data on the entire network.
 
-A real trustless and immutable blockchain should control what nodes can do.
+A real trustless replication solution should limit what nodes can do, and not trust them.
 
-AergoLite is by default append-only for nodes. They can only execute `INSERT INTO` SQL commands.
-Only the administrator is able to execute all the SQL commands.
-
-Future versions may allow nodes to execute smart contracts created by the administrator that can
-include any SQL command.
+An attacker may be able to modify the local database, but this will not be reflected on the other nodes.
 
 All of this enforces the requirement for an attacker to control the majority of the nodes on
 the network to be able to attack it.
+
+
+## Stored procedures
+
+AergoLite uses stored procedures written in SQL to control what the nodes can do.
+
+For security reasons:
+
+1. Only the administrator can create stored procedures.
+2. The nodes can only call stored procedures. Other SQL commands are blocked.
+
+So they work similar to smart contracts.
+
+Here is an example:
+
+```sql
+CREATE PROCEDURE add_new_sale(@products) BEGIN
+ ASSERT txn_sender() IN (SELECT pubkey FROM authorizations WHERE type = 'sale');
+ INSERT INTO sales (time) VALUES (datetime('now'));
+ SET @sale_id = last_insert_rowid();
+ FOREACH @prod_id, @qty, @price IN @products DO
+   INSERT INTO sale_items (sale_id, prod_id, qty, price) VALUES (@sale_id, @prod_id, @qty, @price);
+ END LOOP;
+ RETURN @sale_id;
+END;
+```
+
+It can be called from SQL like this:
+
+```sql
+CALL add_new_sale(ARRAY( ARRAY('123', 1, 10.00), ARRAY('456', 2, 20.00) ));
+```
+
+Full reference of the available commands can be found [here](https://github.com/aergoio/aergolite/wiki/Stored-Procedures)
+
+The applications running on the nodes can be made using different programming languages.
+
+
+## Immutability
+
+If you limit the stored procedures to contain only `INSERT INTO` commands then the database will be immutable.
 
 
 ## Private key protection
