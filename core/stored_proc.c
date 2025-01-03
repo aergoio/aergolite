@@ -1931,58 +1931,38 @@ SQLITE_PRIVATE void prepareNewStoredProcedure(Parse *pParse, char **psql, bool o
 
     // creates and return a prepared statement, to be executed later
 
-#if 0
-    // sqlite3NestedParse() cannot be used because the table does not exist
-    // at this point and the INSERT command cannot be prepared
-
-    // create the aergolite_stored_procedures table if it does not exist
-    sqlite3NestedParse(pParse,
-        "CREATE TABLE IF NOT EXISTS aergolite_stored_procedures ("
-        "id INTEGER PRIMARY KEY,"
-        "name TEXT NOT NULL,"
-        "is_function BOOL NOT NULL,"
-        "code TEXT NOT NULL"
-        ")");
-
-    // insert the stored procedure in the database
-    // if the `or_replace` parameter is true, use the `OR REPLACE` keyword
-    sqlite3NestedParse(pParse,
-        "INSERT %s INTO aergolite_stored_procedures (name, is_function, code)"
-        " VALUES (%Q, %d, %Q)",
-        or_replace ? "OR REPLACE" : "",
-        procedure->name,
-        procedure->is_function,
-        sql);
-#endif
-
     Vdbe *v = sqlite3GetVdbe(pParse);
     if (v == NULL) { rc = SQLITE_NOMEM; goto loc_exit; }
 
+#if 0
     sqlite3BeginWriteOperation(pParse, 0, 0);
 
-    // create the aergolite_stored_procedures table if it does not exist
-    const char *sql2 =
-        "CREATE TABLE IF NOT EXISTS aergolite_stored_procedures ("
-        "name TEXT PRIMARY KEY,"
-        "is_function BOOL NOT NULL,"
-        "code TEXT NOT NULL"
-        ")";
-    sqlite3VdbeAddOp4(v, OP_SqlExec, 0, 0, 0, sql2, P4_STATIC);
-
     // insert the stored procedure in the database
-    sql2 = sqlite3_mprintf(
-        "INSERT %s INTO aergolite_stored_procedures (name, is_function, code)"
+    const char* sql2 = sqlite3_mprintf(
+        "INSERT%s INTO aergolite_stored_procedures (name, is_function, code)"
         " VALUES (%Q, %d, %.*Q)",
-        or_replace ? "OR REPLACE" : "",
+        or_replace ? " OR REPLACE" : "",
         procedure->name,
         procedure->is_function,
         nsql, sql);
     sqlite3VdbeAddOp4(v, OP_SqlExec, 0, 0, 0, sql2, P4_DYNAMIC);
+#endif
+
+    pParse->db->in_system_command = TRUE;
+
+    // insert the stored procedure in the database
+    sqlite3NestedParse(pParse,
+        "INSERT%s INTO aergolite_stored_procedures (name, is_function, code)"
+        " VALUES (%Q, %d, %Q)",
+        or_replace ? " OR REPLACE" : "",
+        procedure->name,
+        procedure->is_function,
+        sql);
+
+    pParse->db->in_system_command = FALSE;
 
     // finish coding the VDBE program
     sqlite3FinishCoding(pParse);
-
-    XTRACE("insertion SQL: %s\n", sql2);
 
 loc_exit:
     if( procedure ){
