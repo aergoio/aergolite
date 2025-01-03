@@ -281,8 +281,7 @@ A real trustless replication solution should limit what nodes can do, and not tr
 
 An attacker may be able to modify the local database, but this will not be reflected on the other nodes.
 
-All of this enforces the requirement for an attacker to control the majority of the nodes on
-the network to be able to attack it.
+A successful attack on the network would require an attacker to gain control of the majority of the nodes. This design ensures a robust level of security, making it challenging for any single entity to compromise the integrity of the system.
 
 
 ## Stored procedures
@@ -292,7 +291,7 @@ AergoLite uses stored procedures written in SQL to control what the nodes can do
 For security reasons:
 
 1. Only the administrator can create stored procedures.
-2. The nodes can only call stored procedures. Other SQL commands are blocked.
+2. The nodes can only execute these stored procedures. Other SQL commands are blocked.
 
 So they work similar to smart contracts.
 
