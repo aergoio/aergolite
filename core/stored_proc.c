@@ -65,7 +65,7 @@ struct command {
     char *sql, *sql2;
     int  nsql, nsql2;
     sqlite3_stmt  *stmt;        /* used in STATEMENT, SET, FOREACH and RETURN */
-    sqlite3_array *input_array; /* parsed ARRAY, used in SET, FOREACH and CALL commands */
+    sqlite3_array *input_array; /* parsed LIST, used in SET, FOREACH and CALL commands */
     sqlite3_var   *input_var;   /* used in the FOREACH command */
     unsigned int current_item;  /* used in the FOREACH command */
 
@@ -350,10 +350,10 @@ SQLITE_PRIVATE void sqlite3_free_array(sqlite3_array *array) {
 /*
 ** Parse an array
 ** It can contain internal arrays.
-** The ARRAY keyword is optional.
+** The LIST keyword is optional.
 ** Examples:
-**   ARRAY(1,2,3,ARRAY(4,5,6))
-**   ARRAY(1,2,3,(4,5,6))
+**   LIST(1,2,3,LIST(4,5,6))
+**   LIST(1,2,3,(4,5,6))
 **   (1,2,3,(4,5,6))
 */
 SQLITE_PRIVATE int parse_array(
@@ -367,9 +367,9 @@ SQLITE_PRIVATE int parse_array(
     // skip whitespaces
     while (sqlite3Isspace(*sql)) sql++;
 
-    // check for the optional "ARRAY" keyword
-    if (sqlite3_strnicmp(sql, "ARRAY", 5) == 0) {
-      sql += 5;
+    // check for the optional "LIST" keyword
+    if (sqlite3_strnicmp(sql, "LIST", 4) == 0) {
+      sql += 4;
       while (sqlite3Isspace(*sql)) sql++;
     }
 
@@ -420,7 +420,7 @@ SQLITE_PRIVATE int parse_array(
             // skip the variable name
             sql += n;
         } else if (tokenType == TK_LP || (tokenType == TK_ID &&
-                  n == 5 && sqlite3_strnicmp(sql, "ARRAY", 5) == 0)) {
+                  n == 4 && sqlite3_strnicmp(sql, "LIST", 4) == 0)) {
             // parse the internal array
             sqlite3_array *internal_array;
             rc = parse_array(pParse, procedure, &sql, &internal_array);
@@ -1136,7 +1136,7 @@ loc_invalid:
 **  SET @variable = {expression}
 **  SET @name, @email, @phone = SELECT ...
 **  SET @users = (SELECT * FROM users WHERE ...)
-**  SET @list = ARRAY ('AA', 'BB', 'CC')
+**  SET @list = LIST ('AA', 'BB', 'CC')
 */
 SQLITE_PRIVATE int parseSetStatement(
   Parse *pParse, stored_proc* procedure, int pos, char** psql
@@ -1173,10 +1173,10 @@ SQLITE_PRIVATE int parseSetStatement(
   n = sqlite3GetToken((u8*)sql, &tokenType);
 
   //if( tokenType==TK_ARRAY ){
-  if( n==5 && sqlite3_strnicmp(sql, "ARRAY", 5)==0 ){
+  if( n==4 && sqlite3_strnicmp(sql, "LIST", 4)==0 ){
     // store the entire array in a single variable
     cmd->flags |= CMD_FLAG_STORE_AS_ARRAY;
-    // skip the ARRAY token
+    // skip the LIST token
     sql += n;
     // parse the array values into the command's input array
     rc = parse_input_array(pParse, procedure, pos, &sql);
@@ -1737,7 +1737,7 @@ parse FOREACH statements
 
 example usage:
 
-FOREACH @item IN ARRAY ('AA', 'BB', 'CC') DO
+FOREACH @item IN LIST ('AA', 'BB', 'CC') DO
     statements;
 END LOOP;
 
@@ -1809,12 +1809,12 @@ SQLITE_PRIVATE int parseForEachStatement(Parse *pParse, stored_proc* procedure, 
     sql += 3;
     while (sqlite3Isspace(*sql)) sql++;
 
-    // check if the next token is ARRAY or a variable or a SQL statement
-    // use an external function to parse the ARRAY or variable
+    // check if the next token is LIST or a variable or a SQL statement
+    // use an external function to parse the LIST or variable
     // save the result in the loop block controller
-    if (sqlite3_strnicmp(sql, "ARRAY", 5) == 0) {
-        // skip "ARRAY"
-        sql += 5;
+    if (sqlite3_strnicmp(sql, "LIST", 4) == 0) {
+        // skip "LIST"
+        sql += 4;
         // parse the array values into the command's input array
         rc = parse_input_array(pParse, procedure, pos, &sql);
         if (rc != SQLITE_OK) {
@@ -2794,7 +2794,7 @@ SQLITE_PRIVATE int executeSetCommand(Vdbe *v, command *cmd) {
     }
   }
 
-  // is the input an ARRAY?
+  // is the input a LIST?
   if (cmd->input_array != NULL) {
     assert(cmd->stmt == NULL);
     assert(cmd->flags & CMD_FLAG_STORE_AS_ARRAY);
