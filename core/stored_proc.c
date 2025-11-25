@@ -25,7 +25,7 @@
 #define CMD_TYPE_FOREACH    15
 
 
-#define CMD_FLAG_STORE_AS_ARRAY  1
+#define CMD_FLAG_STORE_AS_LIST   1
 #define CMD_FLAG_DYNAMIC_SQL     2
 #define CMD_FLAG_EXECUTED        4
 
@@ -41,18 +41,18 @@ struct sqlite3_var {
   int len;                /* variable name size */
   u8 type;  //affinity;   /* defined type. SQLITE_INTEGER, REAL, TEXT or BLOB */
   int declared_in_pos;    /* position in the procedure where it was declared */
-  sqlite3_value value;    /* contains a value or a pointer to an array struct */
+  sqlite3_value value;    /* contains a value or a pointer to a list struct */
   sqlite3_var *next;      /* next in the global list */
   sqlite3_var *nextUsed;  /* temporary use */
 };
 
 #define VAR_POS_PARAMETER  -2
 
-// when a sqlite3_var contains an array, the sqlite3_value has a pointer to a sqlite3_array structure
+// when a sqlite3_var contains a list, the sqlite3_value has a pointer to a sqlite3_list structure
 
-typedef struct sqlite3_array sqlite3_array;
+typedef struct sqlite3_list sqlite3_list;
 
-struct sqlite3_array {
+struct sqlite3_list {
     int num_items;
     sqlite3_value value[1];
 };
@@ -64,9 +64,9 @@ struct command {
     int type;
     char *sql, *sql2;
     int  nsql, nsql2;
-    sqlite3_stmt  *stmt;        /* used in STATEMENT, SET, FOREACH and RETURN */
-    sqlite3_array *input_array; /* parsed LIST, used in SET, FOREACH and CALL commands */
-    sqlite3_var   *input_var;   /* used in the FOREACH command */
+    sqlite3_stmt *stmt;         /* used in STATEMENT, SET, FOREACH and RETURN */
+    sqlite3_list *input_list;   /* parsed LIST, used in SET, FOREACH and CALL commands */
+    sqlite3_var  *input_var;    /* used in the FOREACH command */
     unsigned int current_item;  /* used in the FOREACH command */
 
     int flags;
@@ -97,7 +97,7 @@ struct stored_proc {
     sqlite3_var** params;  // an array of pointers to variables
     unsigned int num_params;
     // result
-    sqlite3_array *result_array;
+    sqlite3_list *result_list;
     int current_row;
     // aMem and nMem from Vdbe are temporarily stored here
     sqlite3_value *aMem;
@@ -107,7 +107,7 @@ struct stored_proc {
 
 struct procedure_call {
     stored_proc *procedure;
-    sqlite3_array *input_array;
+    sqlite3_list *input_list;
 };
 
 
@@ -123,7 +123,7 @@ SQLITE_PRIVATE int parse_variables_list(
   sqlite3_var **pvar_list
 );
 
-SQLITE_PRIVATE int parse_input_array(Parse *pParse, stored_proc* procedure, int cmd_pos, char** psql);
+SQLITE_PRIVATE int parse_input_list(Parse *pParse, stored_proc* procedure, int cmd_pos, char** psql);
 
 SQLITE_PRIVATE int parse_procedure_body(Parse *pParse, stored_proc* procedure, char** psql);
 
@@ -211,13 +211,13 @@ SQLITE_PRIVATE void sqlite3ValueSetVariable(
 }
 
 /*
-** Store a pointer to an array in a value.
+** Store a pointer to a list in a value.
 */
-SQLITE_PRIVATE void sqlite3ValueSetArray(
-  sqlite3_value *value, sqlite3_array *array, void (*free_func)(sqlite3_array*)
+SQLITE_PRIVATE void sqlite3ValueSetList(
+  sqlite3_value *value, sqlite3_list *list, void (*free_func)(sqlite3_list*)
 ){
   sqlite3VdbeMemSetNull(value);
-  sqlite3VdbeMemSetPointer(value, array, "array", (void(*)(void*))free_func);
+  sqlite3VdbeMemSetPointer(value, list, "list", (void(*)(void*))free_func);
 }
 
 /*
@@ -228,17 +228,17 @@ SQLITE_PRIVATE bool is_variable(sqlite3_value *pVal){
 }
 
 /*
-** Return true if the value contains an array.
+** Return true if the value contains a list.
 */
-SQLITE_PRIVATE bool is_array(sqlite3_value *pVal){
-  return sqlite3_value_pointer(pVal, "array") != NULL;
+SQLITE_PRIVATE bool is_list(sqlite3_value *pVal){
+  return sqlite3_value_pointer(pVal, "list") != NULL;
 }
 
 /*
-** Return the array stored in the value.
+** Return the list stored in the value.
 */
-SQLITE_PRIVATE sqlite3_array* get_array_from_value(sqlite3_value *pVal){
-  return sqlite3_value_pointer(pVal, "array");
+SQLITE_PRIVATE sqlite3_list* get_list_from_value(sqlite3_value *pVal){
+  return sqlite3_value_pointer(pVal, "list");
 }
 
 /*
@@ -330,39 +330,39 @@ SQLITE_PRIVATE int sqlite3ValueFromToken(
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// ARRAYS
+// LISTS
 ////////////////////////////////////////////////////////////////////////////////
 
 /*
-** Release the content of the array, recursively.
-** If the value contains a sub-array, then the sub-array is also released.
+** Release the content of the list, recursively.
+** If the value contains a sub-list, then the sub-list is also released.
 */
-SQLITE_PRIVATE void sqlite3_free_array(sqlite3_array *array) {
-    if (array == NULL) return;
-    for (int i = 0; i < array->num_items; i++) {
+SQLITE_PRIVATE void sqlite3_free_list(sqlite3_list *list) {
+    if (list == NULL) return;
+    for (int i = 0; i < list->num_items; i++) {
         // release the value
-        // if it contains an array, it is released recursively
-        sqlite3VdbeMemRelease(&array->value[i]);
+        // if it contains a list, it is released recursively
+        sqlite3VdbeMemRelease(&list->value[i]);
     }
-    sqlite3_free(array);
+    sqlite3_free(list);
 }
 
 /*
-** Parse an array
-** It can contain internal arrays.
+** Parse a list
+** It can contain internal lists.
 ** The LIST keyword is optional.
 ** Examples:
 **   LIST(1,2,3,LIST(4,5,6))
 **   LIST(1,2,3,(4,5,6))
 **   (1,2,3,(4,5,6))
 */
-SQLITE_PRIVATE int parse_array(
-  Parse *pParse, stored_proc* procedure, char** psql, sqlite3_array **parray
+SQLITE_PRIVATE int parse_list(
+  Parse *pParse, stored_proc* procedure, char** psql, sqlite3_list **plist
 ){
     char* sql = *psql;
     int rc = SQLITE_OK;
     int n, tokenType;
-    sqlite3_array* array = NULL;
+    sqlite3_list* list = NULL;
 
     // skip whitespaces
     while (sqlite3Isspace(*sql)) sql++;
@@ -378,26 +378,26 @@ SQLITE_PRIVATE int parse_array(
     sql++;
     while (sqlite3Isspace(*sql)) sql++;
 
-    // parse the array values
+    // parse the list values
     while (1) {
-        if (array == NULL) {
-            // allocate the array object with 1 item
-            array = sqlite3MallocZero( sizeof(sqlite3_array) );
-            if (!array) return SQLITE_NOMEM;
+        if (list == NULL) {
+            // allocate the list object with 1 item
+            list = sqlite3MallocZero( sizeof(sqlite3_list) );
+            if (!list) return SQLITE_NOMEM;
         } else {
-            // increment the array size by 1 item
-            sqlite3_array* new_array;
-            new_array = sqlite3Realloc(array, sizeof(sqlite3_array) + 
-                         (array->num_items) * sizeof(sqlite3_value));
-            if (!new_array) {
-              sqlite3_free_array(array);
+            // increment the list size by 1 item
+            sqlite3_list* new_list;
+            new_list = sqlite3Realloc(list, sizeof(sqlite3_list) +
+                         (list->num_items) * sizeof(sqlite3_value));
+            if (!new_list) {
+              sqlite3_free_list(list);
               return SQLITE_NOMEM;
             }
-            array = new_array;
-            memset(&array->value[array->num_items], 0, sizeof(sqlite3_value));
+            list = new_list;
+            memset(&list->value[list->num_items], 0, sizeof(sqlite3_value));
         }
         // get a reference to the new value
-        sqlite3_value *value = &array->value[array->num_items];
+        sqlite3_value *value = &list->value[list->num_items];
 
         // initialize the value
         sqlite3VdbeMemInit(value, pParse->db, MEM_Null);
@@ -421,23 +421,23 @@ SQLITE_PRIVATE int parse_array(
             sql += n;
         } else if (tokenType == TK_LP || (tokenType == TK_ID &&
                   n == 4 && sqlite3_strnicmp(sql, "LIST", 4) == 0)) {
-            // parse the internal array
-            sqlite3_array *internal_array;
-            rc = parse_array(pParse, procedure, &sql, &internal_array);
+            // parse the internal list
+            sqlite3_list *internal_list;
+            rc = parse_list(pParse, procedure, &sql, &internal_list);
             if (rc != SQLITE_OK) {
                 goto loc_invalid;
             }
-            // store the pointer to the internal array on the value
-            sqlite3ValueSetArray(value, internal_array, sqlite3_free_array);
+            // store the pointer to the internal list on the value
+            sqlite3ValueSetList(value, internal_list, sqlite3_free_list);
         } else if (tokenType == TK_RP) {
-            // this is an empty array
+            // this is an empty list
             sql++;
             break;
         } else {
             // retrieve the value from the token
             rc = sqlite3ValueFromToken(&sql, n, tokenType, SQLITE_UTF8, value);
 #ifdef SQLITE_DEBUG
-            printf("parse_array() pos=%d value=", array->num_items);
+            printf("parse_list() pos=%d value=", list->num_items);
             memTracePrint(value);
             puts("");
 #endif
@@ -447,7 +447,7 @@ SQLITE_PRIVATE int parse_array(
         }
 
         // we have a new value
-        array->num_items++;
+        list->num_items++;
 
         // skip whitespaces
         while (sqlite3Isspace(*sql)) sql++;
@@ -468,11 +468,11 @@ SQLITE_PRIVATE int parse_array(
     while (sqlite3Isspace(*sql)) sql++;
 
     *psql = sql;
-    *parray = array;
+    *plist = list;
     return SQLITE_OK;
 
 loc_invalid:
-    if (array) sqlite3_free_array(array);
+    if (list) sqlite3_free_list(list);
     if (rc == SQLITE_OK) rc = SQLITE_ERROR;
     if (pParse->zErrMsg == NULL) {
       sqlite3ErrorMsg(pParse, "invalid token: %s", sql);
@@ -564,9 +564,9 @@ SQLITE_PRIVATE void dropAllVariables(stored_proc *procedure){
   /* clear the list of variables */
   while( procedure->vars ){
     sqlite3_var *current = procedure->vars;
-    // if it is an array, free it
-    //sqlite3_array *array = get_array_from_value(&current->value);
-    //if( array ) sqlite3_free_array(array);
+    // if it is a list, free it
+    //sqlite3_list *list = get_list_from_value(&current->value);
+    //if( list ) sqlite3_free_list(list);
     // the free function may be called by sqlite3VdbeMemRelease
     // release the value
     sqlite3VdbeMemRelease((Mem*)&current->value);
@@ -1172,14 +1172,14 @@ SQLITE_PRIVATE int parseSetStatement(
   /* Read the next token */
   n = sqlite3GetToken((u8*)sql, &tokenType);
 
-  //if( tokenType==TK_ARRAY ){
+  //if( tokenType==TK_LIST ){
   if( n==4 && sqlite3_strnicmp(sql, "LIST", 4)==0 ){
-    // store the entire array in a single variable
-    cmd->flags |= CMD_FLAG_STORE_AS_ARRAY;
+    // store the entire list in a single variable
+    cmd->flags |= CMD_FLAG_STORE_AS_LIST;
     // skip the LIST token
     sql += n;
-    // parse the array values into the command's input array
-    rc = parse_input_array(pParse, procedure, pos, &sql);
+    // parse the list values into the command's input list
+    rc = parse_input_list(pParse, procedure, pos, &sql);
     if (rc != SQLITE_OK) {
       goto loc_invalid;
     }
@@ -1190,10 +1190,10 @@ SQLITE_PRIVATE int parseSetStatement(
     // skip the semicolon
     sql++;
   }else{
-    // if it is an open parenthesis, then the result is stored as an array
+    // if it is an open parenthesis, then the result is stored as a list
     if( tokenType==TK_LP ){
       // store the entire result set in a single variable
-      cmd->flags |= CMD_FLAG_STORE_AS_ARRAY;
+      cmd->flags |= CMD_FLAG_STORE_AS_LIST;
       // get the next token
       sql += n;
       while( sqlite3Isspace(*sql) ) sql++;
@@ -1204,7 +1204,7 @@ SQLITE_PRIVATE int parseSetStatement(
     // if the command is enclosed in parenthesis, like this:
     // SET @users = (SELECT * FROM users WHERE ...);
     // then skip the closing parenthesis
-    if (cmd->flags & CMD_FLAG_STORE_AS_ARRAY) {
+    if (cmd->flags & CMD_FLAG_STORE_AS_LIST) {
       if( cmd->sql[cmd->nsql-1] != ')' ){
         sqlite3ErrorMsg(pParse, "expected ')'");
         goto loc_invalid;
@@ -1212,7 +1212,7 @@ SQLITE_PRIVATE int parseSetStatement(
       cmd->nsql--;
     }
     // if the result set should be stored in a single variable
-    if (cmd->flags & CMD_FLAG_STORE_AS_ARRAY) {
+    if (cmd->flags & CMD_FLAG_STORE_AS_LIST) {
       // we expect a single variable to store the result set
       if (cmd->num_vars != 1) {
         sqlite3ErrorMsg(pParse, "number of variables must be 1");
@@ -1815,8 +1815,8 @@ SQLITE_PRIVATE int parseForEachStatement(Parse *pParse, stored_proc* procedure, 
     if (sqlite3_strnicmp(sql, "LIST", 4) == 0) {
         // skip "LIST"
         sql += 4;
-        // parse the array values into the command's input array
-        rc = parse_input_array(pParse, procedure, pos, &sql);
+        // parse the list values into the command's input list
+        rc = parse_input_list(pParse, procedure, pos, &sql);
         if (rc != SQLITE_OK) {
             goto loc_invalid;
         }
@@ -1875,23 +1875,23 @@ loc_invalid:
 }
 
 /*
-** Parse an array and save it in the command's input array
+** Parse a list and save it in the command's input list
 */
-SQLITE_PRIVATE int parse_input_array(
+SQLITE_PRIVATE int parse_input_list(
   Parse *pParse, stored_proc* procedure, int pos, char** psql
 ){
     command* cmd = &procedure->cmds[pos];
-    sqlite3_array* array = NULL;
+    sqlite3_list* list = NULL;
     int rc;
 
-    // parse the array values into an sqlite3_array object
-    rc = parse_array(pParse, procedure, psql, &array);
+    // parse the list values into an sqlite3_list object
+    rc = parse_list(pParse, procedure, psql, &list);
     if (rc != SQLITE_OK) {
         return rc;
     }
 
-    // save the array in the command
-    cmd->input_array = array;
+    // save the list in the command
+    cmd->input_list = list;
 
     return SQLITE_OK;
 }
@@ -2019,13 +2019,13 @@ loc_exit:
 ** Parse a stored procedure call
 */
 SQLITE_PRIVATE int parseProcedureCall(
-    Parse *pParse, char** psql, char** name, int* name_len, sqlite3_array** pparams
+    Parse *pParse, char** psql, char** name, int* name_len, sqlite3_list** pparams
 ){
     char* sql = *psql;
     int n;
     int rc = SQLITE_OK;
     int tokenType;
-    sqlite3_array* array = NULL;
+    sqlite3_list* list = NULL;
 
     // skip whitespaces
     while (sqlite3Isspace(*sql)) sql++;
@@ -2044,8 +2044,8 @@ SQLITE_PRIVATE int parseProcedureCall(
     // skip whitespaces
     while (sqlite3Isspace(*sql)) sql++;
 
-    // parse the input parameters into an sqlite3_array object
-    rc = parse_array(pParse, NULL, &sql, &array);
+    // parse the input parameters into an sqlite3_list object
+    rc = parse_list(pParse, NULL, &sql, &list);
     if (rc != SQLITE_OK) {
         goto loc_invalid;
     }
@@ -2055,8 +2055,8 @@ SQLITE_PRIVATE int parseProcedureCall(
 
     // return the current parsing position on the psql pointer
     *psql = sql;
-    // return the input parameters array
-    *pparams = array;
+    // return the input parameters list
+    *pparams = list;
 
     return SQLITE_OK;
 
@@ -2070,13 +2070,13 @@ loc_invalid:
 ** Process the input parameters of a stored procedure call
 ** 
 */
-SQLITE_PRIVATE int processCallParameters(Parse *pParse, sqlite3_array *input_array) {
+SQLITE_PRIVATE int processCallParameters(Parse *pParse, sqlite3_list *input_list) {
     int count = 0;
     int i;
 
-    // count how many variables are there in the input array
-    for (i = 0; i < input_array->num_items; i++) {
-        if (is_variable(&input_array->value[i])) {
+    // count how many variables are there in the input list
+    for (i = 0; i < input_list->num_items; i++) {
+        if (is_variable(&input_list->value[i])) {
             count++;
         }
     }
@@ -2084,9 +2084,9 @@ SQLITE_PRIVATE int processCallParameters(Parse *pParse, sqlite3_array *input_arr
     if (count > 0) {
         Expr aExpr[1];
         Expr *pExpr = &aExpr[0];
-        // iterate the input_array
-        for (i = 0; i < input_array->num_items; i++) {
-            sqlite3_value *value = &input_array->value[i];
+        // iterate the input_list
+        for (i = 0; i < input_list->num_items; i++) {
+            sqlite3_value *value = &input_list->value[i];
             // check if the current value is a variable
             if (is_variable(value)) {
                 // set the pExpr->u.zToken to the variable name
@@ -2122,7 +2122,7 @@ SQLITE_PRIVATE void prepareProcedureCall(Parse *pParse, char **psql) {
     if (call == NULL) { rc = SQLITE_NOMEM; goto loc_exit; }
 
     // parse the CALL statement
-    rc = parseProcedureCall(pParse, &sql, &name, &name_len, &call->input_array);
+    rc = parseProcedureCall(pParse, &sql, &name, &name_len, &call->input_list);
     if (rc != SQLITE_OK) {
       if (pParse->zErrMsg == NULL) {
         sqlite3ErrorMsg(pParse, "Invalid token in stored procedure call: %s", sql);
@@ -2146,8 +2146,8 @@ SQLITE_PRIVATE void prepareProcedureCall(Parse *pParse, char **psql) {
       goto loc_exit;
     }
 
-    // process the variables in the input array
-    rc = processCallParameters(pParse, call->input_array);
+    // process the variables in the input list
+    rc = processCallParameters(pParse, call->input_list);
     if (rc != SQLITE_OK) {
       if (pParse->zErrMsg == NULL) {
         sqlite3ErrorMsg(pParse, "Error processing stored procedure parameters: %s",
@@ -2187,11 +2187,11 @@ SQLITE_PRIVATE void prepareProcedureCall(Parse *pParse, char **psql) {
     }
 
     // check the number of parameters
-    if (call->input_array->num_items != procedure->num_params) {
+    if (call->input_list->num_items != procedure->num_params) {
       rc = SQLITE_ERROR;
       if (pParse->zErrMsg == NULL) {
         sqlite3ErrorMsg(pParse, "Invalid number of parameters: %d",
-              call->input_array->num_items);
+              call->input_list->num_items);
       }
       goto loc_exit;
     }
@@ -2396,19 +2396,19 @@ loc_exit:
 }
 
 /*
-** Copy the values from the input array to the procedure parameters.
+** Copy the values from the input list to the procedure parameters.
 */
 SQLITE_PRIVATE void copyProcedureParameters(Vdbe *v, procedure_call *call) {
   stored_proc *procedure = call->procedure;
-  sqlite3_array *input_array = call->input_array;
+  sqlite3_list *input_list = call->input_list;
   int pos;
 
-  assert(input_array->num_items == procedure->num_params);
+  assert(input_list->num_items == procedure->num_params);
 
-  // iterate the input array
-  for (pos = 0; pos < input_array->num_items; pos++) {
+  // iterate the input list
+  for (pos = 0; pos < input_list->num_items; pos++) {
     // get the input value
-    Mem *input = &input_array->value[pos];
+    Mem *input = &input_list->value[pos];
     // get the parameter value
     Mem *param = &procedure->params[pos]->value;
 
@@ -2447,8 +2447,8 @@ SQLITE_PRIVATE int sqlite3VdbeNextResult(Vdbe *v){
   int i;
 
   // check if the procedure has a result set
-  sqlite3_array *array = procedure->result_array;
-  if( !array ){
+  sqlite3_list *list = procedure->result_list;
+  if( !list ){
     // no result set
     return SQLITE_DONE;
   }
@@ -2456,25 +2456,25 @@ SQLITE_PRIVATE int sqlite3VdbeNextResult(Vdbe *v){
   // increment the current row
   procedure->current_row++;
   // check if there are more rows to return
-  if( procedure->current_row >= array->num_items ){
+  if( procedure->current_row >= list->num_items ){
     // no more rows
     return SQLITE_DONE;
   }
 
-  // get the array value
-  Mem *row_value = &array->value[procedure->current_row];
+  // get the list value
+  Mem *row_value = &list->value[procedure->current_row];
 
-  // check if it is an array
-  array = get_array_from_value(row_value);
-  if( array ){
-    // copy the values from the array to the result set
-    for( i=0; i<array->num_items; i++ ){
-      // get the array value
-      Mem *value = &array->value[i];
+  // check if it is a list
+  list = get_list_from_value(row_value);
+  if( list ){
+    // copy the values from the list to the result set
+    for( i=0; i<list->num_items; i++ ){
+      // get the list value
+      Mem *value = &list->value[i];
       // copy the value to the result set
       sqlite3VdbeMemShallowCopy(&v->aMem[i+1], value, MEM_Static);
     }
-    num_cols = array->num_items;
+    num_cols = list->num_items;
   } else {
     // copy the value to the result set
     sqlite3VdbeMemMove(&v->aMem[1], row_value);
@@ -2535,18 +2535,18 @@ SQLITE_PRIVATE int executeReturnCommand(Vdbe *v, command *cmd) {
   }
 
   // if returning a result set (many rows)
-  if( cmd->num_vars==1 && is_array(&cmd->vars[0]->value) ){
-    // get the array
-    sqlite3_array *array = get_array_from_value(&cmd->vars[0]->value);
+  if( cmd->num_vars==1 && is_list(&cmd->vars[0]->value) ){
+    // get the list
+    sqlite3_list *list = get_list_from_value(&cmd->vars[0]->value);
     // get the number of rows
-    int num_rows = array->num_items;
+    int num_rows = list->num_items;
     // iterate the rows to get the maximum number of columns
     int num_cols = 1;
     for( i=0; i<num_rows; i++ ){
-      // get the array value
-      Mem *value = &array->value[i];
-      // get the array
-      sqlite3_array *row = get_array_from_value(value);
+      // get the list value
+      Mem *value = &list->value[i];
+      // get the list
+      sqlite3_list *row = get_list_from_value(value);
       if( row ){
         // get the number of columns
         int row_num_cols = row->num_items;
@@ -2567,8 +2567,8 @@ SQLITE_PRIVATE int executeReturnCommand(Vdbe *v, command *cmd) {
       sqlite3VdbeMemInit(&v->aMem[i], v->db, MEM_Null);
     }
 
-    // save the source array in the procedure object
-    procedure->result_array = array;
+    // save the source list in the procedure object
+    procedure->result_list = list;
     // save the position of the current row
     procedure->current_row = -1;
 
@@ -2594,10 +2594,10 @@ SQLITE_PRIVATE int executeReturnCommand(Vdbe *v, command *cmd) {
     // move the values from the variables to the result set
     for( i=0; i<cmd->num_vars; i++ ){
       sqlite3_value *value = &cmd->vars[i]->value;
-      // arrays cannot be returned with multiple parameters
-      if( is_array(value) ){
+      // lists cannot be returned with multiple parameters
+      if( is_list(value) ){
         // set the error message
-        sqlite3VdbeError(v, "cannot return an array with multiple parameters");
+        sqlite3VdbeError(v, "cannot return a list with multiple parameters");
         // return the error code
         return SQLITE_ERROR;
       }
@@ -2781,12 +2781,12 @@ SQLITE_PRIVATE int executeSetCommand(Vdbe *v, command *cmd) {
   // similar to the STATEMENT command: execute the prepared statement and store
   // the returned values in the defined variables
 
-  sqlite3_array *parent_array = NULL;
-  void (*free_func)(sqlite3_array*) = sqlite3_free_array;
+  sqlite3_list *parent_list = NULL;
+  void (*free_func)(sqlite3_list*) = sqlite3_free_list;
   int num_rows = 0;
 
-  if (cmd->flags & CMD_FLAG_STORE_AS_ARRAY) {
-    // exactly one variable to store the array
+  if (cmd->flags & CMD_FLAG_STORE_AS_LIST) {
+    // exactly one variable to store the list
     if( cmd->num_vars != 1 ){
       sqlite3VdbeError(v, "expected a single variable to store the result");
       rc = SQLITE_ERROR;
@@ -2795,14 +2795,14 @@ SQLITE_PRIVATE int executeSetCommand(Vdbe *v, command *cmd) {
   }
 
   // is the input a LIST?
-  if (cmd->input_array != NULL) {
+  if (cmd->input_list != NULL) {
     assert(cmd->stmt == NULL);
-    assert(cmd->flags & CMD_FLAG_STORE_AS_ARRAY);
-    // get the pointer to the input array
-    parent_array = cmd->input_array;
+    assert(cmd->flags & CMD_FLAG_STORE_AS_LIST);
+    // get the pointer to the input list
+    parent_list = cmd->input_list;
     // do not release it if the variable is set to another value
     free_func = NULL;
-    // make the variable point to the input array
+    // make the variable point to the input list
     goto loc_set_values;
   }
 
@@ -2887,53 +2887,53 @@ SQLITE_PRIVATE int executeSetCommand(Vdbe *v, command *cmd) {
       }
       // increment the number of rows returned
       num_rows++;
-      // if the statement is expected to return many rows, store them on an array variable
-      if (cmd->flags & CMD_FLAG_STORE_AS_ARRAY) {
+      // if the statement is expected to return many rows, store them on a list variable
+      if (cmd->flags & CMD_FLAG_STORE_AS_LIST) {
 
-        // allocate an sqlite3_array object with the proper number of values
-        sqlite3_array *array = (sqlite3_array*) sqlite3MallocZero(
-            sizeof(sqlite3_array) + sizeof(sqlite3_value) * (num_cols-1));
-        if (array == NULL) {
+        // allocate an sqlite3_list object with the proper number of values
+        sqlite3_list *list = (sqlite3_list*) sqlite3MallocZero(
+            sizeof(sqlite3_list) + sizeof(sqlite3_value) * (num_cols-1));
+        if (list == NULL) {
           rc = SQLITE_NOMEM;
           goto loc_exit;
         }
-        // store the number of items in the array
-        array->num_items = num_cols;
-        // store the result in the array
+        // store the number of items in the list
+        list->num_items = num_cols;
+        // store the result in the list
         for (int ncol = 0; ncol < num_cols; ncol++) {
-          sqlite3_value *array_value = &array->value[ncol];
+          sqlite3_value *list_value = &list->value[ncol];
           sqlite3_value *col_value = sqlite3_column_value(cmd->stmt, ncol);
-          sqlite3VdbeMemInit(array_value, procedure->db, MEM_Null);
-          sqlite3VdbeMemCopy(array_value, col_value);
+          sqlite3VdbeMemInit(list_value, procedure->db, MEM_Null);
+          sqlite3VdbeMemCopy(list_value, col_value);
         }
 
-        // prepare to store the array in the parent array
-        if( parent_array==NULL ){
-          // allocate the parent array
-          parent_array = (sqlite3_array*) sqlite3MallocZero(sizeof(sqlite3_array));
-          if( parent_array==NULL ){
-            sqlite3_free(array);
+        // prepare to store the list in the parent list
+        if( parent_list==NULL ){
+          // allocate the parent list
+          parent_list = (sqlite3_list*) sqlite3MallocZero(sizeof(sqlite3_list));
+          if( parent_list==NULL ){
+            sqlite3_free(list);
             rc = SQLITE_NOMEM;
             goto loc_exit;
           }
-          parent_array->num_items = 1;
+          parent_list->num_items = 1;
         }else{
           // allocate more space
-          sqlite3_array *new_array = (sqlite3_array*) sqlite3Realloc(
-              parent_array, sizeof(sqlite3_array) +
-              (sizeof(sqlite3_value) * parent_array->num_items));
-          if( new_array==NULL ){
-            sqlite3_free(array);
+          sqlite3_list *new_list = (sqlite3_list*) sqlite3Realloc(
+              parent_list, sizeof(sqlite3_list) +
+              (sizeof(sqlite3_value) * parent_list->num_items));
+          if( new_list==NULL ){
+            sqlite3_free(list);
             rc = SQLITE_NOMEM;
             goto loc_exit;
           }
-          parent_array = new_array;
-          parent_array->num_items++;
+          parent_list = new_list;
+          parent_list->num_items++;
         }
-        // store the array in the parent array
-        sqlite3_value *value = &parent_array->value[parent_array->num_items-1];
+        // store the list in the parent list
+        sqlite3_value *value = &parent_list->value[parent_list->num_items-1];
         sqlite3VdbeMemInit(value, procedure->db, MEM_Null);
-        sqlite3ValueSetArray(value, array, sqlite3_free_array);
+        sqlite3ValueSetList(value, list, sqlite3_free_list);
 
       } else {
 
@@ -2983,11 +2983,11 @@ SQLITE_PRIVATE int executeSetCommand(Vdbe *v, command *cmd) {
 
 loc_set_values:
 
-  if (cmd->flags & CMD_FLAG_STORE_AS_ARRAY) {
-    // store the parent array in the defined variable
+  if (cmd->flags & CMD_FLAG_STORE_AS_LIST) {
+    // store the parent list in the defined variable
     sqlite3_var *var = cmd->vars[0];
-    if (parent_array) {
-      sqlite3ValueSetArray(&var->value, parent_array, free_func);
+    if (parent_list) {
+      sqlite3ValueSetList(&var->value, parent_list, free_func);
     } else {
       // no row was returned
       sqlite3VdbeMemSetNull(&var->value);
@@ -3017,14 +3017,14 @@ loc_error:
 
 /*
 ** Execute a foreach command.
-** Retrieve the next item from the array or the next row from the SQL statement
+** Retrieve the next item from the list or the next row from the SQL statement
 ** and save the result in the defined variables.
 ** If there is a new row, return SQLITE_ROW. Otherwise, return SQLITE_DONE.
 **
 ** Check if already executing using the cmd->current_item variable. Use it as the
-** index of the next item to retrieve from the array. For SQL statements, just
+** index of the next item to retrieve from the list. For SQL statements, just
 ** call sqlite3_step() to retrieve the next row and increment the cmd->current_item.
-** The input is an array if cmd->input_array is not NULL.
+** The input is a list if cmd->input_list is not NULL.
 ** The input is a SQL statement if cmd->sql is not NULL.
 ** If the input is a SQL statement, parse it into the cmd->stmt variable if not yet done.
 */
@@ -3032,35 +3032,35 @@ SQLITE_PRIVATE int executeForeachCommand(Vdbe *v, stored_proc *procedure, comman
   sqlite3 *db = v->db;
   int rc = SQLITE_OK;
   int num_cols = 0;
-  sqlite3_array *input_array = NULL;
+  sqlite3_list *input_list = NULL;
   sqlite3_value *row_value = NULL;
-  sqlite3_array *row_array = NULL;
+  sqlite3_list *row_list = NULL;
   bool has_dynamic_values = false;
 
   if (cmd->input_var) {
-    // retrieve the array from the input variable
-    input_array = get_array_from_value(&cmd->input_var->value);
-    if (input_array == NULL) {
-      sqlite3VdbeError(v, "the input variable %s does not contain an array",
+    // retrieve the list from the input variable
+    input_list = get_list_from_value(&cmd->input_var->value);
+    if (input_list == NULL) {
+      sqlite3VdbeError(v, "the input variable %s does not contain a list",
                           cmd->input_var->name);
       goto loc_error;
     }
-  } else if (cmd->input_array) {
-    input_array = cmd->input_array;
+  } else if (cmd->input_list) {
+    input_list = cmd->input_list;
   }
 
-  // retrieve the next item from the array or the next row from the SQL statement
-  if (input_array) {
-    if (cmd->current_item >= input_array->num_items) {
+  // retrieve the next item from the list or the next row from the SQL statement
+  if (input_list) {
+    if (cmd->current_item >= input_list->num_items) {
       // no more items
       cmd->current_item = 0;
       rc = SQLITE_DONE;
       goto loc_exit;
     }
-    // retrieve the next item from the array
-    row_value = &input_array->value[cmd->current_item];
-    // if the row contains an array, retrieve it
-    row_array = get_array_from_value(row_value);
+    // retrieve the next item from the list
+    row_value = &input_list->value[cmd->current_item];
+    // if the row contains a list, retrieve it
+    row_list = get_list_from_value(row_value);
     // increment the current item
     cmd->current_item++;
   } else {
@@ -3098,8 +3098,8 @@ SQLITE_PRIVATE int executeForeachCommand(Vdbe *v, stored_proc *procedure, comman
   }
 
   // check the number of columns returned
-  if (row_array) {
-    num_cols = row_array->num_items;
+  if (row_list) {
+    num_cols = row_list->num_items;
   } else if (row_value) {
     num_cols = 1;
   } else {
@@ -3145,8 +3145,8 @@ SQLITE_PRIVATE int executeForeachCommand(Vdbe *v, stored_proc *procedure, comman
     for (int ncol = 0; ncol < cmd->num_vars; ncol++) {
       sqlite3_var *var = cmd->vars[ncol];
       sqlite3_value *col_value;
-      if (row_array) {
-        col_value = &row_array->value[ncol];
+      if (row_list) {
+        col_value = &row_list->value[ncol];
         // copy the content from the column to the variable
         sqlite3VdbeMemCopy(&var->value, col_value);
       } else if (row_value) {
@@ -3205,7 +3205,7 @@ SQLITE_PRIVATE int executeStoredProcedure(Vdbe *v, procedure_call *call) {
     return rc;
   }
 
-  // copy from the cmd->input_array to the parameter values (procedure->params[])
+  // copy from the cmd->input_list to the parameter values (procedure->params[])
   // copy the declared variable values from the v->aVar[] array to the parameter values
   copyProcedureParameters(v, call);
 
@@ -3433,8 +3433,8 @@ SQLITE_PRIVATE void releaseCommand(command* cmd) {
   if (cmd->stmt) {
     sqlite3_finalize(cmd->stmt);
   }
-  if (cmd->input_array) {
-    sqlite3_free_array(cmd->input_array);
+  if (cmd->input_list) {
+    sqlite3_free_list(cmd->input_list);
   }
   if (cmd->vars) {
     sqlite3_free(cmd->vars);
@@ -3468,8 +3468,8 @@ SQLITE_PRIVATE void releaseProcedureCall(procedure_call *call) {
     if (call->procedure) {
         releaseProcedure(call->procedure);
     }
-    if (call->input_array) {
-        sqlite3_free_array(call->input_array);
+    if (call->input_list) {
+        sqlite3_free_list(call->input_list);
     }
     sqlite3_free(call);
 }
