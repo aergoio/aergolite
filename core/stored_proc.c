@@ -350,31 +350,33 @@ SQLITE_PRIVATE void sqlite3_free_list(sqlite3_list *list) {
 /*
 ** Parse a list
 ** It can contain internal lists.
-** The LIST keyword is optional.
 ** Examples:
-**   LIST(1,2,3,LIST(4,5,6))
-**   LIST(1,2,3,(4,5,6))
-**   (1,2,3,(4,5,6))
+**   [1,2,3]
+**   [1,2,3,[4,5,6]]
 */
 SQLITE_PRIVATE int parse_list(
-  Parse *pParse, stored_proc* procedure, char** psql, sqlite3_list **plist
+  Parse *pParse, stored_proc* procedure, char** psql, bool is_function, sqlite3_list **plist
 ){
     char* sql = *psql;
+    char list_open, list_close;
     int rc = SQLITE_OK;
     int n, tokenType;
     sqlite3_list* list = NULL;
 
+    // set the list delimiters
+    if (is_function) {
+        list_open = '(';
+        list_close = ')';
+    } else {
+        list_open = '[';
+        list_close = ']';
+    }
+
     // skip whitespaces
     while (sqlite3Isspace(*sql)) sql++;
 
-    // check for the optional "LIST" keyword
-    if (sqlite3_strnicmp(sql, "LIST", 4) == 0) {
-      sql += 4;
-      while (sqlite3Isspace(*sql)) sql++;
-    }
-
-    // check for "("
-    if (*sql != '(') return SQLITE_ERROR;
+    // check for "["
+    if (*sql != list_open) return SQLITE_ERROR;
     sql++;
     while (sqlite3Isspace(*sql)) sql++;
 
@@ -419,17 +421,16 @@ SQLITE_PRIVATE int parse_list(
             sqlite3ValueSetVariable(value, sql, n, SQLITE_UTF8);
             // skip the variable name
             sql += n;
-        } else if (tokenType == TK_LP || (tokenType == TK_ID &&
-                  n == 4 && sqlite3_strnicmp(sql, "LIST", 4) == 0)) {
+        } else if (*sql == '[') {
             // parse the internal list
             sqlite3_list *internal_list;
-            rc = parse_list(pParse, procedure, &sql, &internal_list);
+            rc = parse_list(pParse, procedure, &sql, false, &internal_list);
             if (rc != SQLITE_OK) {
                 goto loc_invalid;
             }
             // store the pointer to the internal list on the value
             sqlite3ValueSetList(value, internal_list, sqlite3_free_list);
-        } else if (tokenType == TK_RP) {
+        } else if (n == 1 && *sql == list_close) {
             // this is an empty list
             sql++;
             break;
@@ -452,11 +453,11 @@ SQLITE_PRIVATE int parse_list(
         // skip whitespaces
         while (sqlite3Isspace(*sql)) sql++;
 
-        // check for "," or ")"
+        // check for "," or "]"
         if (*sql == ',') {
             sql++;
             while (sqlite3Isspace(*sql)) sql++;
-        } else if (*sql == ')') {
+        } else if (*sql == list_close) {
             sql++;
             break;
         } else {
@@ -1136,7 +1137,7 @@ loc_invalid:
 **  SET @variable = {expression}
 **  SET @name, @email, @phone = SELECT ...
 **  SET @users = (SELECT * FROM users WHERE ...)
-**  SET @list = LIST ('AA', 'BB', 'CC')
+**  SET @list = ['AA', 'BB', 'CC']
 */
 SQLITE_PRIVATE int parseSetStatement(
   Parse *pParse, stored_proc* procedure, int pos, char** psql
@@ -1172,12 +1173,10 @@ SQLITE_PRIVATE int parseSetStatement(
   /* Read the next token */
   n = sqlite3GetToken((u8*)sql, &tokenType);
 
-  //if( tokenType==TK_LIST ){
-  if( n==4 && sqlite3_strnicmp(sql, "LIST", 4)==0 ){
+  //if( tokenType==TK_LEFT_BRACKET ){
+  if( *sql=='[' ){
     // store the entire list in a single variable
     cmd->flags |= CMD_FLAG_STORE_AS_LIST;
-    // skip the LIST token
-    sql += n;
     // parse the list values into the command's input list
     rc = parse_input_list(pParse, procedure, pos, &sql);
     if (rc != SQLITE_OK) {
@@ -1737,7 +1736,7 @@ parse FOREACH statements
 
 example usage:
 
-FOREACH @item IN LIST ('AA', 'BB', 'CC') DO
+FOREACH @item IN ['AA', 'BB', 'CC'] DO
     statements;
 END LOOP;
 
@@ -1809,12 +1808,10 @@ SQLITE_PRIVATE int parseForEachStatement(Parse *pParse, stored_proc* procedure, 
     sql += 3;
     while (sqlite3Isspace(*sql)) sql++;
 
-    // check if the next token is LIST or a variable or a SQL statement
-    // use an external function to parse the LIST or variable
+    // check if the next token is a [ or a variable or a SQL statement
+    // use an external function to parse the list or variable
     // save the result in the loop block controller
-    if (sqlite3_strnicmp(sql, "LIST", 4) == 0) {
-        // skip "LIST"
-        sql += 4;
+    if (*sql == '[') {
         // parse the list values into the command's input list
         rc = parse_input_list(pParse, procedure, pos, &sql);
         if (rc != SQLITE_OK) {
@@ -1885,7 +1882,7 @@ SQLITE_PRIVATE int parse_input_list(
     int rc;
 
     // parse the list values into an sqlite3_list object
-    rc = parse_list(pParse, procedure, psql, &list);
+    rc = parse_list(pParse, procedure, psql, false, &list);
     if (rc != SQLITE_OK) {
         return rc;
     }
@@ -2045,7 +2042,7 @@ SQLITE_PRIVATE int parseProcedureCall(
     while (sqlite3Isspace(*sql)) sql++;
 
     // parse the input parameters into an sqlite3_list object
-    rc = parse_list(pParse, NULL, &sql, &list);
+    rc = parse_list(pParse, NULL, &sql, true, &list);
     if (rc != SQLITE_OK) {
         goto loc_invalid;
     }

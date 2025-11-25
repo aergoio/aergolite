@@ -312,7 +312,7 @@ END;
 It can be called from SQL like this:
 
 ```sql
-CALL add_new_sale( (('123', 1, 10.00), ('456', 2, 20.00)) );
+CALL add_new_sale( [['123', 1, 10.00],['456', 2, 20.00]] );
 ```
 
 Full reference of the available commands can be found [here](https://github.com/aergoio/aergolite/wiki/Stored-Procedures)
