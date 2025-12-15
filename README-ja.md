@@ -808,9 +808,9 @@ AergoLiteは、Bernardo Ramosによって以下で開発されました：
 
 [![aergo logo](https://user-images.githubusercontent.com/7624275/100549737-8e89c500-3253-11eb-96b3-585916ed0883.png)](https://aergo.io/)
 
-Aergoには、Luaで[スマートコントラクト](https://ide.aergo.io/)をサポートする[パブリックブロックチェーン](https://aergoscan.io/)があります。
+スポンサー:
 
-まもなくリレーショナルデータストレージとスマートコントラクトでのSQLをサポートします。現在、テストネットとプライベートチェーンで利用できます。
+[![HPP logo](https://github.com/user-attachments/assets/fc0549c7-2a8d-4df9-aa74-b72156a8eae8)](https://hpp.io/)
 
 
 ## サポート

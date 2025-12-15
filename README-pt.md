@@ -806,9 +806,9 @@ AergoLite foi desenvolvido por Bernardo Ramos em:
 
 [![aergo logo](https://user-images.githubusercontent.com/7624275/100549737-8e89c500-3253-11eb-96b3-585916ed0883.png)](https://aergo.io/)
 
-Aergo tem um [blockchain público](https://aergoscan.io/) com suporte para [contratos inteligentes](https://ide.aergo.io/) em Lua.
+Patrocinado por:
 
-Em breve, ele suportará armazenamento de dados relacionais e SQL em contratos inteligentes, atualmente disponíveis em nossa testnet e em redes blockchain privadas.
+[![HPP logo](https://github.com/user-attachments/assets/fc0549c7-2a8d-4df9-aa74-b72156a8eae8)](https://hpp.io/)
 
 
 ## Suporte

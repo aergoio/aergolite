@@ -815,9 +815,9 @@ AergoLite由Bernardo Ramos基于Aergo开发:
 
 [![aergo logo](https://user-images.githubusercontent.com/7624275/100549737-8e89c500-3253-11eb-96b3-585916ed0883.png)](https://aergo.io/)
 
-Aergo拥有[公共区块链](https://aergoscan.io/)的支持，并且在Lua中支持[智能合约](https://ide.aergo.io/)
+赞助商:
 
-我们很快会支持智能合约上的关系型数据存储和SQL。目前我们只在测试网和私有链提供。
+[![HPP logo](https://github.com/user-attachments/assets/fc0549c7-2a8d-4df9-aa74-b72156a8eae8)](https://hpp.io/)
 
 
 ## 支持

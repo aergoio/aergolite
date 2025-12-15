@@ -815,9 +815,9 @@ AergoLite был разработан Бернардо Рамосом в:
 
 [![aergo logo](https://user-images.githubusercontent.com/7624275/100549737-8e89c500-3253-11eb-96b3-585916ed0883.png)](https://aergo.io/)
 
-Aergo имеет [публичный блокчейн](https://aergoscan.io/) с поддержкой [смарт-контрактов](https://ide.aergo.io/) на Lua.
+Спонсор:
 
-Он скоро будет поддерживать реляционное хранилище данных и SQL в смарт-контрактах, в настоящее время доступно в нашей тестовой сети и в приватных цепочках.
+[![HPP logo](https://github.com/user-attachments/assets/fc0549c7-2a8d-4df9-aa74-b72156a8eae8)](https://hpp.io/)
 
 
 ## Поддержка
