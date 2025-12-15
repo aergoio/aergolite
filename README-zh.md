@@ -85,8 +85,28 @@ make docker
 
 首先用命令安装需要的工具：
 
+**Ubuntu 和 Debian**
+
 ```
-sudo apt-get install git gcc make automake libtool libreadline-dev -y
+sudo apt-get install git gcc make automake libtool libreadline-dev
+```
+
+**CentOS**
+
+```
+sudo yum install git gcc make automake libtool readline-devel
+```
+
+**Alpine**
+
+```
+sudo apk add git gcc make automake libtool readline-dev
+```
+
+**Mac**
+
+```
+brew install automake libtool readline
 ```
 
 然后将以下命令复制并粘贴到终端上运行：
