@@ -1,7 +1,7 @@
 <p align="right"><a href="README-zh.md">中文</a>&nbsp;&nbsp;&nbsp;<a href="README-pt.md">Português</a></p>
 <p align="center"><img width="65%" src="https://user-images.githubusercontent.com/7624275/92685476-2390b800-f30e-11ea-9edc-980b0e66c0ad.png" alt="AergoLite"></p>
 
-<h1 align="center">SQLite with Blockchain</h1>
+<h1 align="center">Trustless SQLite Replication</h1>
 
 <blockquote align="center"><p><em>The easiest way to deploy a blockchain for relational data storage on your app or device</em></p></blockquote>
 
@@ -319,12 +319,17 @@ Here is an example:
 
 ```sql
 CREATE PROCEDURE add_new_sale(@products) BEGIN
+ -- make sure the caller can call this function
  ASSERT txn_sender() IN (SELECT pubkey FROM authorizations WHERE type = 'sale');
+ -- insert a new sale
  INSERT INTO sales (time) VALUES (datetime('now'));
+ -- retrieve the sale id and store it on a variable
  SET @sale_id = last_insert_rowid();
+ -- insert each product, using a reference to the sale id
  FOREACH @prod_id, @qty, @price IN @products DO
    INSERT INTO sale_items (sale_id, prod_id, qty, price) VALUES (@sale_id, @prod_id, @qty, @price);
  END LOOP;
+ -- return the sale id
  RETURN @sale_id;
 END;
 ```
@@ -342,7 +347,9 @@ The applications running on the nodes can be made using different programming la
 
 ## Immutability
 
-If you limit the stored procedures to contain only `INSERT INTO` commands then the database will be immutable.
+If you limit the stored procedures to contain only `INSERT INTO` commands then the database content will be immutable.
+
+But even with normal usage allowing update and deletion of rows, the history of changes (all the SQL commands) are recorded on the lightweight blockchain and cannot be deleted, allowing both restoration of data and auditing.
 
 
 ## Private key protection

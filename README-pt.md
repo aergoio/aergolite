@@ -292,20 +292,63 @@ Exemplo:
 ```
 
 
+## Segurança
+
+Soluções básicas de replicação permitem que os nós executem qualquer comando SQL no banco de dados. Essas soluções não são seguras porque um invasor que obtém o controle de um único nó pode excluir e/ou sobrescrever dados em toda a rede.
+
+Uma solução de replicação verdadeiramente "sem confiança" (trustless) deve limitar o que os nós podem fazer e não confiar neles.
+
+Um invasor pode ser capaz de modificar o banco de dados local, mas isso não será refletido nos outros nós.
+
+Um ataque bem-sucedido à rede exigiria que um invasor obtivesse o controle da maioria dos nós. Este design garante um nível robusto de segurança, tornando desafiador para qualquer entidade única comprometer a integridade do sistema.
+
+
+## Procedimentos armazenados
+
+O AergoLite usa procedimentos armazenados escritos em SQL para controlar o que os nós podem fazer.
+
+Por razões de segurança:
+
+1. Apenas o administrador pode criar procedimentos armazenados.
+2. Os nós só podem executar esses procedimentos armazenados. Outros comandos SQL são bloqueados.
+
+Portanto, eles funcionam de forma semelhante aos contratos inteligentes.
+
+Aqui está um exemplo:
+
+```sql
+CREATE PROCEDURE add_new_sale(@products) BEGIN
+ -- certifique-se de que o chamador pode chamar esta função
+ ASSERT txn_sender() IN (SELECT pubkey FROM authorizations WHERE type = 'sale');
+ -- inserir uma nova venda
+ INSERT INTO sales (time) VALUES (datetime('now'));
+ -- recuperar o ID da venda e armazená-lo em uma variável
+ SET @sale_id = last_insert_rowid();
+ -- inserir cada produto, usando uma referência ao ID da venda
+ FOREACH @prod_id, @qty, @price IN @products DO
+   INSERT INTO sale_items (sale_id, prod_id, qty, price) VALUES (@sale_id, @prod_id, @qty, @price);
+ END LOOP;
+ -- retornar o ID da venda
+ RETURN @sale_id;
+END;
+```
+
+Pode ser chamado do SQL assim:
+
+```sql
+CALL add_new_sale( [['123', 1, 10.00],['456', 2, 20.00]] );
+```
+
+A referência completa dos comandos disponíveis pode ser encontrada [aqui](https://github.com/aergoio/aergolite/wiki/Stored-Procedures)
+
+Os aplicativos executados nos nós podem ser feitos usando diferentes linguagens de programação.
+
+
 ## Imutabilidade
 
-Soluções baseadas em confiança permitem que usuários ou nós específicos executem qualquer comando SQL no banco de dados.
-Eles não são seguros porque um invasor adquirindo o controle de um único nó pode excluir e/ou
-sobrescrever dados em toda a rede.
+Se você limitar os procedimentos armazenados para conter apenas comandos `INSERT INTO`, o conteúdo do banco de dados será imutável.
 
-Um blockchain real sem confiança em um nó específico e imutável deve controlar o que os nós podem fazer.
-
-O AergoLite, por padrão, permite que os nós apenas adicionem dados no banco de dados. Eles não podem atualizer ou apagar dados. Eles só podem executar comandos SQL do tipo `INSERT`.
-Apenas o administrador pode executar todos os comandos SQL.
-
-Versões futuras podem permitir que os nós executem contratos inteligentes criados pelo administrador que podem incluir qualquer comando SQL.
-
-Toda essa proteção impõe a necessidade à um invasor de controlar a maioria dos nós da rede para poder atacá-la. Quanto mais nós na rede, mais difícil é o ataque.
+Mas mesmo com uso normal permitindo atualização e exclusão de registros, o histórico de alterações (todos os comandos SQL) são registrados no blockchain leve e não podem ser excluídos, permitindo tanto a restauração de dados quanto auditoria.
 
 
 ## Proteção de chave privada
