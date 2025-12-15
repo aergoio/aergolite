@@ -1,17 +1,16 @@
-<p align="right"><a href="README-zh.md">中文</a>&nbsp;&nbsp;&nbsp;<a href="README-pt.md">Português</a></p>
+<p align="right"><a href="README-zh.md">中文</a>&nbsp;&nbsp;&nbsp;<a href="README-pt.md">Português</a>&nbsp;&nbsp;&nbsp;<a href="README-ru.md">Русский</a>&nbsp;&nbsp;&nbsp;<a href="README-ja.md">日本語</a>&nbsp;&nbsp;&nbsp;<a href="README-ko.md">한국어</a></p>
+
 <p align="center"><img width="65%" src="https://user-images.githubusercontent.com/7624275/92685476-2390b800-f30e-11ea-9edc-980b0e66c0ad.png" alt="AergoLite"></p>
 
 <h1 align="center">Trustless SQLite Replication</h1>
 
-<blockquote align="center"><p><em>The easiest way to deploy a blockchain for relational data storage on your app or device</em></p></blockquote>
-
-AergoLite allows us to have a replicated SQLite database secured by a private and lightweight blockchain.
+AergoLite provides a replicated SQLite database secured by a private and lightweight blockchain.
 
 Each app has a local replica of the database.
 
-New database transactions are distributed to all the peers and once they reach a consensus on the order of execution all the nodes execute the transactions. As the order of execution of these transactions is the same, all the nodes have the same resulting database content.
+New database transactions are distributed to all the peers and once they reach a consensus on the order of execution all the nodes execute the transactions. As the order of execution is the same, all the nodes have the same resulting database content.
 
-Apps can also write to the local database when they are off-line. The database transactions are stored on a local queue and sent to the network once the connectivity is reestablished. The application will read the new state of the database after the off-line modifications, and it can check if the off-line transactions were processed by the global consensus. If rejected, the database will return to the previous state.
+Apps can also write to the local database when they are off-line. The database transactions are stored on a local queue and sent to the network once the connectivity is reestablished. The application will read the new state of the database with the off-line modifications, and it can check if the off-line transactions were processed by the global consensus. If rejected, the database will return to the previous state.
 
 AergoLite uses **special blockchain technology** focused on **resource constrained devices**.
 
@@ -22,7 +21,7 @@ AergoLite uses **absolute finality**. Once the nodes reach consensus on a new bl
 Only the last block is required to check the blockchain and the database state integrity, therefore the nodes do not need to keep and verify all the history of blocks and transactions.
 It is also possible to setup some nodes to keep all the history for audit reasons.
 
-It also uses a **hash of the database state**. This lets the nodes to check if they have exactly the same content on the database, protects against intentional modifications on the database file and also works as an integrity check to detect failures on the storage media.
+It also uses a **hash of the database state**. This lets the nodes check if they have exactly the same content on the database, protects against intentional modifications on the database file and also works as an integrity check to detect failures on the storage media.
 
 This final hash is updated using only the modified pages on each new block. It does not need to load the entire database to calculate the new state. The integrity check is also only made when a new db page is loaded. This drastically increases the database performance.
 
@@ -30,9 +29,9 @@ The resulting solution does not require big disk storage, uses low processor tim
 
 The network traffic is also lightweight to reduce energy consumption. New packets are transferred only when there are new database transactions.
 
-This technology allows us to run a real private blockchain on IoT and mobile devices.
+This technology allows us to run a private blockchain on IoT and mobile devices.
 
-AergoLite is also easy to use. You do not need to know how a blockchain works to use it.
+You do not need to know how a blockchain works to use it.
 
 Supported OS:
 
@@ -267,13 +266,13 @@ is an user that has its own private + public key pair.
 The blockchain administrator can:
 
 * Add nodes to the blockchain network
-* Execute reserved SQL commands
+* Execute any SQL command
+* Create stored procedures
 
 In future versions it will also be able to:
 
 * Remove nodes from the blockchain network
 * Add users to the network
-* Create smart contracts to let nodes to execute blocked SQL commands
 
 You will need to inform the public key of the blockchain administrator on each participating node.
 
@@ -340,9 +339,9 @@ It can be called from SQL like this:
 CALL add_new_sale( [['123', 1, 10.00],['456', 2, 20.00]] );
 ```
 
-Full reference of the available commands can be found [here](https://github.com/aergoio/aergolite/wiki/Stored-Procedures)
+Full reference of the available commands can be found [here](https://github.com/aergoio/sqlite-stored-procedures)
 
-The applications running on the nodes can be made using different programming languages.
+It is possible to have apps made using different programming languages on the same network, as the core logic is done with stored procedures.
 
 
 ## Immutability
@@ -788,7 +787,7 @@ If the block interval is not specified then the library will use a default value
 
 ## Limitations
 
-This first version uses a fully connected network for communication between the nodes. It works with up to 200 nodes on the automated tests. Soon it will also contain a gossip based protocol to support millions of nodes.
+This version uses a fully connected network for communication between the nodes. It works with up to 200 nodes (checked via the automated tests) and probably more. In the future it can also contain a gossip based protocol to support even more nodes.
 
 Only 1 connection to each database file. If there are many applications needing to access the db file, each application must have its own copy of the database, configured as a separate node.
 

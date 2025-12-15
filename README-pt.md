@@ -1,17 +1,16 @@
-<p align="right"><a href="README.md">English</a>&nbsp;&nbsp;&nbsp;<a href="README-zh.md">中文</a></p>
+<p align="right"><a href="README.md">English</a>&nbsp;&nbsp;&nbsp;<a href="README-zh.md">中文</a>&nbsp;&nbsp;&nbsp;<a href="README-ru.md">Русский</a>&nbsp;&nbsp;&nbsp;<a href="README-ja.md">日本語</a>&nbsp;&nbsp;&nbsp;<a href="README-ko.md">한국어</a></p>
+
 <p align="center"><img width="65%" src="https://user-images.githubusercontent.com/7624275/92685476-2390b800-f30e-11ea-9edc-980b0e66c0ad.png" alt="AergoLite"></p>
 
-<h1 align="center">SQLite com Blockchain</h1>
+<h1 align="center">Replicação SQLite Descentralizada</h1>
 
-<blockquote align="center"><p><em>A maneira mais fácil de implantar um blockchain para armazenamento de dados relacionais em seu aplicativo ou dispositivo</em></p></blockquote>
-
-O AergoLite nos permite ter um banco de dados SQLite replicado protegido por um blockchain privado e leve.
+O AergoLite fornece um banco de dados SQLite replicado protegido por um blockchain privado e leve.
 
 Cada aplicativo possui uma réplica local do banco de dados.
 
-Novas transações do banco de dados são distribuídas para todos os pares e uma vez que eles alcançam um consenso sobre a ordem de execução, todos os nós executam as transações. Como a ordem de execução dessas transações é a mesma, todos os nós têm o mesmo conteúdo do banco de dados resultante.
+Novas transações do banco de dados são distribuídas para todos os pares e uma vez que eles alcançam um consenso sobre a ordem de execução, todos os nós executam as transações. Como a ordem de execução é a mesma, todos os nós têm o mesmo conteúdo do banco de dados resultante.
 
-Os aplicativos também podem gravar no banco de dados local quando estão off-line. As transações do banco de dados são armazenadas em uma fila local e enviadas para a rede assim que a conectividade for restabelecida. O aplicativo fará a leitura do novo estado do banco de dados após as modificações off-line, podendo verificar se as transações off-line foram processadas pelo consenso global. Se rejeitado, o banco de dados retornará ao estado anterior.
+Os aplicativos também podem gravar no banco de dados local quando estão off-line. As transações do banco de dados são armazenadas em uma fila local e enviadas para a rede assim que a conectividade for restabelecida. O aplicativo fará a leitura do novo estado do banco de dados com as modificações off-line, podendo verificar se as transações off-line foram processadas pelo consenso global. Se rejeitado, o banco de dados retornará ao estado anterior.
 
 AergoLite usa **tecnologia blockchain especial** focada em **dispositivos com recursos limitados**.
 
@@ -32,7 +31,7 @@ O tráfego de rede também é leve para reduzir o consumo de energia. Novos paco
 
 Essa tecnologia nos permite ter um blockchain privado em IoT e dispositivos móveis.
 
-O AergoLite também é fácil de usar. Você não precisa saber como funciona um blockchain para usá-lo.
+Você não precisa saber como funciona um blockchain para usá-lo.
 
 Sistemas Operacionais suportados:
 
@@ -268,13 +267,13 @@ A entidade que tem controle sobre o blockchain é chamada de administrador do bl
 O administrador do blockchain pode:
 
 * Adicionar nós à rede blockchain
-* Executar comandos SQL reservados
+* Executar qualquer comando SQL
+* Criar procedimentos armazenados
 
 Em versões futuras, também será capaz de:
 
 * Remover nós da rede blockchain
 * Adicionar usuários à rede
-* Criar contratos inteligentes para permitir que os nós executem comandos SQL bloqueados
 
 Você precisará informar a chave pública do administrador do blockchain em cada nó participante.
 
@@ -339,9 +338,9 @@ Pode ser chamado do SQL assim:
 CALL add_new_sale( [['123', 1, 10.00],['456', 2, 20.00]] );
 ```
 
-A referência completa dos comandos disponíveis pode ser encontrada [aqui](https://github.com/aergoio/aergolite/wiki/Stored-Procedures)
+A referência completa dos comandos disponíveis pode ser encontrada [aqui](https://github.com/aergoio/sqlite-stored-procedures)
 
-Os aplicativos executados nos nós podem ser feitos usando diferentes linguagens de programação.
+É possível ter aplicativos feitos usando diferentes linguagens de programação na mesma rede, já que a lógica principal é feita com procedimentos armazenados.
 
 
 ## Imutabilidade
@@ -779,7 +778,7 @@ Se o intervalo de bloco não for especificado, a biblioteca usará um valor padr
 
 ## Limitações
 
-Esta primeira versão usa uma rede totalmente conectada para comunicação entre os nós. Ele funciona com até 200 nós nos testes automatizados. Em breve, também conterá um protocolo blockchain com suporte a milhões de nós.
+Esta versão usa uma rede totalmente conectada para comunicação entre os nós. Ele funciona com até 200 nós (verificado via testes automatizados) e provavelmente mais. No futuro, também pode conter um protocolo baseado em gossip para suportar ainda mais nós.
 
 Apenas 1 conexão para cada arquivo de banco de dados. Se houver muitos aplicativos que precisam acessar o arquivo db, cada aplicativo deve ter sua própria cópia do banco de dados, configurada como um nó separado.
 
