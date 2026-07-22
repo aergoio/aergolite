@@ -2457,9 +2457,14 @@ loc_again2:
     db_check_int(db[node], "PRAGMA last_nonce", last_nonce[node]);
   }
 
-  /* register the callback function used to sign the admin transactions */
-  sqlite3_create_function(db[add_from_node], "sign_transaction", 1, SQLITE_UTF8,
-    NULL, &on_sign_transaction, NULL, NULL);
+  /* register the callback function used to sign the admin transactions.
+  ** every (re)connected node gets a fresh database handle above, so the
+  ** callback must be registered on each of them, otherwise admin transactions
+  ** executed on a reconnected node fail with SQLITE_PERM */
+  for(i=0; connecting_nodes[i]; i++){
+    sqlite3_create_function(db[connecting_nodes[i]], "sign_transaction", 1, SQLITE_UTF8,
+      NULL, &on_sign_transaction, NULL, NULL);
+  }
 
   /* get the public key for the new added nodes */
   for(i=0; connecting_nodes[i]; i++){
