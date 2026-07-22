@@ -22,7 +22,7 @@
 
 #define PLUGIN_CMD                 0x43292173
 
-#define PLUGIN_VERSION_NUMBER      1
+#define PLUGIN_VERSION_NUMBER      2
 
 
 /* message commands */
