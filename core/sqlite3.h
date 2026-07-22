@@ -12031,6 +12031,17 @@ AERGOLITE_API int aergolite_verify(aergolite *this_node, char *msg, int msglen,
                                    char *pubkey, int pklen,
                                    char *signature, int siglen);
 
+/*
+** Vote signatures.  A vote is signed over SHA256(height || round || block_id)
+** so that a vote signature cannot be replayed across rounds or heights.
+*/
+AERGOLITE_API int aergolite_sign_vote(aergolite *this_node, int64 height, int round,
+                                      unsigned char *block_id,
+                                      char *signature, int *psiglen);
+AERGOLITE_API int aergolite_verify_vote(aergolite *this_node, int64 height, int round,
+                                        unsigned char *block_id, int node_id,
+                                        char *signature, int siglen);
+
 void * aergolite_pubkey(aergolite *this_node, char **ppubkey, int *ppklen, unsigned char **pprivkey);
 
 

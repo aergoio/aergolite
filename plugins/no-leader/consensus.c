@@ -585,8 +585,9 @@ SQLITE_PRIVATE void vote_on_block(plugin *plugin, int round, struct block *block
   assert( round==0 || round==1 );
 
   /* sign the vote on this block */
-//! and round
-  rc = aergolite_sign_raw(this_node, block->id, sig, &siglen);
+  /* the signature commits to the block height, the voting round and the
+  ** block id, so it cannot be replayed for a different round or height */
+  rc = aergolite_sign_vote(this_node, block->height, round, block->id, sig, &siglen);
   if( rc ) return;
 
   /* vote from this node */
@@ -965,8 +966,9 @@ SQLITE_PRIVATE void on_block_vote(node *source_node, void *msg, int size) {
   if( idlen!=32 || siglen!=64 || round<0 || round>1 ) return;
 
   /* verify the signature on the vote */
-//! check sig on round too
-  rc = aergolite_verify_raw(this_node, id, NULL, node_id, sig, siglen);
+  /* the signature commits to the height, the round and the block id, so a
+  ** vote captured for one round cannot be replayed as a vote for another */
+  rc = aergolite_verify_vote(this_node, height, round, id, node_id, sig, siglen);
   if( rc ) return;
 
   /* check if we have this block locally */

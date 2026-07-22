@@ -48533,6 +48533,54 @@ loc_invalid:
 
 /****************************************************************************/
 
+/*
+** Compute the digest that a block vote is signed/verified over.
+**
+** A vote commits to the block height, the voting round and the block id.
+** Binding the round (and the height) into the signed digest prevents a
+** signature captured for one round from being replayed as a vote for a
+** different round of the same block, and a vote for one height from being
+** reused at a different height.  The fields are encoded in big-endian
+** (network) byte order so the digest is identical on any host architecture.
+**
+**   digest = SHA256( be64(height) || be32(round) || block_id[32] )
+*/
+SQLITE_PRIVATE void calc_vote_hash(int64 height, int round,
+                                   const unsigned char *block_id,
+                                   unsigned char *hash){
+  unsigned char buf[12 + 32];
+  sqlite3Put4byte(&buf[0], (u32)((u64)height >> 32));
+  sqlite3Put4byte(&buf[4], (u32)(height & 0xffffffff));
+  sqlite3Put4byte(&buf[8], (u32)round);
+  memcpy(&buf[12], block_id, 32);
+  sha256(hash, buf, sizeof(buf));
+}
+
+/****************************************************************************/
+
+AERGOLITE_API int aergolite_sign_vote(aergolite *this_node, int64 height, int round,
+                                      unsigned char *block_id,
+                                      char *signature, int *psiglen){
+  unsigned char hash[32];
+  SYNCTRACE("aergolite_sign_vote height=%" INT64_FORMAT " round=%d\n", height, round);
+  calc_vote_hash(height, round, block_id, hash);
+  return aergolite_sign_raw(this_node, hash, signature, psiglen);
+}
+
+/****************************************************************************/
+
+AERGOLITE_API int aergolite_verify_vote(aergolite *this_node, int64 height, int round,
+                                        unsigned char *block_id, int node_id,
+                                        char *signature, int siglen){
+  unsigned char hash[32];
+  SYNCTRACE("aergolite_verify_vote height=%" INT64_FORMAT " round=%d node=%d\n",
+            height, round, node_id);
+  calc_vote_hash(height, round, block_id, hash);
+  return aergolite_verify_raw(this_node, hash, NULL, node_id, signature, siglen);
+}
+
+/****************************************************************************/
+
 AERGOLITE_API int aergolite_verify(aergolite *this_node, char *msg, int msglen,
                                    char *pubkey, int pklen,
                                    char *signature, int siglen){
@@ -229168,16 +229216,19 @@ AERGOLITE_API int verify_block_votes(
   num_votes = 0;
 
   binn_list_foreach(votes, item){
-    int node_id, siglen;
+    int node_id, siglen, round;
     char *sig;
     assert( item.type==BINN_LIST );
     /* get the node id and the signature */
     node_id = binn_list_int32(&item, 1);
     sig = binn_list_blob(&item, 2, &siglen);
+    /* get the voting round (optional field; absent means round 0) */
+    round = binn_list_int32(&item, 3);
     /* check if this node can vote at this height */
     if( in_state_update || can_vote_on_block(this_node,node_id,block_height) ){
-      /* verify the signature on the vote */
-      rc = aergolite_verify_raw(this_node, block_id, NULL, node_id, sig, siglen);
+      /* verify the signature on the vote (bound to height, round and block id) */
+      rc = aergolite_verify_vote(this_node, block_height, round, block_id,
+                                 node_id, sig, siglen);
       if( rc==SQLITE_OK ){
         /* increment the number of valid votes */
         num_votes++;
