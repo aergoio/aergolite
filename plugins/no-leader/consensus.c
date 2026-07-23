@@ -232,6 +232,55 @@ SQLITE_PRIVATE bool add_block_vote(struct block *block, int round, int node_id, 
 /****************************************************************************/
 
 /*
+** Track one vote per node per (height, round) across all blocks.
+**
+** Equivocation is a node signing votes for two different blocks at the same
+** height and round.  The per-block dedup in add_block_vote cannot catch this,
+** because each conflicting vote is stored in a different block.  This helper
+** keeps a single global record per (height, round, node_id) holding the block
+** id the node first voted for.
+**
+** Returns TRUE if the vote is new or a benign duplicate (same block id), in
+** which case the caller may proceed.  Returns FALSE if the node already voted
+** for a different block at this height and round (equivocation): the vote must
+** be rejected and the node is considered misbehaving.
+*/
+SQLITE_PRIVATE BOOL record_vote_cast(plugin *plugin, int64 height, int round,
+                                     int node_id, const uchar *block_id){
+  struct block_vote *vote;
+
+  /* check if this node already voted at this height and round */
+  for( vote=plugin->cast_votes; vote; vote=vote->next ){
+    if( vote->height==height && vote->round==round && vote->node_id==node_id ){
+      if( memcmp(vote->block_id, block_id, 32)==0 ){
+        /* benign duplicate: same block, already recorded */
+        return TRUE;
+      }
+      /* equivocation: the node voted for a different block in this round */
+      SYNCTRACE("record_vote_cast - EQUIVOCATION node=%d height=%" INT64_FORMAT
+                " round=%d\n", node_id, height, round);
+      sqlite3_log(SQLITE_INVALID, "equivocation detected - node %d voted for two "
+                  "different blocks at height %" INT64_FORMAT " round %d",
+                  node_id, height, round);
+      return FALSE;
+    }
+  }
+
+  /* first vote from this node at this height and round: record it */
+  vote = sqlite3_malloc_zero(sizeof(struct block_vote));
+  if( !vote ) return FALSE;
+  vote->node_id = node_id;
+  vote->round = round;
+  vote->height = height;
+  memcpy(vote->block_id, block_id, 32);
+  llist_add(&plugin->cast_votes, vote);
+
+  return TRUE;
+}
+
+/****************************************************************************/
+
+/*
 ** Store the votes temporarily while the block does not arrive
 */
 SQLITE_PRIVATE void store_block_vote(
@@ -299,6 +348,15 @@ loc_again:
     }
   }
 
+  /* discard the equivocation tracking for heights already committed */
+  for( vote=plugin->cast_votes; vote; vote=vote->next ){
+    if( vote->height < current_height ){
+      llist_remove(&plugin->cast_votes, vote);
+      sqlite3_free(vote);
+      goto loc_again;
+    }
+  }
+
 }
 
 /****************************************************************************/
@@ -311,6 +369,12 @@ SQLITE_PRIVATE void clear_block_votes(plugin *plugin){
     struct block_vote *next = plugin->block_votes->next;
     sqlite3_free(plugin->block_votes);
     plugin->block_votes = next;
+  }
+
+  while( plugin->cast_votes ){
+    struct block_vote *next = plugin->cast_votes->next;
+    sqlite3_free(plugin->cast_votes);
+    plugin->cast_votes = next;
   }
 
 }
@@ -589,6 +653,13 @@ SQLITE_PRIVATE void vote_on_block(plugin *plugin, int round, struct block *block
   ** block id, so it cannot be replayed for a different round or height */
   rc = aergolite_sign_vote(this_node, block->height, round, block->id, sig, &siglen);
   if( rc ) return;
+
+  /* record this vote and reject equivocation (voting for two different
+  ** blocks at the same height and round) */
+  if( !record_vote_cast(plugin, block->height, round, plugin->node_id, block->id) ){
+    SYNCTRACE("vote_on_block - EQUIVOCATION rejected\n");
+    return;
+  }
 
   /* vote from this node */
   if( add_block_vote(block,round,plugin->node_id,sig) ){
@@ -970,6 +1041,14 @@ SQLITE_PRIVATE void on_block_vote(node *source_node, void *msg, int size) {
   ** vote captured for one round cannot be replayed as a vote for another */
   rc = aergolite_verify_vote(this_node, height, round, id, node_id, sig, siglen);
   if( rc ) return;
+
+  /* reject equivocation: a node may vote for at most one block per height
+  ** and round.  a vote for a different block than the one already recorded
+  ** from this node at this (height, round) is dropped */
+  if( !record_vote_cast(plugin, height, round, node_id, id) ){
+    SYNCTRACE("on_block_vote - EQUIVOCATION rejected\n");
+    return;
+  }
 
   /* check if we have this block locally */
   for( block=plugin->new_blocks; block; block=block->next ){

@@ -318,6 +318,9 @@ struct plugin {
   struct block *new_blocks;
   struct block *open_block;
   struct block_vote *block_votes;
+  struct block_vote *cast_votes;   /* one entry per (height,round,node_id) to
+                                    ** detect a node voting for two different
+                                    ** blocks in the same round (equivocation) */
   int64  last_created_block_height;
   int64  last_vote_height;
   int    last_vote_round;
