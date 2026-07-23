@@ -217,6 +217,10 @@ else
 	cd test && LD_LIBRARY_PATH=..:/usr/local/lib ./runtest
 endif
 
+# standalone cipher throughput benchmark (no external libs required)
+bench: test/bench_cipher.c
+	$(CC) -std=gnu99 -O2 $< -o test/bench_cipher
+
 valgrind: only-linux $(LIBRARY) test/runtest
 ifeq ($(TARGET_OS),Mac)
 	cd test && DYLD_LIBRARY_PATH=..:/usr/local/lib valgrind --leak-check=full --show-leak-kinds=all ./runtest
