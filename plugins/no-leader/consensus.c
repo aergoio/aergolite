@@ -11,6 +11,11 @@ SQLITE_PRIVATE void broadcast_equivocation_proof(plugin *plugin, int64 height,
                                                  const uchar *block_id_b,
                                                  const uchar *sig_b);
 SQLITE_PRIVATE void on_equivocation_proof(node *source_node, void *msg, int size);
+SQLITE_PRIVATE void on_relayed_block_vote(node *source_node, void *msg, int size);
+SQLITE_PRIVATE void relay_block_vote(plugin *plugin, node *source_node,
+                                      int64 height, int round, int node_id,
+                                      const uchar *block_id, const uchar *sig,
+                                      int siglen);
 
 /****************************************************************************/
 
@@ -418,6 +423,75 @@ SQLITE_PRIVATE void on_equivocation_proof(node *source_node, void *msg, int size
   add_equivocator(plugin, node_id, height);
   broadcast_equivocation_proof(plugin, height, round, node_id,
                                 id_a, sig_a, id_b, sig_b);
+}
+
+/****************************************************************************/
+
+/*
+** Relay a received block vote to a random subset of the authorized peers, excluding
+** the node that sent it to us.  This is what makes equivocation detectable in a
+** trustless network: an attacker sends vote A to half the peers and vote B to the
+** other half, so no single peer sees both.  By relaying, an honest node that got
+** A forwards it to peers that only got B (and vice versa), so some node ends up
+** holding both conflicting votes and detects the equivocation.
+**
+** The fan-out is k = (N-1)/2, where N is the total number of authorized nodes,
+** capped to the number of candidate peers actually connected.  This is above
+** the connectivity threshold, so both conflicting votes flood the network and
+** overlap with high probability.
+**
+** The relayed vote is sent as PLUGIN_RELAY_BLOCK_VOTE, which receivers process
+** but do not re-relay.  This makes the relay exactly one hop, so it terminates
+** by construction without any dedup state.
+*/
+SQLITE_PRIVATE void relay_block_vote(plugin *plugin, node *source_node,
+                                      int64 height, int round, int node_id,
+                                      const uchar *block_id, const uchar *sig,
+                                      int siglen){
+  binn *map;
+  struct node *node, **cand;
+  int num_candidates = 0, k, i, j;
+
+  /* count the authorized peers we could relay to (excluding the sender) */
+  for( node=plugin->peers; node; node=node->next ){
+    if( node->is_authorized && node!=source_node ) num_candidates++;
+  }
+  if( num_candidates<=0 ) return;
+
+  /* k = (N-1)/2, capped to the number of connected candidates */
+  k = (plugin->total_authorized_nodes - 1) / 2;
+  if( k > num_candidates ) k = num_candidates;
+  if( k <= 0 ) return;
+
+  /* collect the candidate peers to pick from */
+  cand = sqlite3_malloc(num_candidates * sizeof(struct node *));
+  if( !cand ) return;
+  i = 0;
+  for( node=plugin->peers; node; node=node->next ){
+    if( node->is_authorized && node!=source_node ) cand[i++] = node;
+  }
+
+  /* partial Fisher-Yates: pick k distinct random candidates */
+  for( i=0; i<k; i++ ){
+    j = random_number(i, num_candidates - 1);
+    node = cand[i]; cand[i] = cand[j]; cand[j] = node;
+  }
+
+  /* rebuild the vote as a RELAY message and send it to the k selected peers */
+  map = binn_map();
+  if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_RELAY_BLOCK_VOTE)==FALSE ) goto loc_exit;
+  if( binn_map_set_int64(map, PLUGIN_HEIGHT, height)==FALSE ) goto loc_exit;
+  if( binn_map_set_int32(map, PLUGIN_NODE_ID, node_id)==FALSE ) goto loc_exit;
+  if( binn_map_set_int32(map, PLUGIN_ROUND, round)==FALSE ) goto loc_exit;
+  if( binn_map_set_blob(map, PLUGIN_HASH, block_id, 32)==FALSE ) goto loc_exit;
+  if( binn_map_set_blob(map, PLUGIN_SIGNATURE, sig, siglen)==FALSE ) goto loc_exit;
+  for( i=0; i<k; i++ ){
+    send_peer_message(cand[i], map, NULL);
+  }
+
+loc_exit:
+  sqlite3_free(cand);
+  binn_free(map);
 }
 
 /****************************************************************************/
@@ -1164,7 +1238,21 @@ SQLITE_PRIVATE void check_for_winner_block(plugin *plugin, int round) {
 
 /****************************************************************************/
 
-SQLITE_PRIVATE void on_block_vote(node *source_node, void *msg, int size) {
+SQLITE_PRIVATE void on_block_vote(node *source_node, void *msg, int size);
+
+/*
+** Common handling for a block vote received from a peer, whether directly from
+** its originator (PLUGIN_BLOCK_VOTE) or via a single relay hop
+** (PLUGIN_RELAY_BLOCK_VOTE).  When do_relay is TRUE (the vote arrived as a
+** direct vote) the vote is forwarded once, as PLUGIN_RELAY_BLOCK_VOTE, to a
+** random subset of peers; relayed votes are never re-relayed, so the gossip is
+** exactly one hop and terminates by construction.
+**
+** Returns TRUE if the vote is valid and was accepted (so a direct vote may be
+** relayed), FALSE if it was rejected or is an equivocation.
+*/
+SQLITE_PRIVATE bool process_block_vote(node *source_node, void *msg, int size,
+                                       bool do_relay){
   plugin *plugin = source_node->plugin;
   aergolite *this_node = plugin->this_node;
   struct block *block;
@@ -1179,26 +1267,35 @@ SQLITE_PRIVATE void on_block_vote(node *source_node, void *msg, int size) {
   id = binn_map_blob(msg, PLUGIN_HASH, &idlen);
   sig = binn_map_blob(msg, PLUGIN_SIGNATURE, &siglen);
 
-  SYNCTRACE("on_block_vote - height=%" INT64_FORMAT " id=%02X%02X%02X%02X round=%d\n",
+  SYNCTRACE("process_block_vote - height=%" INT64_FORMAT " id=%02X%02X%02X%02X round=%d\n",
             height, *id, *(id+1), *(id+2), *(id+3), round+1);
 
-  if( idlen!=32 || siglen!=64 || round<0 || round>1 ) return;
+  if( idlen!=32 || siglen!=64 || round<0 || round>1 ) return false;
 
   /* drop votes from nodes already proven to have equivocated */
-  if( is_equivocator(plugin, node_id) ) return;
+  if( is_equivocator(plugin, node_id) ) return false;
 
   /* verify the signature on the vote */
   /* the signature commits to the height, the round and the block id, so a
   ** vote captured for one round cannot be replayed as a vote for another */
   rc = aergolite_verify_vote(this_node, height, round, id, node_id, sig, siglen);
-  if( rc ) return;
+  if( rc ) return false;
 
   /* reject equivocation: a node may vote for at most one block per height
   ** and round.  a vote for a different block than the one already recorded
   ** from this node at this (height, round) is dropped */
   if( !record_vote_cast(plugin, height, round, node_id, id, sig) ){
-    SYNCTRACE("on_block_vote - EQUIVOCATION rejected\n");
-    return;
+    SYNCTRACE("process_block_vote - EQUIVOCATION rejected\n");
+    return false;
+  }
+
+  /* the vote is valid and not an equivocation.  relay it once to a random
+  ** subset of peers (excluding the sender) so that, in a trustless network,
+  ** an attacker that sends conflicting votes to different peers is still
+  ** detected: relaying spreads each vote beyond the attacker's chosen
+  ** recipients.  only direct votes are relayed; relayed votes are not. */
+  if( do_relay ){
+    relay_block_vote(plugin, source_node, height, round, node_id, id, sig, siglen);
   }
 
   /* check if we have this block locally */
@@ -1209,7 +1306,7 @@ SQLITE_PRIVATE void on_block_vote(node *source_node, void *msg, int size) {
   }
   if( !block ){
     int64 current_height = plugin->current_block ? plugin->current_block->height : 0;
-    SYNCTRACE("on_block_vote - BLOCK NOT FOUND\n");
+    SYNCTRACE("process_block_vote - BLOCK NOT FOUND\n");
     if( height>current_height ){
       /* store the vote for this block */
       store_block_vote(plugin, node_id, height, round, id, sig, siglen);
@@ -1223,31 +1320,55 @@ SQLITE_PRIVATE void on_block_vote(node *source_node, void *msg, int size) {
         request_state_update(plugin);
       }
     }
-    return;
+    return true;
   }
 
 #if 0
   if( !can_vote_on_block(plugin->this_node,node_id,height) ){
-    SYNCTRACE("on_block_vote - node cannot vote on this block\n");
-    return;
+    SYNCTRACE("process_block_vote - node cannot vote on this block\n");
+    return false;
   }
 #endif
 
   /* check if this vote was already counted */
   if( add_block_vote(block,round,node_id,sig)==false ){
-    SYNCTRACE("on_block_vote - block vote already stored\n");
-    return;
+    SYNCTRACE("process_block_vote - block vote already stored\n");
+    return true;
   }
 
   /* increment the number of nodes that voted on this block */
   block->num_votes[round]++;
 
-  SYNCTRACE("on_block_vote - num_votes=%d active_authorized_nodes=%d\n",
+  SYNCTRACE("process_block_vote - num_votes=%d active_authorized_nodes=%d\n",
             block->num_votes[round], plugin->active_authorized_nodes);
 
   /* do we have a winner block? */
   check_for_winner_block(plugin, round);
 
+  return true;
+}
+
+/****************************************************************************/
+
+/*
+** A block vote received directly from its originator.  Process it and, if it is
+** valid, relay it once (as PLUGIN_RELAY_BLOCK_VOTE) to a random subset of peers.
+*/
+SQLITE_PRIVATE void on_block_vote(node *source_node, void *msg, int size) {
+  SYNCTRACE("   on_block_vote (direct)\n");
+  process_block_vote(source_node, msg, size, true);
+}
+
+/****************************************************************************/
+
+/*
+** A block vote received via a single relay hop from another peer.  Process it
+** (count it / detect equivocation) but do NOT relay it again, so the relay
+** terminates after one hop.
+*/
+SQLITE_PRIVATE void on_relayed_block_vote(node *source_node, void *msg, int size) {
+  SYNCTRACE("   on_relayed_block_vote (relay)\n");
+  process_block_vote(source_node, msg, size, false);
 }
 
 /****************************************************************************/

@@ -63,6 +63,7 @@
 #define PLUGIN_NEW_BLOCK           0xB021     /* follower <- leader */
 #define PLUGIN_BLOCK_VOTE          0xB022     /* follower -> all (broadcast) */
 #define PLUGIN_EQUIVOCATION_PROOF   0xB023     /* any -> all (gossip) */
+#define PLUGIN_RELAY_BLOCK_VOTE     0xB024     /* peer -> subset (one relay hop) */
 
 #define PLUGIN_GET_BLOCK           0xB041     /* follower -> leader (request) */
 #define PLUGIN_REQUESTED_BLOCK     0xB042     /* follower <- leader (response) */
