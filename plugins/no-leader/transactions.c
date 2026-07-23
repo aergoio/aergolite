@@ -147,6 +147,9 @@ SQLITE_PRIVATE void on_get_transaction(node *node, void *msg, int size) {
 
   SYNCTRACE("on_get_transaction - request from node %d - tid=%" INT64_FORMAT "\n", node->id, tid);
 
+  /* do not serve transactions (pending or committed) to unauthorized peers */
+  if( !node->is_authorized ) return;
+
   map = binn_map();
   if( !map ) return;
 
@@ -215,6 +218,9 @@ SQLITE_PRIVATE void on_get_mempool_transactions(node *node, void *msg, int size)
   plugin *plugin = node->plugin;
 
   SYNCTRACE("on_get_mempool_transactions - request from node %d\n", node->id);
+
+  /* do not serve the pending transaction set to unauthorized peers */
+  if( !node->is_authorized ) return;
 
   send_mempool_transactions(plugin, node);
 

@@ -652,6 +652,9 @@ SQLITE_PRIVATE void on_get_block(node *node, void *msg, int size) {
   SYNCTRACE("on_get_block - request from node %d - height=%" INT64_FORMAT "\n",
             node->id, height);
 
+  /* do not serve chain data to unauthorized peers */
+  if( !node->is_authorized ) return;
+
   if( height<=0 ) return;
 
   map = binn_map();
