@@ -1388,7 +1388,6 @@ SQLITE_PRIVATE int count_mempool_unused_txns(plugin *plugin){
 SQLITE_PRIVATE bool is_next_nonce(plugin *plugin, int node_id, int64 nonce){
   struct node_nonce *item;
   int count, i;
-  bool node_found = false;
 
   SYNCTRACE("is_next_nonce node_id=%d nonce=%" INT64_FORMAT "\n",
             node_id, nonce);
@@ -1396,16 +1395,14 @@ SQLITE_PRIVATE bool is_next_nonce(plugin *plugin, int node_id, int64 nonce){
   count = array_count(plugin->nonces);
   for( i=0; i<count; i++ ){
     item = array_get(plugin->nonces, i);
-    //if( item->node_id==node_id && nonce==item->last_nonce+1 ){
     if( item->node_id==node_id ){
-      node_found = true;
       SYNCTRACE("is_next_nonce node_id=%d last_nonce=%" INT64_FORMAT "\n",
                 node_id, item->last_nonce);
       if( nonce==item->last_nonce+1 ) return true;
+      return false;
     }
   }
 
-  if( !node_found && nonce==1 ) return true;  //! workaround. remove it later!
   return false;
 }
 
