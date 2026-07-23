@@ -230484,7 +230484,7 @@ AERGOLITE_API int aergolite_new_authorization(
   nodeauth *auth;
   char buf[36], type[16];
   bool is_full_node;
-  int rc, pklen;
+  int rc, pklen, node_id;
 
   SYNCTRACE("aergolite_new_authorization\n");
 
@@ -230510,6 +230510,26 @@ AERGOLITE_API int aergolite_new_authorization(
   is_full_node = (strcmp(type,"full") == 0);
 
 
+  /* derive the node id from the public key and reject collisions.
+  **
+  ** the node id is only 31 bits (it is stored on the high bits of the
+  ** transaction row id, see build_transaction_id), so two different
+  ** public keys may map to the same value.  admitting both would let one
+  ** shadow the other in the authorization list: lookups by node_id (used
+  ** by aergolite_verify_vote / aergolite_verify_raw) return the first
+  ** match, so the second node's votes and transactions would be verified
+  ** against the wrong public key and silently fail.  an attacker who
+  ** registers first could also use this to silence an honest node. */
+  node_id = generate_node_id_from_pubkey(pubkey);
+  for( auth=this_node->authorizations; auth; auth=auth->next ){
+    if( auth->node_id==node_id ){
+      sqlite3_log(SQLITE_CONSTRAINT_PRIMARYKEY,
+          "aergolite_new_authorization: node_id %d collision (different pubkey)",
+          node_id);
+      return SQLITE_CONSTRAINT_PRIMARYKEY;
+    }
+  }
+
   /* add it to the list */
 
   auth = sqlite3_malloc_zero(sizeof(struct nodeauth));
@@ -230518,7 +230538,7 @@ AERGOLITE_API int aergolite_new_authorization(
   memcpy(auth->pk, pubkey, pklen);
   auth->pklen = pklen;
 
-  auth->node_id = generate_node_id_from_pubkey(pubkey);
+  auth->node_id = node_id;
 
   auth->is_full_node = is_full_node;
 
@@ -230605,7 +230625,11 @@ SQLITE_PRIVATE int load_authorizations_cb1(u32 iFrame, binn *log, void *ctx) {
   if( is_special_transaction(log) ){
     aergolite *this_node = (aergolite*) ctx;
     int rc = aergolite_new_authorization(this_node, log, NULL, NULL, NULL);
-    if( rc==SQLITE_EXISTS ) rc = SQLITE_OK;
+    /* SQLITE_EXISTS: same pubkey already loaded.  SQLITE_CONSTRAINT_PRIMARYKEY:
+    ** node_id collision with a different pubkey already loaded (only possible
+    ** with a chain produced by an older, unpatched node).  In both cases skip
+    ** without aborting the replay. */
+    if( rc==SQLITE_EXISTS || rc==SQLITE_CONSTRAINT_PRIMARYKEY ) rc = SQLITE_OK;
     return rc;
   }
   return SQLITE_OK;
