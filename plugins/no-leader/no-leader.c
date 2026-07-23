@@ -1202,6 +1202,10 @@ SQLITE_PRIVATE void worker_thread_on_peer_message(uv_msg_t *stream, void *msg, i
     SYNCTRACE("   received message: PLUGIN_BLOCK_VOTE\n");
     on_block_vote(node, msg, size);
     break;
+  case PLUGIN_EQUIVOCATION_PROOF:
+    SYNCTRACE("   received message: PLUGIN_EQUIVOCATION_PROOF\n");
+    on_equivocation_proof(node, msg, size);
+    break;
 
 /*
   case PLUGIN_LOG_EXISTS:

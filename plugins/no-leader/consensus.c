@@ -2,6 +2,15 @@
 SQLITE_PRIVATE void choose_block_to_vote(plugin *plugin, int round);
 SQLITE_PRIVATE void check_for_winner_block(plugin *plugin, int round);
 SQLITE_PRIVATE int  commit_block(plugin *plugin, struct block *block);
+SQLITE_PRIVATE bool is_equivocator(plugin *plugin, int node_id);
+SQLITE_PRIVATE void add_equivocator(plugin *plugin, int node_id, int64 height);
+SQLITE_PRIVATE void broadcast_equivocation_proof(plugin *plugin, int64 height,
+                                                 int round, int node_id,
+                                                 const uchar *block_id_a,
+                                                 const uchar *sig_a,
+                                                 const uchar *block_id_b,
+                                                 const uchar *sig_b);
+SQLITE_PRIVATE void on_equivocation_proof(node *source_node, void *msg, int size);
 
 /****************************************************************************/
 
@@ -238,15 +247,17 @@ SQLITE_PRIVATE bool add_block_vote(struct block *block, int round, int node_id, 
 ** height and round.  The per-block dedup in add_block_vote cannot catch this,
 ** because each conflicting vote is stored in a different block.  This helper
 ** keeps a single global record per (height, round, node_id) holding the block
-** id the node first voted for.
+** id (and signature) of the first vote cast by that node.
 **
 ** Returns TRUE if the vote is new or a benign duplicate (same block id), in
 ** which case the caller may proceed.  Returns FALSE if the node already voted
-** for a different block at this height and round (equivocation): the vote must
-** be rejected and the node is considered misbehaving.
+** for a different block at this height and round (equivocation): the vote is
+** rejected, the node is recorded as an equivocator and a self-verifying proof
+** (the two signatures) is gossiped to the other nodes.
 */
 SQLITE_PRIVATE BOOL record_vote_cast(plugin *plugin, int64 height, int round,
-                                     int node_id, const uchar *block_id){
+                                     int node_id, const uchar *block_id,
+                                     const uchar *sig){
   struct block_vote *vote;
 
   /* check if this node already voted at this height and round */
@@ -256,12 +267,18 @@ SQLITE_PRIVATE BOOL record_vote_cast(plugin *plugin, int64 height, int round,
         /* benign duplicate: same block, already recorded */
         return TRUE;
       }
-      /* equivocation: the node voted for a different block in this round */
+      /* equivocation: the node voted for a different block in this round.
+      ** we hold both signatures, so build a self-verifying proof, mark the
+      ** node as an equivocator and gossip the proof to the other nodes */
       SYNCTRACE("record_vote_cast - EQUIVOCATION node=%d height=%" INT64_FORMAT
                 " round=%d\n", node_id, height, round);
       sqlite3_log(SQLITE_INVALID, "equivocation detected - node %d voted for two "
                   "different blocks at height %" INT64_FORMAT " round %d",
                   node_id, height, round);
+      add_equivocator(plugin, node_id, height);
+      broadcast_equivocation_proof(plugin, height, round, node_id,
+                                    vote->block_id, vote->sig,
+                                    block_id, sig);
       return FALSE;
     }
   }
@@ -273,9 +290,134 @@ SQLITE_PRIVATE BOOL record_vote_cast(plugin *plugin, int64 height, int round,
   vote->round = round;
   vote->height = height;
   memcpy(vote->block_id, block_id, 32);
+  memcpy(vote->sig, sig, 64);
   llist_add(&plugin->cast_votes, vote);
 
   return TRUE;
+}
+
+/****************************************************************************/
+
+/*
+** Is this node already known to have equivocated?
+*/
+SQLITE_PRIVATE bool is_equivocator(plugin *plugin, int node_id){
+  struct equivocator *e;
+  for( e=plugin->equivocators; e; e=e->next ){
+    if( e->node_id==node_id ) return true;
+  }
+  return false;
+}
+
+/****************************************************************************/
+
+/*
+** Mark a node as an equivocator.  Idempotent: adding the same node twice is a
+** no-op.  Once a node is marked, its votes are no longer counted.
+*/
+SQLITE_PRIVATE void add_equivocator(plugin *plugin, int node_id, int64 height){
+  struct equivocator *e;
+  if( is_equivocator(plugin, node_id) ) return;
+  e = sqlite3_malloc_zero(sizeof(struct equivocator));
+  if( !e ) return;
+  e->node_id = node_id;
+  e->height = height;
+  llist_add(&plugin->equivocators, e);
+}
+
+/****************************************************************************/
+
+/*
+** Build a self-verifying equivocation proof (the two votes signed by the same
+** node for two different blocks at the same height and round) and gossip it to
+** every connected authorized peer.  The proof is undeniable: both signatures
+** verify against the node's public key, so it cannot be forged.
+*/
+SQLITE_PRIVATE void broadcast_equivocation_proof(plugin *plugin, int64 height,
+                                                 int round, int node_id,
+                                                 const uchar *block_id_a,
+                                                 const uchar *sig_a,
+                                                 const uchar *block_id_b,
+                                                 const uchar *sig_b){
+  binn *map;
+  struct node *node;
+
+  SYNCTRACE("broadcast_equivocation_proof node=%d height=%" INT64_FORMAT
+            " round=%d\n", node_id, height, round);
+
+  map = binn_map();
+  if( binn_map_set_int32(map, PLUGIN_CMD, PLUGIN_EQUIVOCATION_PROOF)==FALSE ) goto loc_exit;
+  if( binn_map_set_int64(map, PLUGIN_HEIGHT, height)==FALSE ) goto loc_exit;
+  if( binn_map_set_int32(map, PLUGIN_NODE_ID, node_id)==FALSE ) goto loc_exit;
+  if( binn_map_set_int32(map, PLUGIN_ROUND, round)==FALSE ) goto loc_exit;
+  if( binn_map_set_blob(map, PLUGIN_HASH,  block_id_a, 32)==FALSE ) goto loc_exit;
+  if( binn_map_set_blob(map, PLUGIN_SIGNATURE,  sig_a, 64)==FALSE ) goto loc_exit;
+  if( binn_map_set_blob(map, PLUGIN_HASH2,  block_id_b, 32)==FALSE ) goto loc_exit;
+  if( binn_map_set_blob(map, PLUGIN_SIGNATURE2, sig_b, 64)==FALSE ) goto loc_exit;
+
+  for( node=plugin->peers; node; node=node->next ){
+    if( node->is_authorized ){
+      send_peer_message(node, map, NULL);
+    }
+  }
+
+loc_exit:
+  binn_free(map);
+}
+
+/****************************************************************************/
+
+/*
+** Receive an equivocation proof gossiped by another node.
+**
+** The proof is self-verifying: it carries two signatures from the same node for
+** two different blocks at the same height and round.  If both signatures
+** verify, the node is proven to have equivocated and is marked as such.  When
+** this node first learns of an equivocator it relays the proof to its own peers
+** (gossip), so the evidence reaches nodes that did not directly witness both
+** conflicting votes.  Relaying stops once the node is already known, so the
+** gossip terminates.
+*/
+SQLITE_PRIVATE void on_equivocation_proof(node *source_node, void *msg, int size){
+  plugin *plugin = source_node->plugin;
+  aergolite *this_node = plugin->this_node;
+  int64 height;
+  int node_id, round, idlen_a, idlen_b, siglen_a, siglen_b;
+  uchar *id_a, *id_b, *sig_a, *sig_b;
+  int rc;
+
+  height  = binn_map_int64(msg, PLUGIN_HEIGHT);
+  node_id = binn_map_int32(msg, PLUGIN_NODE_ID);
+  round   = binn_map_int32(msg, PLUGIN_ROUND);
+  id_a    = binn_map_blob(msg, PLUGIN_HASH,       &idlen_a);
+  sig_a   = binn_map_blob(msg, PLUGIN_SIGNATURE,  &siglen_a);
+  id_b    = binn_map_blob(msg, PLUGIN_HASH2,      &idlen_b);
+  sig_b   = binn_map_blob(msg, PLUGIN_SIGNATURE2, &siglen_b);
+
+  SYNCTRACE("on_equivocation_proof node=%d height=%" INT64_FORMAT " round=%d\n",
+            node_id, height, round);
+
+  /* validate the proof fields */
+  if( idlen_a!=32 || idlen_b!=32 || siglen_a!=64 || siglen_b!=64 ) return;
+  if( round<0 || round>1 ) return;
+  if( memcmp(id_a, id_b, 32)==0 ) return;  /* not an equivocation */
+
+  /* already known? then we already relayed it: nothing to do */
+  if( is_equivocator(plugin, node_id) ) return;
+
+  /* verify both signatures against the accused node's public key */
+  rc = aergolite_verify_vote(this_node, height, round, id_a, node_id, sig_a, siglen_a);
+  if( rc ) return;
+  rc = aergolite_verify_vote(this_node, height, round, id_b, node_id, sig_b, siglen_b);
+  if( rc ) return;
+
+  /* proven: mark the node and gossip the proof to our peers */
+  SYNCTRACE("on_equivocation_proof - VERIFIED node=%d\n", node_id);
+  sqlite3_log(SQLITE_INVALID, "equivocation proof verified - node %d at height "
+              "%" INT64_FORMAT " round %d", node_id, height, round);
+  add_equivocator(plugin, node_id, height);
+  broadcast_equivocation_proof(plugin, height, round, node_id,
+                                id_a, sig_a, id_b, sig_b);
 }
 
 /****************************************************************************/
@@ -375,6 +517,12 @@ SQLITE_PRIVATE void clear_block_votes(plugin *plugin){
     struct block_vote *next = plugin->cast_votes->next;
     sqlite3_free(plugin->cast_votes);
     plugin->cast_votes = next;
+  }
+
+  while( plugin->equivocators ){
+    struct equivocator *next = plugin->equivocators->next;
+    sqlite3_free(plugin->equivocators);
+    plugin->equivocators = next;
   }
 
 }
@@ -656,7 +804,7 @@ SQLITE_PRIVATE void vote_on_block(plugin *plugin, int round, struct block *block
 
   /* record this vote and reject equivocation (voting for two different
   ** blocks at the same height and round) */
-  if( !record_vote_cast(plugin, block->height, round, plugin->node_id, block->id) ){
+  if( !record_vote_cast(plugin, block->height, round, plugin->node_id, block->id, sig) ){
     SYNCTRACE("vote_on_block - EQUIVOCATION rejected\n");
     return;
   }
@@ -1036,6 +1184,9 @@ SQLITE_PRIVATE void on_block_vote(node *source_node, void *msg, int size) {
 
   if( idlen!=32 || siglen!=64 || round<0 || round>1 ) return;
 
+  /* drop votes from nodes already proven to have equivocated */
+  if( is_equivocator(plugin, node_id) ) return;
+
   /* verify the signature on the vote */
   /* the signature commits to the height, the round and the block id, so a
   ** vote captured for one round cannot be replayed as a vote for another */
@@ -1045,7 +1196,7 @@ SQLITE_PRIVATE void on_block_vote(node *source_node, void *msg, int size) {
   /* reject equivocation: a node may vote for at most one block per height
   ** and round.  a vote for a different block than the one already recorded
   ** from this node at this (height, round) is dropped */
-  if( !record_vote_cast(plugin, height, round, node_id, id) ){
+  if( !record_vote_cast(plugin, height, round, node_id, id, sig) ){
     SYNCTRACE("on_block_vote - EQUIVOCATION rejected\n");
     return;
   }

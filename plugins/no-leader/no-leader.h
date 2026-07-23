@@ -62,6 +62,7 @@
 
 #define PLUGIN_NEW_BLOCK           0xB021     /* follower <- leader */
 #define PLUGIN_BLOCK_VOTE          0xB022     /* follower -> all (broadcast) */
+#define PLUGIN_EQUIVOCATION_PROOF   0xB023     /* any -> all (gossip) */
 
 #define PLUGIN_GET_BLOCK           0xB041     /* follower -> leader (request) */
 #define PLUGIN_REQUESTED_BLOCK     0xB042     /* follower <- leader (response) */
@@ -90,6 +91,7 @@
 
 #define PLUGIN_PUBKEY              0xC0DE401  /*  */
 #define PLUGIN_SIGNATURE           0xC0DE402  /*  */
+#define PLUGIN_SIGNATURE2          0xC0DE403  /* second signature (equivocation proof) */
 
 #define PLUGIN_SEQ                 0xC0DE601  /*  */
 #define PLUGIN_TID                 0xC0DE602  /*  */
@@ -107,6 +109,7 @@
 #define PLUGIN_HASH                0xC0DE809
 #define PLUGIN_ROUND               0xC0DE80A
 #define PLUGIN_VOTES               0xC0DE80B
+#define PLUGIN_HASH2               0xC0DE80C  /* second block id (equivocation proof) */
 
 #define PLUGIN_PROOF               0xC0DE901
 
@@ -253,6 +256,17 @@ struct block_vote {
   uchar sig[64];
 };
 
+/*
+** A node proven to have signed votes for two different blocks at the same
+** height and round.  Its votes are no longer counted and the proof is
+** gossiped to the other nodes so they independently reach the same conclusion.
+*/
+struct equivocator {
+  struct equivocator *next;
+  int   node_id;
+  int64 height;
+};
+
 struct block {
   struct block *next;
   int64 height;
@@ -321,6 +335,9 @@ struct plugin {
   struct block_vote *cast_votes;   /* one entry per (height,round,node_id) to
                                     ** detect a node voting for two different
                                     ** blocks in the same round (equivocation) */
+  struct equivocator *equivocators;  /* nodes proven to have equivocated; their
+                                      ** votes are rejected and the proof is
+                                      ** gossiped to the other nodes */
   int64  last_created_block_height;
   int64  last_vote_height;
   int    last_vote_round;
