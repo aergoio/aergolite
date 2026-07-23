@@ -4,7 +4,7 @@
 
 #include "../common/sha256.c"
 
-#define majority(X)  X / 2 + 1
+#define majority(X)  ((X) / 2 + 1)
 
 #define USE_ADD_NODE       11
 #define USE_NODE_TYPE      12

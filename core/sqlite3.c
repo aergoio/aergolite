@@ -224214,7 +224214,7 @@ SQLITE_API const char *sqlite3_sourceid(void){ return SQLITE_SOURCE_ID; }
 #include "single_instance.c"
 //#include "../common/elapsed_time.c"
 
-#define majority(X)  X / 2 + 1
+#define majority(X)  ((X) / 2 + 1)
 
 int sqlite3CodecCopy(sqlite3 *db, int nDb, Pager *pPager, Pager *pFromPager);
 

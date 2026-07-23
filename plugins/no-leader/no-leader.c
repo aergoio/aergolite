@@ -30,7 +30,7 @@
 
 #include "../common/uv_functions.c"
 
-#define majority(X)  X / 2 + 1
+#define majority(X)  ((X) / 2 + 1)
 
 /*****************************************************************************/
 
